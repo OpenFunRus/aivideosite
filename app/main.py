@@ -153,6 +153,7 @@ async def api_generate(
     fps: Annotated[float, Form()] = 24.0,
     profile: Annotated[str, Form()] = "fast",
     seed: Annotated[int, Form()] = -1,
+    generate_audio: Annotated[bool, Form()] = False,
     first_frame: UploadFile | None = File(None),
     last_frame: UploadFile | None = File(None),
     _: None = Depends(require_auth),
@@ -199,6 +200,7 @@ async def api_generate(
             "fps": fps,
             "profile": profile,
             "seed": seed,
+            "generate_audio": bool(generate_audio),
             "images": image_paths,
         },
     )
@@ -250,6 +252,39 @@ async def api_retry_job(
     new_job_id = uuid.uuid4().hex
     db.clone_failed_job(job_id, new_job_id)
     return {"ok": True, "job_id": new_job_id}
+
+
+@app.delete("/api/jobs/{job_id}")
+async def api_delete_job(
+    job_id: str,
+    _: None = Depends(require_auth),
+):
+    try:
+        job = db.delete_terminal_job(job_id)
+    except ValueError:
+        raise HTTPException(
+            409,
+            "Работающую или ожидающую задачу сначала нужно остановить.",
+        )
+    if job is None:
+        raise HTTPException(404, "Задача не найдена.")
+    _cleanup_job_uploads(job)
+    return {"ok": True}
+
+
+@app.delete("/api/jobs")
+async def api_clear_jobs(
+    _: None = Depends(require_auth),
+):
+    jobs = db.clear_nonrunning_jobs()
+    for job in jobs:
+        _cleanup_job_uploads(job)
+    counts = db.state_counts()
+    return {
+        "ok": True,
+        "deleted": len(jobs),
+        "running_kept": counts["running"],
+    }
 
 
 @app.post("/api/media/{media_id}/lipsync")
@@ -328,6 +363,28 @@ async def api_remove_audio(
     return {"ok": True, "job_id": job_id}
 
 
+@app.delete("/api/media")
+async def api_clear_media(
+    _: None = Depends(require_auth),
+):
+    protected_ids = db.active_media_ids()
+    media_items = db.clear_media_except(protected_ids)
+    deleted_files = 0
+    for media in media_items:
+        path = settings.library_dir / media["filename"]
+        try:
+            path.unlink(missing_ok=True)
+            deleted_files += 1
+        except OSError:
+            pass
+    return {
+        "ok": True,
+        "deleted": len(media_items),
+        "files_deleted": deleted_files,
+        "protected": len(protected_ids),
+    }
+
+
 @app.delete("/api/media/{media_id}")
 async def api_delete_media(
     media_id: str,
@@ -402,6 +459,22 @@ async def save_upload(
         await upload.close()
 
     return destination
+
+
+def _cleanup_job_uploads(job: dict) -> None:
+    payload = job.get("payload") or {}
+    paths = list(payload.get("images") or [])
+    if payload.get("audio_path"):
+        paths.append(payload["audio_path"])
+
+    upload_root = settings.upload_dir.resolve()
+    for value in paths:
+        try:
+            path = Path(value).resolve()
+            if path.parent == upload_root:
+                path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _ensure_media(media_id: str) -> dict:
