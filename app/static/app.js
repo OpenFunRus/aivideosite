@@ -604,9 +604,12 @@
     qs("#editor-audio-block-meta").textContent = `${editorClock(audibleDuration)} · +${editorAudio.offset.toFixed(1)} сек`;
     qs("#editor-audio-volume-value").textContent = `${Math.round(editorAudio.volume * 100)}%`;
 
-    const base = Math.max(total, editorAudio.offset + audibleDuration, 1);
+    const base = Math.max(total, 1);
     const left = Math.max(0, Math.min(100, (editorAudio.offset / base) * 100));
-    const width = Math.max(3, Math.min(100 - left, (audibleDuration / base) * 100));
+    const width = Math.max(
+      3,
+      Math.min(100 - left, (audibleDuration / base) * 100)
+    );
     block.style.left = `${left}%`;
     block.style.width = `${width}%`;
   };
@@ -1036,6 +1039,80 @@
   });
   qs("#editor-remove-audio")?.addEventListener("click", clearEditorAudio);
 
+  const editorAudioBlock = qs("#editor-audio-block");
+  const editorAudioTrack = qs("#editor-audio-track");
+  if (editorAudioBlock && editorAudioTrack) {
+    editorAudioBlock.addEventListener("pointerdown", (event) => {
+      if (!editorAudio.file) return;
+      const total = editorTotalDuration();
+      if (total <= 0) return;
+
+      event.preventDefault();
+      const resize = Boolean(event.target.closest(".editor-audio-resize"));
+      const startX = event.clientX;
+      const startOffset = editorAudio.offset;
+      const startDuration = editorAudio.trimDuration;
+      const rect = editorAudioTrack.getBoundingClientRect();
+      const pixelsPerSecond = rect.width / total;
+      if (!Number.isFinite(pixelsPerSecond) || pixelsPerSecond <= 0) return;
+
+      editorAudioBlock.setPointerCapture(event.pointerId);
+      editorAudioBlock.classList.add(resize ? "resizing" : "dragging");
+
+      const onMove = (moveEvent) => {
+        const deltaSeconds = (moveEvent.clientX - startX) / pixelsPerSecond;
+        if (resize) {
+          const available = Math.max(
+            0,
+            editorAudio.duration - editorAudio.trimStart
+          );
+          const maxByTimeline = Math.max(0, total - editorAudio.offset);
+          const maxDuration = Math.min(available, maxByTimeline);
+          editorAudio.trimDuration = Math.max(
+            0.1,
+            Math.min(maxDuration, startDuration + deltaSeconds)
+          );
+          qs("#editor-audio-trim-duration").value =
+            editorAudio.trimDuration.toFixed(1);
+        } else {
+          const available = Math.max(
+            0,
+            editorAudio.duration - editorAudio.trimStart
+          );
+          const usedDuration = Math.min(
+            available,
+            editorAudio.trimDuration > 0
+              ? editorAudio.trimDuration
+              : available
+          );
+          const maxOffset = Math.max(0, total - Math.min(total, usedDuration));
+          editorAudio.offset = Math.max(
+            0,
+            Math.min(maxOffset, startOffset + deltaSeconds)
+          );
+          qs("#editor-audio-offset").value = editorAudio.offset.toFixed(1);
+        }
+        renderEditorAudioTrack();
+      };
+
+      const onEnd = (endEvent) => {
+        editorAudioBlock.classList.remove("dragging", "resizing");
+        try {
+          editorAudioBlock.releasePointerCapture(endEvent.pointerId);
+        } catch {
+          // Pointer capture may already be released by the browser.
+        }
+        editorAudioBlock.removeEventListener("pointermove", onMove);
+        editorAudioBlock.removeEventListener("pointerup", onEnd);
+        editorAudioBlock.removeEventListener("pointercancel", onEnd);
+      };
+
+      editorAudioBlock.addEventListener("pointermove", onMove);
+      editorAudioBlock.addEventListener("pointerup", onEnd);
+      editorAudioBlock.addEventListener("pointercancel", onEnd);
+    });
+  }
+
   const syncEditorAudioControls = () => {
     if (!editorAudio.file) return;
     editorAudio.offset = Math.max(
@@ -1120,6 +1197,10 @@
       button.disabled = false;
     }
   });
+
+  if (currentView === "editor") {
+    refreshEditorMedia();
+  }
 
   qs("#refresh-library").addEventListener("click", () => {
     lastMediaSignature = "";
