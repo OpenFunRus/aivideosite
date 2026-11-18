@@ -219,6 +219,20 @@ class JobWorker(threading.Thread):
             self._prepare_gpu_for_latentsync(job_id)
 
             self._check_cancel(job_id)
+            db.update_job(job_id, progress=17, stage="LatentSync: проверка лица")
+            latentsync_video, restore_info = self._prepare_face_safe_video(
+                prepared_video,
+                workdir,
+                job_id,
+                should_cancel,
+            )
+            raw_output_path = (
+                workdir / "latentsync_raw.mp4"
+                if restore_info is not None
+                else output_path
+            )
+
+            self._check_cancel(job_id)
             db.update_job(job_id, progress=18, stage="LatentSync: синхронизация губ")
             command = [
                 str(settings.latentsync_python),
@@ -234,11 +248,11 @@ class JobWorker(threading.Thread):
                 str(guidance),
                 "--enable_deepcache",
                 "--video_path",
-                str(prepared_video),
+                str(latentsync_video),
                 "--audio_path",
                 str(prepared_audio),
                 "--video_out_path",
-                str(output_path),
+                str(raw_output_path),
             ]
             run_command(
                 command,
@@ -250,6 +264,20 @@ class JobWorker(threading.Thread):
                 },
             )
             self._check_cancel(job_id)
+
+            if restore_info is not None:
+                db.update_job(
+                    job_id,
+                    progress=93,
+                    stage="LipSync: восстановление исходного кадра",
+                )
+                self._restore_face_safe_video(
+                    raw_output_path,
+                    output_path,
+                    restore_info,
+                    should_cancel,
+                )
+
             db.update_job(job_id, progress=95, stage="LipSync: сохранение")
 
             if not output_path.is_file():
@@ -261,6 +289,9 @@ class JobWorker(threading.Thread):
                 "audio_start": start,
                 "steps": steps,
                 "guidance": guidance,
+                "face_safe_scale": (
+                    restore_info.get("scale") if restore_info is not None else 1.0
+                ),
             }
             db.insert_media(
                 media_id=media_id,
@@ -331,6 +362,184 @@ class JobWorker(threading.Thread):
         raise RuntimeError(
             "Не удалось освободить достаточно VRAM для LatentSync: "
             f"{used_text}.{extra}"
+        )
+
+    def _prepare_face_safe_video(
+        self,
+        prepared_video: Path,
+        workdir: Path,
+        job_id: str,
+        should_cancel: Callable[[], bool],
+    ) -> tuple[Path, dict[str, Any] | None]:
+        """
+        Verify every frame with LatentSync's own InsightFace detector.
+        For extreme close-ups, progressively shrink the temporary frame and
+        add disposable margins until the detector can see the whole face.
+        """
+        initial = self._latentsync_face_preflight(prepared_video, should_cancel)
+        if initial.get("ok"):
+            return prepared_video, None
+
+        size = probe_video_size(prepared_video)
+        if size is None:
+            raise RuntimeError("Could not determine video dimensions for LipSync.")
+        width, height = size
+        failed_frame = initial.get("failed_frame")
+
+        for scale in (0.85, 0.75, 0.65):
+            self._check_cancel(job_id)
+            safe_w = max(2, int(width * scale) // 2 * 2)
+            safe_h = max(2, int(height * scale) // 2 * 2)
+            x = (width - safe_w) // 2
+            y = (height - safe_h) // 2
+            safe_path = workdir / f"video_face_safe_{int(scale * 100)}.mp4"
+
+            db.update_job(
+                job_id,
+                progress=17,
+                stage=(
+                    "LatentSync: лицо слишком крупно"
+                    + (
+                        f" (кадр {int(failed_frame) + 1})"
+                        if failed_frame is not None
+                        else ""
+                    )
+                    + f", пробую масштаб {int(scale * 100)}%"
+                ),
+            )
+
+            run_command(
+                [
+                    str(settings.ffmpeg_bin),
+                    "-y",
+                    "-i",
+                    str(prepared_video),
+                    "-vf",
+                    (
+                        f"scale={safe_w}:{safe_h}:flags=lanczos,"
+                        f"pad={width}:{height}:{x}:{y}:color=black"
+                    ),
+                    "-an",
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "medium",
+                    "-crf",
+                    "15",
+                    "-pix_fmt",
+                    "yuv420p",
+                    str(safe_path),
+                ],
+                should_cancel=should_cancel,
+            )
+
+            check = self._latentsync_face_preflight(safe_path, should_cancel)
+            if check.get("ok"):
+                return safe_path, {
+                    "scale": scale,
+                    "safe_width": safe_w,
+                    "safe_height": safe_h,
+                    "x": x,
+                    "y": y,
+                    "width": width,
+                    "height": height,
+                }
+            failed_frame = check.get("failed_frame")
+
+        frame_text = (
+            f" на кадре {int(failed_frame) + 1}"
+            if failed_frame is not None
+            else ""
+        )
+        raise RuntimeError(
+            "LatentSync не смог стабильно определить лицо"
+            f"{frame_text} даже после автоматического уменьшения. "
+            "Нужен кадр, где лицо целиком помещается в изображение и не закрыто."
+        )
+
+    def _latentsync_face_preflight(
+        self,
+        video_path: Path,
+        should_cancel: Callable[[], bool],
+    ) -> dict[str, Any]:
+        checker = settings.root_dir / "app" / "latentsync_face_check.py"
+        result = run_command(
+            [
+                str(settings.latentsync_python),
+                str(checker),
+                "--video",
+                str(video_path),
+                "--latentsync-dir",
+                str(settings.latentsync_dir),
+            ],
+            cwd=settings.latentsync_dir,
+            timeout=600,
+            should_cancel=should_cancel,
+            env_overrides={
+                "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+            },
+        )
+
+        for line in reversed(result.stdout.splitlines()):
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(data, dict) and "ok" in data:
+                return data
+
+        raise RuntimeError(
+            "LatentSync face preflight finished without a readable result."
+        )
+
+    def _restore_face_safe_video(
+        self,
+        raw_output_path: Path,
+        output_path: Path,
+        info: dict[str, Any],
+        should_cancel: Callable[[], bool],
+    ) -> None:
+        if not raw_output_path.is_file():
+            raise RuntimeError("LatentSync did not produce an intermediate video.")
+
+        safe_w = int(info["safe_width"])
+        safe_h = int(info["safe_height"])
+        x = int(info["x"])
+        y = int(info["y"])
+        width = int(info["width"])
+        height = int(info["height"])
+
+        run_command(
+            [
+                str(settings.ffmpeg_bin),
+                "-y",
+                "-i",
+                str(raw_output_path),
+                "-vf",
+                (
+                    f"crop={safe_w}:{safe_h}:{x}:{y},"
+                    f"scale={width}:{height}:flags=lanczos"
+                ),
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "medium",
+                "-crf",
+                "15",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "copy",
+                str(output_path),
+            ],
+            should_cancel=should_cancel,
         )
 
     def _replace_audio(self, job: dict[str, Any]) -> str:
@@ -476,6 +685,37 @@ def _prompt_title(prompt: str) -> str:
     if len(compact) <= 64:
         return compact or "MiniMax H3"
     return compact[:61].rstrip() + "..."
+
+
+def probe_video_size(path: Path) -> tuple[int, int] | None:
+    try:
+        result = subprocess.run(
+            [
+                str(settings.ffprobe_bin),
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "json",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        payload = json.loads(result.stdout)
+        stream = (payload.get("streams") or [])[0]
+        width = int(stream["width"])
+        height = int(stream["height"])
+        if width <= 0 or height <= 0:
+            return None
+        return width, height
+    except Exception:
+        return None
 
 
 def probe_duration(path: Path) -> float | None:
