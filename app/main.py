@@ -130,6 +130,7 @@ async def api_state(
     media_data = db.list_media_page(media_page, 20)
     jobs_data = db.list_jobs_page(jobs_page, 20)
     return {
+        "server_now": time.time(),
         "jobs": jobs_data["items"],
         "media": media_data["items"],
         "jobs_pagination": {
