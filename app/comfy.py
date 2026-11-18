@@ -16,9 +16,15 @@ from .config import settings
 
 
 ProgressCallback = Callable[[float, str], None]
+PromptIdCallback = Callable[[str], None]
+CancelCallback = Callable[[], bool]
 
 
 class ComfyUIError(RuntimeError):
+    pass
+
+
+class ComfyUICancelled(ComfyUIError):
     pass
 
 
@@ -41,9 +47,16 @@ class ComfyUIClient:
         payload: dict[str, Any],
         destination: Path,
         progress: ProgressCallback,
+        on_prompt_id: PromptIdCallback | None = None,
+        should_cancel: CancelCallback | None = None,
     ) -> dict[str, Any]:
+        if should_cancel and should_cancel():
+            raise ComfyUICancelled("Generation cancelled.")
+
         uploaded_images: list[str] = []
         for index, local_path in enumerate(payload.get("images") or [], start=1):
+            if should_cancel and should_cancel():
+                raise ComfyUICancelled("Generation cancelled.")
             progress(3 + index * 2, f"Загрузка кадра {index} в ComfyUI")
             uploaded_images.append(self.upload_image(Path(local_path)))
 
@@ -81,13 +94,20 @@ class ComfyUIClient:
         prompt_id = body.get("prompt_id")
         if not prompt_id:
             raise ComfyUIError(f"ComfyUI did not return prompt_id: {body!r}")
+        if on_prompt_id is not None:
+            on_prompt_id(str(prompt_id))
+        if should_cancel and should_cancel():
+            self.cancel_prompt(str(prompt_id))
+            raise ComfyUICancelled("Generation cancelled.")
 
         progress(10, "H3: подготовка модели")
         if ws is not None:
             try:
-                self._wait_websocket(ws, prompt_id, progress)
+                self._wait_websocket(ws, prompt_id, progress, should_cancel)
+            except ComfyUICancelled:
+                raise
             except Exception:
-                # The WebSocket is only for responsive progress. History polling
+                # WebSocket is only for responsive progress. History polling
                 # remains the source of truth and keeps jobs robust.
                 pass
             finally:
@@ -96,7 +116,7 @@ class ComfyUIClient:
                 except Exception:
                     pass
 
-        history = self._wait_history(prompt_id, progress)
+        history = self._wait_history(prompt_id, progress, should_cancel=should_cancel)
         output = self._find_video_output(history)
         if output is None:
             raise ComfyUIError(
@@ -112,6 +132,25 @@ class ComfyUIClient:
             "comfy_output": output,
             "seed": int(payload.get("seed", 0)),
         }
+
+    def cancel_prompt(self, prompt_id: str) -> bool:
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/jobs/{prompt_id}/cancel",
+                timeout=10,
+            )
+            if response.ok:
+                data = response.json()
+                return bool(data.get("cancelled"))
+        except Exception:
+            pass
+
+        # Compatibility fallback for older ComfyUI builds.
+        try:
+            response = self.session.post(f"{self.base_url}/interrupt", timeout=10)
+            return response.ok
+        except Exception:
+            return False
 
     def upload_image(self, path: Path) -> str:
         if not path.is_file():
@@ -144,7 +183,14 @@ class ComfyUIClient:
         uploaded_images: list[str],
     ) -> dict[str, Any]:
         profile = str(payload.get("profile") or "fast").lower()
-        steps = 8 if profile == "fast" else 20
+        profiles = {
+            "fast": {"steps": 8, "turbo": True},
+            "quality": {"steps": 20, "turbo": False},
+            "max": {"steps": 30, "turbo": False},
+        }
+        profile_config = profiles.get(profile, profiles["fast"])
+        steps = int(profile_config["steps"])
+        use_turbo = bool(profile_config["turbo"])
         seed = int(payload.get("seed", -1))
         if seed < 0:
             seed = secrets.randbelow(2**32)
@@ -202,7 +248,7 @@ class ComfyUIClient:
             "34": {
                 "class_type": "ModelAttentionBackend",
                 "inputs": {
-                    "model": ["24", 0] if profile == "fast" else ["2", 0],
+                    "model": ["24", 0] if use_turbo else ["2", 0],
                     "attention": settings.h3_attention_backend,
                 },
             },
@@ -254,7 +300,7 @@ class ComfyUIClient:
             },
         }
 
-        if profile == "fast":
+        if use_turbo:
             workflow["24"] = {
                 "class_type": "LoraLoaderModelOnly",
                 "inputs": {
@@ -280,13 +326,17 @@ class ComfyUIClient:
         ws: websocket.WebSocket,
         prompt_id: str,
         progress: ProgressCallback,
+        should_cancel: CancelCallback | None = None,
     ) -> None:
-        ws.settimeout(15)
+        ws.settimeout(2)
         while True:
+            if should_cancel and should_cancel():
+                self.cancel_prompt(prompt_id)
+                raise ComfyUICancelled("Generation cancelled.")
             try:
                 message = ws.recv()
             except websocket.WebSocketTimeoutException:
-                return
+                continue
 
             if isinstance(message, bytes):
                 continue
@@ -320,9 +370,13 @@ class ComfyUIClient:
         prompt_id: str,
         progress: ProgressCallback,
         timeout_seconds: int = 7200,
+        should_cancel: CancelCallback | None = None,
     ) -> dict[str, Any]:
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
+            if should_cancel and should_cancel():
+                self.cancel_prompt(prompt_id)
+                raise ComfyUICancelled("Generation cancelled.")
             response = self.session.get(
                 f"{self.base_url}/history/{prompt_id}",
                 timeout=30,
