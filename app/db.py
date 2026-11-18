@@ -8,6 +8,9 @@ from typing import Any
 from .config import settings
 
 
+PAGE_SIZE = 20
+
+
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -50,6 +53,8 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 started_at TEXT,
                 finished_at TEXT,
+                external_id TEXT,
+                cancel_requested INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(result_media_id) REFERENCES media(id) ON DELETE SET NULL
             );
 
@@ -59,6 +64,17 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_media_created
                 ON media(created_at DESC);
             """
+        )
+        _ensure_jobs_columns(conn)
+
+
+def _ensure_jobs_columns(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    if "external_id" not in columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN external_id TEXT")
+    if "cancel_requested" not in columns:
+        conn.execute(
+            "ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0"
         )
 
 
@@ -71,6 +87,8 @@ def recover_interrupted_jobs() -> int:
                    stage='Восстановлено после перезапуска',
                    progress=0,
                    started_at=NULL,
+                   external_id=NULL,
+                   cancel_requested=0,
                    error=NULL
              WHERE status='running'
             """
@@ -83,11 +101,28 @@ def enqueue_job(job_id: str, kind: str, payload: dict[str, Any]) -> None:
         conn.execute(
             """
             INSERT INTO jobs(
-                id, kind, status, progress, stage, payload_json, created_at
-            ) VALUES (?, ?, 'queued', 0, 'В очереди', ?, ?)
+                id, kind, status, progress, stage, payload_json,
+                created_at, external_id, cancel_requested
+            ) VALUES (?, ?, 'queued', 0, 'В очереди', ?, ?, NULL, 0)
             """,
             (job_id, kind, json.dumps(payload, ensure_ascii=False), utcnow()),
         )
+
+
+def get_job(job_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+    return _decode_job(row) if row else None
+
+
+def clone_failed_job(source_job_id: str, new_job_id: str) -> dict[str, Any]:
+    source = get_job(source_job_id)
+    if source is None:
+        raise LookupError("Job not found")
+    if source["status"] != "failed":
+        raise ValueError("Only failed jobs can be retried")
+    enqueue_job(new_job_id, source["kind"], source["payload"])
+    return source
 
 
 def claim_next_job() -> dict[str, Any] | None:
@@ -97,7 +132,7 @@ def claim_next_job() -> dict[str, Any] | None:
             """
             SELECT *
               FROM jobs
-             WHERE status='queued'
+             WHERE status='queued' AND cancel_requested=0
              ORDER BY created_at ASC
              LIMIT 1
             """
@@ -114,6 +149,8 @@ def claim_next_job() -> dict[str, Any] | None:
                    stage='Запуск',
                    progress=1,
                    started_at=?,
+                   external_id=NULL,
+                   cancel_requested=0,
                    error=NULL
              WHERE id=?
             """,
@@ -121,10 +158,10 @@ def claim_next_job() -> dict[str, Any] | None:
         )
         conn.execute("COMMIT")
 
-    result = dict(row)
+    result = _decode_job(row)
     result["status"] = "running"
     result["started_at"] = started_at
-    result["payload"] = json.loads(result.pop("payload_json"))
+    result["cancel_requested"] = 0
     return result
 
 
@@ -133,6 +170,7 @@ def update_job(
     *,
     progress: float | None = None,
     stage: str | None = None,
+    external_id: str | None = None,
 ) -> None:
     fields: list[str] = []
     values: list[Any] = []
@@ -143,6 +181,9 @@ def update_job(
     if stage is not None:
         fields.append("stage=?")
         values.append(stage)
+    if external_id is not None:
+        fields.append("external_id=?")
+        values.append(external_id)
 
     if not fields:
         return
@@ -155,6 +196,67 @@ def update_job(
         )
 
 
+def request_cancel(job_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if row is None:
+            conn.execute("COMMIT")
+            return None
+
+        status = row["status"]
+        if status == "queued":
+            conn.execute(
+                """
+                UPDATE jobs
+                   SET status='canceled',
+                       stage='Отменено',
+                       cancel_requested=1,
+                       finished_at=?
+                 WHERE id=?
+                """,
+                (utcnow(), job_id),
+            )
+        elif status == "running":
+            conn.execute(
+                """
+                UPDATE jobs
+                   SET cancel_requested=1,
+                       stage='Отмена...'
+                 WHERE id=?
+                """,
+                (job_id,),
+            )
+        conn.execute("COMMIT")
+
+    return get_job(job_id)
+
+
+def is_cancel_requested(job_id: str) -> bool:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT cancel_requested, status FROM jobs WHERE id=?",
+            (job_id,),
+        ).fetchone()
+    return bool(row and (row["cancel_requested"] or row["status"] == "canceled"))
+
+
+def mark_cancelled(job_id: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE jobs
+               SET status='canceled',
+                   stage='Отменено',
+                   cancel_requested=1,
+                   finished_at=?,
+                   error=NULL
+             WHERE id=?
+            """,
+            (utcnow(), job_id),
+        )
+
+
 def complete_job(job_id: str, media_id: str | None = None) -> None:
     with connect() as conn:
         conn.execute(
@@ -164,7 +266,8 @@ def complete_job(job_id: str, media_id: str | None = None) -> None:
                    progress=100,
                    stage='Готово',
                    result_media_id=?,
-                   finished_at=?
+                   finished_at=?,
+                   cancel_requested=0
              WHERE id=?
             """,
             (media_id, utcnow(), job_id),
@@ -245,6 +348,23 @@ def list_media(limit: int = 100) -> list[dict[str, Any]]:
     return [_decode_media(row) for row in rows]
 
 
+def list_media_page(page: int, page_size: int = PAGE_SIZE) -> dict[str, Any]:
+    page = max(1, int(page))
+    page_size = max(1, min(100, int(page_size)))
+    with connect() as conn:
+        total = int(conn.execute("SELECT COUNT(*) FROM media").fetchone()[0])
+        rows = conn.execute(
+            """
+            SELECT *
+              FROM media
+             ORDER BY created_at DESC
+             LIMIT ? OFFSET ?
+            """,
+            (page_size, (page - 1) * page_size),
+        ).fetchall()
+    return _page_result([_decode_media(row) for row in rows], page, page_size, total)
+
+
 def delete_media_row(media_id: str) -> None:
     with connect() as conn:
         conn.execute("DELETE FROM media WHERE id=?", (media_id,))
@@ -261,17 +381,24 @@ def list_jobs(limit: int = 100) -> list[dict[str, Any]]:
             """,
             (max(1, min(500, limit)),),
         ).fetchall()
+    return [_decode_job(row) for row in rows]
 
-    result = []
-    for row in rows:
-        item = dict(row)
-        try:
-            item["payload"] = json.loads(item.pop("payload_json"))
-        except Exception:
-            item["payload"] = {}
-            item.pop("payload_json", None)
-        result.append(item)
-    return result
+
+def list_jobs_page(page: int, page_size: int = PAGE_SIZE) -> dict[str, Any]:
+    page = max(1, int(page))
+    page_size = max(1, min(100, int(page_size)))
+    with connect() as conn:
+        total = int(conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
+        rows = conn.execute(
+            """
+            SELECT *
+              FROM jobs
+             ORDER BY created_at DESC
+             LIMIT ? OFFSET ?
+            """,
+            (page_size, (page - 1) * page_size),
+        ).fetchall()
+    return _page_result([_decode_job(row) for row in rows], page, page_size, total)
 
 
 def state_counts() -> dict[str, int]:
@@ -288,6 +415,29 @@ def state_counts() -> dict[str, int]:
         "running": int(running),
         "media": int(media_count),
     }
+
+
+def _page_result(items: list[dict[str, Any]], page: int, page_size: int, total: int) -> dict[str, Any]:
+    pages = max(1, (total + page_size - 1) // page_size)
+    if page > pages:
+        page = pages
+    return {
+        "items": items,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "pages": pages,
+    }
+
+
+def _decode_job(row: sqlite3.Row) -> dict[str, Any]:
+    item = dict(row)
+    try:
+        item["payload"] = json.loads(item.pop("payload_json"))
+    except Exception:
+        item["payload"] = {}
+        item.pop("payload_json", None)
+    return item
 
 
 def _decode_media(row: sqlite3.Row) -> dict[str, Any]:
