@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -51,6 +52,30 @@ class Settings:
 
 
 _data_dir = _path("DATA_DIR", ROOT_DIR / "data")
+_data_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _session_secret() -> str:
+    configured = os.getenv("SESSION_SECRET", "").strip()
+    if configured and configured != "auto":
+        return configured
+
+    secret_file = _data_dir / ".session_secret"
+    try:
+        value = secret_file.read_text(encoding="utf-8").strip()
+        if value:
+            return value
+    except FileNotFoundError:
+        pass
+
+    value = secrets.token_urlsafe(48)
+    secret_file.write_text(value, encoding="utf-8")
+    try:
+        secret_file.chmod(0o600)
+    except OSError:
+        pass
+    return value
+
 
 settings = Settings(
     root_dir=ROOT_DIR,
@@ -60,7 +85,7 @@ settings = Settings(
     temp_dir=_data_dir / "tmp",
     db_path=_data_dir / "aivideosite.db",
     site_password=os.getenv("SITE_PASSWORD", "11332244"),
-    session_secret=os.getenv("SESSION_SECRET", "change-this-local-session-secret"),
+    session_secret=_session_secret(),
     host=os.getenv("HOST", "0.0.0.0"),
     port=int(os.getenv("PORT", "8000")),
     comfyui_url=os.getenv("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/"),
