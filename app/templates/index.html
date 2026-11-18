@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block title %}AI Video Studio{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block body %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="AI Video Studio">
+      <span class="brand-mark">
+        <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
+      </span>
+      <span>
+        <strong>AI Video</strong>
+        <small>Studio</small>
+      </span>
+    </a>
+
+    <nav class="nav-list" aria-label="Разделы">
+      <button class="nav-item active" data-nav="generate" type="button">
+        <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+        <span>Генерация</span>
+      </button>
+      <button class="nav-item" data-nav="library" type="button">
+        <svg class="icon"><use href="/static/icons.svg#icon-library"></use></svg>
+        <span>Библиотека</span>
+        <span class="nav-count" id="sidebar-media-count">0</span>
+      </button>
+      <button class="nav-item" data-nav="queue" type="button">
+        <svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>
+        <span>Очередь</span>
+        <span class="nav-count" id="sidebar-queue-count">0</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="gpu-mini">
+        <span class="status-dot" id="gpu-status-dot"></span>
+        <div>
+          <span id="gpu-mini-name">RTX 3090</span>
+          <small id="gpu-mini-value">проверка...</small>
+        </div>
+      </div>
+      <form method="post" action="/logout">
+        <button class="nav-item subtle" type="submit">
+          <svg class="icon"><use href="/static/icons.svg#icon-logout"></use></svg>
+          <span>Выйти</span>
+        </button>
+      </form>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">LOCAL GPU WORKSPACE</span>
+        <h1 id="page-title">Генерация</h1>
+      </div>
+      <div class="topbar-status">
+        <span class="status-pill" id="comfy-status">
+          <span class="status-dot"></span>
+          ComfyUI
+        </span>
+        <span class="status-pill" id="active-status">
+          <svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>
+          <span>GPU свободен</span>
+        </span>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="view active" data-view="generate">
+        <div class="section-heading">
+          <div>
+            <h2>Создать видео</h2>
+            <p>T2V без кадров, I2V с первым кадром или переход между первым и последним.</p>
+          </div>
+        </div>
+
+        <form id="generate-form" class="generator-grid">
+          <section class="panel generator-main">
+            <div class="panel-header">
+              <div>
+                <span class="panel-kicker">MiniMax H3 FL2VA</span>
+                <h3>Сцена</h3>
+              </div>
+              <span class="badge badge-blue">RTX 3090</span>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Prompt</span>
+              <textarea
+                name="prompt"
+                id="prompt"
+                rows="8"
+                required
+                placeholder="Опишите персонажа, действие, движение камеры, окружение и свет..."></textarea>
+              <span class="field-help">Для сложного движения обычно стабильнее английский prompt.</span>
+            </label>
+
+            <div class="reference-grid">
+              <label class="upload-card">
+                <input type="file" name="first_frame" accept="image/png,image/jpeg,image/webp">
+                <span class="upload-icon">
+                  <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+                </span>
+                <strong>Первый кадр</strong>
+                <small>Необязательно · PNG/JPG/WebP</small>
+                <span class="upload-name">Выбрать изображение</span>
+              </label>
+              <label class="upload-card">
+                <input type="file" name="last_frame" accept="image/png,image/jpeg,image/webp">
+                <span class="upload-icon">
+                  <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+                </span>
+                <strong>Последний кадр</strong>
+                <small>Необязательно · нужен только для First/Last</small>
+                <span class="upload-name">Выбрать изображение</span>
+              </label>
+            </div>
+          </section>
+
+          <aside class="panel generator-settings">
+            <div class="panel-header">
+              <div>
+                <span class="panel-kicker">OUTPUT</span>
+                <h3>Настройки</h3>
+              </div>
+              <svg class="icon icon-muted"><use href="/static/icons.svg#icon-adjustments"></use></svg>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Размер</span>
+              <select name="resolution" id="resolution">
+                <option value="1344x768" selected>1344 × 768 · 16:9</option>
+                <option value="768x1344">768 × 1344 · 9:16</option>
+                <option value="1024x1024">1024 × 1024 · 1:1</option>
+                <option value="1536x864">1536 × 864 · 16:9+</option>
+              </select>
+            </label>
+
+            <div class="field-row">
+              <label class="field">
+                <span class="field-label">Длительность</span>
+                <select name="seconds">
+                  <option value="5">5 сек</option>
+                  <option value="10" selected>10 сек</option>
+                  <option value="15">15 сек</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">FPS</span>
+                <select name="fps">
+                  <option value="24" selected>24</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Профиль</span>
+              <div class="segmented">
+                <label>
+                  <input type="radio" name="profile" value="fast" checked>
+                  <span>
+                    <strong>Fast</strong>
+                    <small>Turbo · 8 steps</small>
+                  </span>
+                </label>
+                <label>
+                  <input type="radio" name="profile" value="quality">
+                  <span>
+                    <strong>Quality</strong>
+                    <small>Base · 20 steps</small>
+                  </span>
+                </label>
+              </div>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Seed</span>
+              <input name="seed" type="number" value="-1" min="-1" max="4294967295">
+              <span class="field-help">-1 = новый случайный seed.</span>
+            </label>
+
+            <div class="settings-summary">
+              <div>
+                <span>Аудио H3</span>
+                <strong>выключено</strong>
+              </div>
+              <div>
+                <span>Sampler</span>
+                <strong>Euler</strong>
+              </div>
+            </div>
+
+            <button class="btn btn-primary btn-lg w-full" type="submit" id="generate-button">
+              <svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>
+              Поставить в очередь
+            </button>
+          </aside>
+        </form>
+
+        <section class="dashboard-strip">
+          <article class="metric-card">
+            <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span>
+            <div><small>GPU</small><strong id="metric-gpu">—</strong><span id="metric-vram">—</span></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-activity"></use></svg></span>
+            <div><small>Загрузка</small><strong id="metric-util">—</strong><span id="metric-temp">—</span></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-database"></use></svg></span>
+            <div><small>Диск</small><strong id="metric-disk">—</strong><span>свободно</span></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-stack"></use></svg></span>
+            <div><small>Очередь</small><strong id="metric-queue">0</strong><span>задач</span></div>
+          </article>
+        </section>
+      </section>
+
+      <section class="view" data-view="library">
+        <div class="section-heading">
+          <div>
+            <h2>Библиотека</h2>
+            <p>Исходные H3-ролики и все производные версии сохраняются отдельно.</p>
+          </div>
+          <button class="btn btn-secondary" id="refresh-library" type="button">
+            <svg class="icon"><use href="/static/icons.svg#icon-refresh"></use></svg>
+            Обновить
+          </button>
+        </div>
+        <div class="media-grid" id="media-grid"></div>
+        <div class="empty-state" id="media-empty">
+          <svg class="icon"><use href="/static/icons.svg#icon-library"></use></svg>
+          <h3>Пока пусто</h3>
+          <p>Сгенерированные ролики появятся здесь автоматически.</p>
+        </div>
+      </section>
+
+      <section class="view" data-view="queue">
+        <div class="section-heading">
+          <div>
+            <h2>Очередь задач</h2>
+            <p>Страница может быть закрыта: worker продолжит работу в фоне.</p>
+          </div>
+        </div>
+        <div class="job-list" id="job-list"></div>
+        <div class="empty-state" id="job-empty">
+          <svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>
+          <h3>Нет задач</h3>
+          <p>Новые генерации и операции над видео появятся здесь.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="Мобильная навигация">
+    <button class="active" data-nav="generate" type="button">
+      <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+      <span>Создать</span>
+    </button>
+    <button data-nav="library" type="button">
+      <svg class="icon"><use href="/static/icons.svg#icon-library"></use></svg>
+      <span>Ролики</span>
+    </button>
+    <button data-nav="queue" type="button">
+      <svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>
+      <span>Очередь</span>
+      <i id="mobile-queue-count">0</i>
+    </button>
+  </nav>
+</div>
+
+<dialog class="action-dialog" id="action-dialog">
+  <form id="action-form" method="dialog">
+    <div class="dialog-header">
+      <div>
+        <span class="panel-kicker" id="dialog-kicker">POST PROCESS</span>
+        <h3 id="dialog-title">LipSync</h3>
+      </div>
+      <button class="icon-btn" type="button" data-close-dialog aria-label="Закрыть">
+        <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+      </button>
+    </div>
+
+    <input type="hidden" name="media_id" id="action-media-id">
+    <input type="hidden" name="action" id="action-type">
+
+    <label class="field">
+      <span class="field-label" id="audio-label">Вокал / аудиодорожка</span>
+      <input type="file" name="audio" accept="audio/*" required>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Начало дорожки, сек</span>
+      <input type="number" name="audio_start" min="0" step="0.1" value="0">
+    </label>
+
+    <div class="field-row" id="lipsync-options">
+      <label class="field">
+        <span class="field-label">Steps</span>
+        <input type="number" name="steps" min="10" max="60" value="20">
+      </label>
+      <label class="field">
+        <span class="field-label">Guidance</span>
+        <input type="number" name="guidance" min="1" max="3" step="0.1" value="1.5">
+      </label>
+    </div>
+
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="button" data-close-dialog>Отмена</button>
+      <button class="btn btn-primary" type="submit" id="action-submit">
+        <svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>
+        Запустить
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast-container" id="toast-container" aria-live="polite"></div>
+{% endblock %}
