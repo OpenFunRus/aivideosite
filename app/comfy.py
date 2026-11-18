@@ -145,12 +145,18 @@ class ComfyUIClient:
         except Exception:
             pass
 
-        # Compatibility fallback for older ComfyUI builds.
-        try:
-            response = self.session.post(f"{self.base_url}/interrupt", timeout=10)
-            return response.ok
-        except Exception:
-            return False
+        # Compatibility fallbacks for older ComfyUI builds.
+        for endpoint in ("/api/interrupt", "/interrupt"):
+            try:
+                response = self.session.post(
+                    f"{self.base_url}{endpoint}",
+                    timeout=10,
+                )
+                if response.ok:
+                    return True
+            except Exception:
+                continue
+        return False
 
     def upload_image(self, path: Path) -> str:
         if not path.is_file():
