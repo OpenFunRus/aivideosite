@@ -14,7 +14,10 @@
   let lastMediaSignature = "";
   let mediaPage = 1;
   let jobsPage = 1;
+  let serverClockAtFetchMs = null;
+  let serverClockPerfAtFetch = null;
   let currentView = localStorage.getItem("aivideosite-view") || "generate";
+  const uploadObjectUrls = new Map();
 
   const icon = (name) =>
     `<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-${name}"></use></svg>`;
@@ -110,12 +113,55 @@
       .join(":");
   };
 
-  const jobElapsed = (job) => {
-    if (!job.started_at) return null;
-    const start = new Date(job.started_at).getTime();
-    const end = job.finished_at ? new Date(job.finished_at).getTime() : Date.now();
+  const syncedServerNowMs = () => {
+    if (serverClockAtFetchMs === null || serverClockPerfAtFetch === null) {
+      return Date.now();
+    }
+    return serverClockAtFetchMs + (performance.now() - serverClockPerfAtFetch);
+  };
+
+  const elapsedBetween = (startIso, endIso = null) => {
+    if (!startIso) return null;
+    const start = new Date(startIso).getTime();
+    const end = endIso ? new Date(endIso).getTime() : syncedServerNowMs();
     if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
     return Math.max(0, (end - start) / 1000);
+  };
+
+  const jobElapsed = (job) =>
+    elapsedBetween(job.started_at, job.finished_at || null);
+
+  const jobWait = (job) => {
+    if (!job.created_at) return null;
+    if (job.started_at) {
+      return elapsedBetween(job.created_at, job.started_at);
+    }
+    if (job.status === "queued") {
+      return elapsedBetween(job.created_at);
+    }
+    return null;
+  };
+
+  const updateLiveJobTimers = () => {
+    $("#job-list [data-job-start]").forEach((element) => {
+      const start = element.dataset.jobStart || "";
+      const finished = element.dataset.jobFinished || "";
+      const elapsed = elapsedBetween(start, finished || null);
+      element.textContent = elapsed === null ? "—" : formatHms(elapsed);
+    });
+
+    $("#job-list [data-job-created]").forEach((element) => {
+      const created = element.dataset.jobCreated || "";
+      const started = element.dataset.jobStarted || "";
+      const status = element.dataset.jobStatus || "";
+      let elapsed = null;
+      if (started) {
+        elapsed = elapsedBetween(created, started);
+      } else if (status === "queued") {
+        elapsed = elapsedBetween(created);
+      }
+      element.textContent = elapsed === null ? "—" : formatHms(elapsed);
+    });
   };
 
   const switchView = (view, refresh = false, persist = true) => {
@@ -250,11 +296,8 @@
     }
 
     generationForm.reset();
-    $$(".upload-card input[type=file]").forEach((input) => {
-      input.value = "";
-      const label = input.closest(".upload-card");
-      const name = $(".upload-name", label);
-      if (name) name.textContent = "Выбрать изображение";
+    $(".upload-card input[type=file]").forEach((input) => {
+      clearUploadPreview(input);
     });
 
     mediaPage = 1;
@@ -535,9 +578,15 @@
               <span><b>Начало:</b> ${
                 job.started_at ? escapeHtml(shortDate(job.started_at)) : "—"
               }</span>
-              <span><b>Время:</b> ${
-                elapsed === null ? "—" : formatHms(elapsed)
-              }</span>
+              <span><b>Ожидание:</b> <span
+                data-job-created="${escapeHtml(job.created_at || "")}"
+                data-job-started="${escapeHtml(job.started_at || "")}"
+                data-job-status="${escapeHtml(job.status || "")}"
+              >${jobWait(job) === null ? "—" : formatHms(jobWait(job))}</span></span>
+              <span><b>Генерация:</b> <span
+                data-job-start="${escapeHtml(job.started_at || "")}"
+                data-job-finished="${escapeHtml(job.finished_at || "")}"
+              >${elapsed === null ? "—" : formatHms(elapsed)}</span></span>
               <span><b>Прогресс:</b> ${progressText}</span>
             </div>
 
@@ -581,6 +630,10 @@
         `/api/state?media_page=${mediaPage}&jobs_page=${jobsPage}`
       );
       lastState = state;
+      if (Number.isFinite(Number(state.server_now))) {
+        serverClockAtFetchMs = Number(state.server_now) * 1000;
+        serverClockPerfAtFetch = performance.now();
+      }
 
       mediaPage = Number(state.media_pagination?.page || mediaPage);
       jobsPage = Number(state.jobs_pagination?.page || jobsPage);
@@ -692,13 +745,81 @@
     }
   });
 
-  $$(".upload-card input[type=file]").forEach((input) => {
+  const clearUploadPreview = (input) => {
+    if (!input) return;
+    const card = input.closest(".upload-card");
+    const existingUrl = uploadObjectUrls.get(input);
+    if (existingUrl) {
+      URL.revokeObjectURL(existingUrl);
+      uploadObjectUrls.delete(input);
+    }
+
+    input.value = "";
+    if (!card) return;
+
+    const preview = $(".upload-preview", card);
+    const name = $(".upload-name", card);
+    if (preview) {
+      preview.removeAttribute("src");
+      preview.hidden = true;
+    }
+    if (name) {
+      name.textContent = "Выбрать изображение";
+    }
+    card.classList.remove("has-preview");
+  };
+
+  const showUploadPreview = (input, file) => {
+    const card = input.closest(".upload-card");
+    if (!card || !file) {
+      clearUploadPreview(input);
+      return;
+    }
+
+    const previousUrl = uploadObjectUrls.get(input);
+    if (previousUrl) {
+      URL.revokeObjectURL(previousUrl);
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    uploadObjectUrls.set(input, objectUrl);
+
+    const preview = $(".upload-preview", card);
+    const name = $(".upload-name", card);
+    if (preview) {
+      preview.src = objectUrl;
+      preview.hidden = false;
+    }
+    if (name) {
+      name.textContent = file.name;
+    }
+    card.classList.add("has-preview");
+  };
+
+  $(".upload-card input[type=file]").forEach((input) => {
     input.addEventListener("change", () => {
-      const label = input.closest(".upload-card");
-      const name = $(".upload-name", label);
-      name.textContent =
-        input.files?.[0]?.name || "Выбрать изображение";
+      const file = input.files?.[0] || null;
+      if (file) {
+        showUploadPreview(input, file);
+      } else {
+        clearUploadPreview(input);
+      }
     });
+  });
+
+  $(".upload-card .upload-remove").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const card = button.closest(".upload-card");
+      const input = card ? $('input[type="file"]', card) : null;
+      clearUploadPreview(input);
+    });
+  });
+
+  window.addEventListener("beforeunload", () => {
+    uploadObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+    uploadObjectUrls.clear();
   });
 
   generationForm.addEventListener("submit", async (event) => {
@@ -999,5 +1120,6 @@
     }
   });
 
+  setInterval(updateLiveJobTimers, 1000);
   refreshState(true, currentView === "library");
 })();
