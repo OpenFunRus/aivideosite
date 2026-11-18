@@ -731,6 +731,7 @@ class JobWorker(threading.Thread):
             else:
                 filters.append(
                     "anullsrc=r=48000:cl=stereo,"
+                    "aformat=sample_fmts=fltp:channel_layouts=stereo,"
                     f"atrim=duration={duration:.6f},asetpts=PTS-STARTPTS"
                     f"[a{index}]"
                 )
@@ -763,7 +764,7 @@ class JobWorker(threading.Thread):
                 "aformat=sample_fmts=fltp:channel_layouts=stereo,"
                 f"{trim_filter},asetpts=PTS-STARTPTS,"
                 f"volume={track_volume:.4f},"
-                f"adelay={delay_ms}:all=1,"
+                f"adelay=delays={delay_ms}:all=1,"
                 f"apad,atrim=duration={total_duration:.6f}"
                 "[track]"
             )
