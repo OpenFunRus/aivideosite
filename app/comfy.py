@@ -306,6 +306,16 @@ class ComfyUIClient:
             },
         }
 
+        if bool(payload.get("generate_audio", False)):
+            workflow["10"] = {
+                "class_type": "VAEDecodeAudio",
+                "inputs": {
+                    "samples": ["30", 0],
+                    "vae": ["13", 3],
+                },
+            }
+            workflow["11"]["inputs"]["audio"] = ["10", 0]
+
         if use_turbo:
             workflow["24"] = {
                 "class_type": "LoraLoaderModelOnly",
