@@ -245,6 +245,7 @@ class JobWorker(threading.Thread):
                 raise RuntimeError("LatentSync finished without producing output video.")
 
             metadata = {
+                **_generation_context(source),
                 "operation": "lipsync",
                 "audio_start": start,
                 "steps": steps,
@@ -318,7 +319,11 @@ class JobWorker(threading.Thread):
                 kind="audio",
                 title=f"{source['title']} · Audio",
                 parent_id=source["id"],
-                metadata={"operation": "audio_replace", "audio_start": start},
+                metadata={
+                    **_generation_context(source),
+                    "operation": "audio_replace",
+                    "audio_start": start,
+                },
                 size_bytes=output_path.stat().st_size,
                 duration=probe_duration(output_path),
             )
@@ -362,7 +367,10 @@ class JobWorker(threading.Thread):
                 kind="silent",
                 title=f"{source['title']} · Без звука",
                 parent_id=source["id"],
-                metadata={"operation": "audio_remove"},
+                metadata={
+                    **_generation_context(source),
+                    "operation": "audio_remove",
+                },
                 size_bytes=output_path.stat().st_size,
                 duration=probe_duration(output_path),
             )
@@ -380,6 +388,23 @@ def _require_media(media_id: str) -> dict[str, Any]:
     if not path.is_file():
         raise RuntimeError("Video file is missing from the library.")
     return media
+
+
+def _generation_context(source: dict[str, Any]) -> dict[str, Any]:
+    meta = source.get("meta") or {}
+    keys = (
+        "prompt",
+        "width",
+        "height",
+        "seconds",
+        "fps",
+        "profile",
+        "seed",
+        "generate_audio",
+        "reference_count",
+        "comfy_prompt_id",
+    )
+    return {key: meta.get(key) for key in keys if key in meta}
 
 
 def _prompt_title(prompt: str) -> str:
