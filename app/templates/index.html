@@ -124,7 +124,10 @@
                 <span class="panel-kicker">OUTPUT</span>
                 <h3>Настройки</h3>
               </div>
-              <svg class="icon icon-muted"><use href="/static/icons.svg#icon-adjustments"></use></svg>
+              <button class="btn btn-secondary btn-compact" id="reset-settings" type="button" title="Сбросить сохранённые настройки">
+                <svg class="icon"><use href="/static/icons.svg#icon-refresh"></use></svg>
+                По умолчанию
+              </button>
             </div>
 
             <label class="field">
@@ -198,14 +201,23 @@
               <span class="field-help">-1 = новый случайный seed.</span>
             </label>
 
+            <label class="toggle-field">
+              <input type="checkbox" name="generate_audio" id="generate-audio" value="true">
+              <span class="toggle-control" aria-hidden="true"></span>
+              <span class="toggle-copy">
+                <strong>Генерировать со звуком</strong>
+                <small>Нативное аудио MiniMax H3. По умолчанию выключено.</small>
+              </span>
+            </label>
+
             <div class="settings-summary">
-              <div>
-                <span>Аудио H3</span>
-                <strong>выключено</strong>
-              </div>
               <div>
                 <span>Sampler</span>
                 <strong>Euler</strong>
+              </div>
+              <div>
+                <span>Настройки</span>
+                <strong>сохраняются локально</strong>
               </div>
             </div>
 
@@ -242,10 +254,16 @@
             <h2>Библиотека</h2>
             <p>Исходные H3-ролики и все производные версии сохраняются отдельно.</p>
           </div>
-          <button class="btn btn-secondary" id="refresh-library" type="button">
-            <svg class="icon"><use href="/static/icons.svg#icon-refresh"></use></svg>
-            Обновить
-          </button>
+          <div class="section-actions">
+            <button class="btn btn-secondary" id="refresh-library" type="button">
+              <svg class="icon"><use href="/static/icons.svg#icon-refresh"></use></svg>
+              Обновить
+            </button>
+            <button class="btn btn-danger" id="clear-library" type="button">
+              <svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg>
+              Очистить всё
+            </button>
+          </div>
         </div>
         <div class="media-grid" id="media-grid"></div>
         <div class="empty-state" id="media-empty">
@@ -262,6 +280,10 @@
             <h2>Очередь задач</h2>
             <p>Страница может быть закрыта: worker продолжит работу в фоне.</p>
           </div>
+          <button class="btn btn-danger" id="clear-queue" type="button">
+            <svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg>
+            Очистить всё
+          </button>
         </div>
         <div class="job-list" id="job-list"></div>
         <div class="empty-state" id="job-empty">
@@ -335,6 +357,48 @@
       </button>
     </div>
   </form>
+</dialog>
+
+<dialog class="action-dialog info-dialog" id="media-info-dialog">
+  <div class="info-dialog-body">
+    <div class="dialog-header">
+      <div>
+        <span class="panel-kicker">GENERATION INFO</span>
+        <h3>Промт и параметры</h3>
+      </div>
+      <button class="icon-btn" type="button" data-close-info-dialog aria-label="Закрыть">
+        <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+      </button>
+    </div>
+
+    <label class="field">
+      <span class="field-label field-label-row">
+        <span>Prompt</span>
+        <button class="copy-link" type="button" data-copy-target="media-info-prompt">
+          <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+          Копировать
+        </button>
+      </span>
+      <textarea id="media-info-prompt" rows="8" readonly></textarea>
+    </label>
+
+    <label class="field">
+      <span class="field-label field-label-row">
+        <span>Seed</span>
+        <button class="copy-link" type="button" data-copy-target="media-info-seed">
+          <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+          Копировать
+        </button>
+      </span>
+      <input id="media-info-seed" type="text" readonly>
+    </label>
+
+    <div class="info-grid" id="media-info-grid"></div>
+
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="button" data-close-info-dialog>Закрыть</button>
+    </div>
+  </div>
 </dialog>
 
 <div class="toast-container" id="toast-container" aria-live="polite"></div>
