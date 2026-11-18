@@ -405,6 +405,68 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .media-actions button:hover, .media-actions a:hover { color: var(--text); background: var(--surface-2); }
 .media-actions .danger:hover { color: #ffadb2; border-color: rgba(232,89,95,.3); }
 
+.editor-timeline-panel { padding: 22px; }
+.editor-panel-header { margin-bottom: 18px; }
+.editor-summary { display: flex; align-items: baseline; gap: 10px; color: var(--muted); font-size: 11px; }
+.editor-summary strong { color: var(--text); font-size: 15px; }
+.editor-track-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; align-items: stretch; margin-top: 10px; }
+.editor-track-label { min-height: 112px; display: grid; place-items: center; align-content: center; gap: 7px; color: var(--muted); background: #0b101a; border: 1px solid var(--border-soft); border-radius: 10px; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+.editor-track-label .icon { width: 18px; height: 18px; color: var(--primary-hover); }
+.editor-track { position: relative; min-height: 112px; padding: 9px; overflow-x: auto; background: #070b13; border: 1px solid var(--border-soft); border-radius: 10px; }
+.editor-video-track { display: flex; gap: 8px; align-items: stretch; }
+.editor-video-track.drag-over { border-color: var(--primary); box-shadow: inset 0 0 0 1px rgba(79,140,255,.25); }
+.editor-track-empty { width: 100%; min-width: 260px; display: none; place-items: center; color: var(--muted-2); font-size: 11px; text-align: center; }
+.editor-track-empty.show { display: grid; }
+.editor-clip { flex: var(--clip-grow, 1) 1 0; min-width: 180px; max-width: 430px; min-height: 92px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; background: linear-gradient(135deg, #17233a, #101827); border: 1px solid #2b3a58; border-radius: 9px; cursor: grab; user-select: none; }
+.editor-clip.dragging { opacity: .45; }
+.editor-clip-top { display: grid; grid-template-columns: 24px minmax(0,1fr) 28px; gap: 8px; align-items: center; }
+.editor-clip-index { width: 24px; height: 24px; display: grid; place-items: center; color: #bcd0f8; background: rgba(79,140,255,.16); border-radius: 7px; font-size: 10px; font-weight: 800; }
+.editor-clip-top > div { min-width: 0; }
+.editor-clip-top strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; }
+.editor-clip-top small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+.editor-clip-remove { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; color: var(--muted); background: transparent; border: 0; border-radius: 7px; }
+.editor-clip-remove:hover { color: #ffb2b6; background: rgba(232,89,95,.12); }
+.editor-clip-remove .icon { width: 16px; height: 16px; }
+.editor-clip-volume { display: grid; gap: 4px; color: var(--muted); font-size: 9px; }
+.editor-clip-volume span { display: flex; justify-content: space-between; gap: 8px; }
+.editor-clip-volume b { color: #dce5f2; }
+.editor-clip-volume input { height: 18px; padding: 0; border: 0; accent-color: var(--primary); background: transparent; }
+.editor-audio-track { overflow: hidden; }
+.editor-audio-track .editor-track-empty { min-height: 92px; }
+.editor-audio-block { position: absolute; top: 13px; bottom: 13px; min-width: 84px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; overflow: hidden; color: #dff8e5; background: linear-gradient(135deg, rgba(47,179,68,.26), rgba(47,179,68,.12)); border: 1px solid rgba(89,210,111,.34); border-radius: 9px; }
+.editor-audio-block > div { min-width: 0; }
+.editor-audio-block strong, .editor-audio-block small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.editor-audio-block strong { font-size: 11px; }
+.editor-audio-block small { margin-top: 3px; color: #9bd8a7; font-size: 9px; }
+.editor-audio-block .icon { flex: 0 0 auto; color: #9be6aa; }
+.editor-audio-settings { margin-top: 14px; padding: 13px; display: grid; gap: 12px; background: rgba(8,12,20,.48); border: 1px solid var(--border-soft); border-radius: 11px; }
+.editor-audio-upload { position: relative; min-height: 58px; padding: 10px 12px; display: flex; align-items: center; gap: 11px; border: 1px dashed #33405d; border-radius: 10px; cursor: pointer; }
+.editor-audio-upload:hover { border-color: var(--primary); background: var(--primary-soft); }
+.editor-audio-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.editor-audio-upload > span:last-child { display: grid; gap: 3px; pointer-events: none; }
+.editor-audio-upload strong { font-size: 11px; }
+.editor-audio-upload small { color: var(--muted); font-size: 9px; }
+.editor-audio-controls { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)) auto; gap: 10px; align-items: end; }
+.editor-audio-controls .field { margin: 0; }
+.editor-volume-field input[type="range"] { height: 43px; padding: 0; border: 0; background: transparent; accent-color: var(--primary); }
+.editor-export-row { margin-top: 16px; padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border-soft); }
+.editor-export-row > div:first-child { min-width: 0; display: grid; gap: 4px; }
+.editor-export-row strong { font-size: 12px; }
+.editor-export-row small { color: var(--muted); font-size: 10px; }
+.editor-export-actions { display: flex; gap: 9px; }
+.editor-library-panel { margin-top: 18px; padding: 22px; }
+.editor-media-pool { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+.editor-pool-card { min-width: 0; overflow: hidden; background: #0c121e; border: 1px solid var(--border-soft); border-radius: 11px; cursor: grab; }
+.editor-pool-card:active { cursor: grabbing; }
+.editor-pool-preview { aspect-ratio: 16/9; background: #03050a; overflow: hidden; }
+.editor-pool-preview video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.editor-pool-body { padding: 10px; display: grid; gap: 9px; }
+.editor-pool-body > div { min-width: 0; }
+.editor-pool-body strong, .editor-pool-body small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.editor-pool-body strong { font-size: 11px; }
+.editor-pool-body small { margin-top: 4px; color: var(--muted); font-size: 9px; }
+.editor-pool-body .btn { width: 100%; }
+
 .job-list { display: grid; gap: 10px; }
 .job-card { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 13px; }
 .job-top { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
@@ -508,7 +570,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   .mobile-nav {
     position: fixed;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     left: 8px;
     right: 8px;
     bottom: calc(8px + env(safe-area-inset-bottom));
@@ -840,4 +902,29 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
     pointer-events: auto;
     transform: none;
   }
+}
+
+
+@media (max-width: 1180px) {
+  .editor-media-pool { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .editor-audio-controls { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .editor-audio-controls .btn { align-self: stretch; }
+}
+@media (max-width: 650px) {
+  .editor-timeline-panel, .editor-library-panel { padding: 14px; }
+  .editor-track-row { grid-template-columns: 54px minmax(0,1fr); }
+  .editor-track-label { min-height: 104px; font-size: 8px; }
+  .editor-track-label span { writing-mode: vertical-rl; transform: rotate(180deg); }
+  .editor-clip { min-width: 165px; }
+  .editor-audio-controls { grid-template-columns: 1fr 1fr; }
+  .editor-audio-controls .btn { grid-column: 1 / -1; }
+  .editor-export-row { align-items: stretch; flex-direction: column; }
+  .editor-export-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .editor-media-pool { grid-template-columns: 1fr 1fr; gap: 9px; }
+}
+@media (max-width: 430px) {
+  .editor-media-pool { grid-template-columns: 1fr; }
+  .editor-audio-controls { grid-template-columns: 1fr; }
+  .editor-audio-controls .btn { grid-column: auto; }
+  .editor-export-actions { grid-template-columns: 1fr; }
 }
