@@ -19,7 +19,7 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -304,15 +304,6 @@ async def media_file(
         content_disposition_type="attachment" if download else "inline",
     )
 
-
-@app.exception_handler(HTTPException)
-async def api_http_exception_handler(request: Request, exc: HTTPException):
-    if request.url.path.startswith("/api/"):
-        return JSONResponse(
-            {"ok": False, "error": exc.detail},
-            status_code=exc.status_code,
-        )
-    raise exc
 
 
 async def save_upload(
