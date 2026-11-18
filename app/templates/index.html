@@ -19,6 +19,10 @@
         <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
         <span>Генерация</span>
       </button>
+      <button class="nav-item" data-nav="editor" type="button">
+        <svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg>
+        <span>Монтаж</span>
+      </button>
       <button class="nav-item" data-nav="library" type="button">
         <svg class="icon"><use href="/static/icons.svg#icon-library"></use></svg>
         <span>Библиотека</span>
@@ -260,6 +264,135 @@
         </section>
       </section>
 
+      <section class="view" data-view="editor">
+        <div class="section-heading">
+          <div>
+            <h2>Монтаж ролика</h2>
+            <p>Перетащите видео на таймлайн, расставьте порядок, настройте звук клипов и добавьте отдельный трек.</p>
+          </div>
+          <button class="btn btn-secondary" id="editor-refresh-media" type="button">
+            <svg class="icon"><use href="/static/icons.svg#icon-refresh"></use></svg>
+            Обновить видео
+          </button>
+        </div>
+
+        <section class="panel editor-timeline-panel">
+          <div class="panel-header editor-panel-header">
+            <div>
+              <span class="panel-kicker">TIMELINE</span>
+              <h3>Таймлайн</h3>
+            </div>
+            <div class="editor-summary">
+              <span id="editor-clip-count">0 клипов</span>
+              <strong id="editor-total-duration">00:00</strong>
+            </div>
+          </div>
+
+          <div class="editor-track-row">
+            <div class="editor-track-label">
+              <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
+              <span>Видео</span>
+            </div>
+            <div class="editor-track editor-video-track" id="editor-video-track">
+              <div class="editor-track-empty show" id="editor-video-empty">
+                Перетащите сюда ролики из списка ниже или нажмите «На таймлайн».
+              </div>
+            </div>
+          </div>
+
+          <div class="editor-track-row">
+            <div class="editor-track-label">
+              <svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg>
+              <span>Аудио</span>
+            </div>
+            <div class="editor-track editor-audio-track" id="editor-audio-track">
+              <div class="editor-track-empty show" id="editor-audio-empty">
+                Отдельная дорожка не добавлена.
+              </div>
+              <div class="editor-audio-block" id="editor-audio-block" hidden>
+                <div>
+                  <strong id="editor-audio-name">Трек</strong>
+                  <small id="editor-audio-block-meta">00:00</small>
+                </div>
+                <svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="editor-audio-settings">
+            <label class="editor-audio-upload">
+              <input id="editor-audio-input" type="file" accept="audio/*">
+              <span class="metric-icon">
+                <svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg>
+              </span>
+              <span>
+                <strong>Добавить свою аудиодорожку</strong>
+                <small>WAV, MP3, FLAC, M4A, AAC, OGG, OPUS</small>
+              </span>
+            </label>
+
+            <div class="editor-audio-controls" id="editor-audio-controls" hidden>
+              <label class="field">
+                <span class="field-label">Позиция на таймлайне, сек</span>
+                <input id="editor-audio-offset" type="number" min="0" step="0.1" value="0">
+              </label>
+              <label class="field">
+                <span class="field-label">Обрезать начало, сек</span>
+                <input id="editor-audio-trim-start" type="number" min="0" step="0.1" value="0">
+              </label>
+              <label class="field">
+                <span class="field-label">Длина фрагмента, сек</span>
+                <input id="editor-audio-trim-duration" type="number" min="0" step="0.1" value="0">
+              </label>
+              <label class="field editor-volume-field">
+                <span class="field-label field-label-row">
+                  <span>Громкость трека</span>
+                  <strong id="editor-audio-volume-value">100%</strong>
+                </span>
+                <input id="editor-audio-volume" type="range" min="0" max="200" step="1" value="100">
+              </label>
+              <button class="btn btn-danger btn-compact" id="editor-remove-audio" type="button">
+                <svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg>
+                Убрать дорожку
+              </button>
+            </div>
+          </div>
+
+          <div class="editor-export-row">
+            <div>
+              <strong id="editor-output-summary">Добавьте видео на таймлайн</strong>
+              <small>Экспорт нормализуется под размер первого клипа и 24 FPS.</small>
+            </div>
+            <div class="editor-export-actions">
+              <button class="btn btn-secondary" id="editor-clear" type="button">
+                <svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg>
+                Очистить
+              </button>
+              <button class="btn btn-primary btn-lg" id="editor-export" type="button" disabled>
+                <svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>
+                Склеить и скачать
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel editor-library-panel">
+          <div class="panel-header">
+            <div>
+              <span class="panel-kicker">SOURCE CLIPS</span>
+              <h3>Видео для монтажа</h3>
+            </div>
+            <span class="badge badge-blue">Drag & Drop</span>
+          </div>
+          <div class="editor-media-pool" id="editor-media-pool"></div>
+          <div class="empty-state" id="editor-media-empty">
+            <svg class="icon"><use href="/static/icons.svg#icon-library"></use></svg>
+            <h3>Нет видео</h3>
+            <p>Сначала сгенерируйте или добавьте ролики в библиотеку.</p>
+          </div>
+        </section>
+      </section>
+
       <section class="view" data-view="library">
         <div class="section-heading">
           <div>
@@ -312,6 +445,10 @@
     <button class="active" data-nav="generate" type="button">
       <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
       <span>Создать</span>
+    </button>
+    <button data-nav="editor" type="button">
+      <svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg>
+      <span>Монтаж</span>
     </button>
     <button data-nav="library" type="button">
       <svg class="icon"><use href="/static/icons.svg#icon-library"></use></svg>
