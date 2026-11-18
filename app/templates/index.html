@@ -128,47 +128,65 @@
             </div>
 
             <label class="field">
-              <span class="field-label">Размер</span>
+              <span class="field-label">Формат и размер</span>
               <select name="resolution" id="resolution">
                 <option value="1344x768" selected>1344 × 768 · 16:9</option>
                 <option value="768x1344">768 × 1344 · 9:16</option>
                 <option value="1024x1024">1024 × 1024 · 1:1</option>
-                <option value="1536x864">1536 × 864 · 16:9+</option>
+                <option value="1152x768">1152 × 768 · 3:2</option>
+                <option value="768x1152">768 × 1152 · 2:3</option>
+                <option value="1024x768">1024 × 768 · 4:3</option>
+                <option value="768x1024">768 × 1024 · 3:4</option>
+                <option value="1344x576">1344 × 576 · 21:9</option>
+                <option value="1536x864">1536 × 864 · 16:9 HQ</option>
+                <option value="864x1536">864 × 1536 · 9:16 HQ</option>
               </select>
             </label>
 
-            <div class="field-row">
-              <label class="field">
-                <span class="field-label">Длительность</span>
-                <select name="seconds">
-                  <option value="5">5 сек</option>
-                  <option value="10" selected>10 сек</option>
-                  <option value="15">15 сек</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="field-label">FPS</span>
-                <select name="fps">
-                  <option value="24" selected>24</option>
-                </select>
-              </label>
-            </div>
+            <label class="field duration-field">
+              <span class="field-label field-label-row">
+                <span>Длительность</span>
+                <strong id="seconds-value">5 сек</strong>
+              </span>
+              <input id="seconds-range" name="seconds" type="range" min="1" max="30" step="1" value="5">
+              <span class="field-help">1–30 сек. Чем длиннее ролик, тем больше время генерации и риск артефактов.</span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">FPS</span>
+              <select name="fps">
+                <option value="12">12 FPS</option>
+                <option value="16">16 FPS</option>
+                <option value="20">20 FPS</option>
+                <option value="24" selected>24 FPS · рекомендуется</option>
+                <option value="25">25 FPS</option>
+                <option value="30">30 FPS</option>
+              </select>
+              <span class="field-help">24 FPS — штатный вариант. Более высокий FPS генерирует больше кадров.</span>
+            </label>
 
             <label class="field">
               <span class="field-label">Профиль</span>
-              <div class="segmented">
+              <div class="segmented segmented-three">
                 <label>
                   <input type="radio" name="profile" value="fast" checked>
                   <span>
                     <strong>Fast</strong>
-                    <small>Turbo · 8 steps</small>
+                    <small>Turbo · 8</small>
                   </span>
                 </label>
                 <label>
                   <input type="radio" name="profile" value="quality">
                   <span>
                     <strong>Quality</strong>
-                    <small>Base · 20 steps</small>
+                    <small>Base · 20</small>
+                  </span>
+                </label>
+                <label>
+                  <input type="radio" name="profile" value="max">
+                  <span>
+                    <strong>Max</strong>
+                    <small>Base · 30</small>
                   </span>
                 </label>
               </div>
@@ -235,6 +253,7 @@
           <h3>Пока пусто</h3>
           <p>Сгенерированные ролики появятся здесь автоматически.</p>
         </div>
+        <div class="pagination" id="media-pagination"></div>
       </section>
 
       <section class="view" data-view="queue">
@@ -250,6 +269,7 @@
           <h3>Нет задач</h3>
           <p>Новые генерации и операции над видео появятся здесь.</p>
         </div>
+        <div class="pagination" id="job-pagination"></div>
       </section>
     </main>
   </div>
