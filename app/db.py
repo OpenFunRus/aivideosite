@@ -405,6 +405,65 @@ def list_jobs_page(page: int, page_size: int = PAGE_SIZE) -> dict[str, Any]:
     return _page_result([_decode_job(row) for row in rows], page, page_size, total)
 
 
+def delete_terminal_job(job_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if row is None:
+            conn.execute("COMMIT")
+            return None
+        if row["status"] in {"queued", "running"}:
+            conn.execute("ROLLBACK")
+            raise ValueError("Active jobs cannot be deleted")
+        conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+        conn.execute("COMMIT")
+    return _decode_job(row)
+
+
+def clear_nonrunning_jobs() -> list[dict[str, Any]]:
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE status != 'running'"
+        ).fetchall()
+        conn.execute("DELETE FROM jobs WHERE status != 'running'")
+        conn.execute("COMMIT")
+    return [_decode_job(row) for row in rows]
+
+
+def active_media_ids() -> set[str]:
+    protected: set[str] = set()
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT payload_json FROM jobs WHERE status IN ('queued', 'running')"
+        ).fetchall()
+    for row in rows:
+        try:
+            payload = json.loads(row["payload_json"])
+        except Exception:
+            continue
+        media_id = payload.get("media_id")
+        if media_id:
+            protected.add(str(media_id))
+    return protected
+
+
+def clear_media_except(exclude_ids: set[str] | None = None) -> list[dict[str, Any]]:
+    exclude_ids = {str(value) for value in (exclude_ids or set())}
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute("SELECT * FROM media ORDER BY created_at DESC").fetchall()
+        delete_ids = [row["id"] for row in rows if row["id"] not in exclude_ids]
+        if delete_ids:
+            placeholders = ",".join("?" for _ in delete_ids)
+            conn.execute(
+                f"DELETE FROM media WHERE id IN ({placeholders})",
+                delete_ids,
+            )
+        conn.execute("COMMIT")
+    return [_decode_media(row) for row in rows if row["id"] in delete_ids]
+
+
 def state_counts() -> dict[str, int]:
     with connect() as conn:
         queued = conn.execute(
