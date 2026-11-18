@@ -2,7 +2,8 @@
   "use strict";
 
   const $ = (selector, root = document) => root.querySelector(selector);
-  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const $ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
   const appPage = $(".app-page");
   if (!appPage) return;
 
@@ -143,14 +144,14 @@
   };
 
   const updateLiveJobTimers = () => {
-    $("#job-list [data-job-start]").forEach((element) => {
+    qsa("#job-list [data-job-start]").forEach((element) => {
       const start = element.dataset.jobStart || "";
       const finished = element.dataset.jobFinished || "";
       const elapsed = elapsedBetween(start, finished || null);
       element.textContent = elapsed === null ? "—" : formatHms(elapsed);
     });
 
-    $("#job-list [data-job-created]").forEach((element) => {
+    qsa("#job-list [data-job-created]").forEach((element) => {
       const created = element.dataset.jobCreated || "";
       const started = element.dataset.jobStarted || "";
       const status = element.dataset.jobStatus || "";
@@ -296,7 +297,7 @@
     }
 
     generationForm.reset();
-    $(".upload-card input[type=file]").forEach((input) => {
+    qsa(".upload-card input[type=file]").forEach((input) => {
       clearUploadPreview(input);
     });
 
@@ -796,7 +797,7 @@
     card.classList.add("has-preview");
   };
 
-  $(".upload-card input[type=file]").forEach((input) => {
+  qsa(".upload-card input[type=file]").forEach((input) => {
     input.addEventListener("change", () => {
       const file = input.files?.[0] || null;
       if (file) {
@@ -807,7 +808,7 @@
     });
   });
 
-  $(".upload-card .upload-remove").forEach((button) => {
+  qsa(".upload-card .upload-remove").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
