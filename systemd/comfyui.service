@@ -1,0 +1,18 @@
+[Unit]
+Description=ComfyUI for AI Video Site
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openfun
+Group=openfun
+WorkingDirectory=/opt/ai/ComfyUI
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 127.0.0.1 --port 8188
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
