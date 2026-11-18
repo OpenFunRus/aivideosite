@@ -1,10 +1,9 @@
 (() => {
   "use strict";
 
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const $ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const qs = (selector, root = document) => root.querySelector(selector);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const appPage = $(".app-page");
+  const appPage = qs(".app-page");
   if (!appPage) return;
 
   const SETTINGS_KEY = "aivideosite-settings-v1";
@@ -60,7 +59,7 @@
   };
 
   const showToast = (message, type = "success") => {
-    const container = $("#toast-container");
+    const container = qs("#toast-container");
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
     toast.innerHTML = `
@@ -172,10 +171,10 @@
       localStorage.setItem("aivideosite-view", view);
     }
 
-    $$("[data-view]").forEach((element) =>
+    qsa("[data-view]").forEach((element) =>
       element.classList.toggle("active", element.dataset.view === view)
     );
-    $$("[data-nav]").forEach((element) =>
+    qsa("[data-nav]").forEach((element) =>
       element.classList.toggle("active", element.dataset.nav === view)
     );
 
@@ -184,21 +183,21 @@
       library: "Библиотека",
       queue: "Очередь",
     };
-    $("#page-title").textContent = titles[view];
+    qs("#page-title").textContent = titles[view];
 
     if (refresh) {
       refreshState(true, view === "library");
     }
   };
 
-  $$("[data-nav]").forEach((button) => {
+  qsa("[data-nav]").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.nav, true));
   });
   switchView(currentView);
 
-  const generationForm = $("#generate-form");
-  const secondsRange = $("#seconds-range");
-  const secondsValue = $("#seconds-value");
+  const generationForm = qs("#generate-form");
+  const secondsRange = qs("#seconds-range");
+  const secondsValue = qs("#seconds-value");
 
   const updateSeconds = () => {
     if (secondsRange && secondsValue) {
@@ -207,15 +206,15 @@
   };
 
   const collectGeneratorSettings = () => {
-    const checkedProfile = $('[name="profile"]:checked', generationForm);
+    const checkedProfile = qs('[name="profile"]:checked', generationForm);
     return {
-      prompt: $("#prompt")?.value || "",
-      resolution: $("#resolution")?.value || "1344x768",
+      prompt: qs("#prompt")?.value || "",
+      resolution: qs("#resolution")?.value || "1344x768",
       seconds: secondsRange?.value || "5",
-      fps: $('[name="fps"]', generationForm)?.value || "24",
+      fps: qs('[name="fps"]', generationForm)?.value || "24",
       profile: checkedProfile?.value || "fast",
-      seed: $('[name="seed"]', generationForm)?.value || "-1",
-      generate_audio: Boolean($("#generate-audio")?.checked),
+      seed: qs('[name="seed"]', generationForm)?.value || "-1",
+      generate_audio: Boolean(qs("#generate-audio")?.checked),
     };
   };
 
@@ -243,10 +242,10 @@
     }
 
     if (typeof saved.prompt === "string") {
-      $("#prompt").value = saved.prompt;
+      qs("#prompt").value = saved.prompt;
     }
 
-    const resolution = $("#resolution");
+    const resolution = qs("#resolution");
     if (
       resolution &&
       [...resolution.options].some((option) => option.value === saved.resolution)
@@ -259,7 +258,7 @@
       secondsRange.value = String(seconds);
     }
 
-    const fps = $('[name="fps"]', generationForm);
+    const fps = qs('[name="fps"]', generationForm);
     if (
       fps &&
       [...fps.options].some((option) => option.value === String(saved.fps))
@@ -267,7 +266,7 @@
       fps.value = String(saved.fps);
     }
 
-    const profile = $(
+    const profile = qs(
       `[name="profile"][value="${CSS.escape(String(saved.profile || "fast"))}"]`,
       generationForm
     );
@@ -275,12 +274,12 @@
       profile.checked = true;
     }
 
-    const seed = $('[name="seed"]', generationForm);
+    const seed = qs('[name="seed"]', generationForm);
     if (seed && saved.seed !== undefined && saved.seed !== null) {
       seed.value = String(saved.seed);
     }
 
-    const audio = $("#generate-audio");
+    const audio = qs("#generate-audio");
     if (audio) {
       audio.checked = Boolean(saved.generate_audio);
     }
@@ -322,7 +321,7 @@
     saveGeneratorSettings();
   });
 
-  $("#reset-settings").addEventListener("click", clearAppStorageAndReset);
+  qs("#reset-settings").addEventListener("click", clearAppStorageAndReset);
 
   const renderSystem = (state) => {
     const gpu = state.system?.gpu;
@@ -330,47 +329,47 @@
     const running = Number(state.counts?.running || 0);
     const queued = Number(state.counts?.queued || 0);
 
-    const comfyPill = $("#comfy-status");
-    const comfyDot = $(".status-dot", comfyPill);
+    const comfyPill = qs("#comfy-status");
+    const comfyDot = qs(".status-dot", comfyPill);
     comfyDot.className = `status-dot ${comfy ? "ok" : "error"}`;
     comfyPill.title = comfy ? "ComfyUI доступен" : "ComfyUI недоступен";
 
-    const active = $("#active-status");
+    const active = qs("#active-status");
     active.innerHTML = running
       ? `${icon("bolt")}<span>GPU занят</span>`
       : `${icon("check")}<span>GPU свободен</span>`;
 
-    $("#sidebar-queue-count").textContent = String(running + queued);
-    $("#mobile-queue-count").textContent = String(running + queued);
-    $("#sidebar-media-count").textContent = String(state.counts?.media || 0);
-    $("#metric-queue").textContent = String(running + queued);
+    qs("#sidebar-queue-count").textContent = String(running + queued);
+    qs("#mobile-queue-count").textContent = String(running + queued);
+    qs("#sidebar-media-count").textContent = String(state.counts?.media || 0);
+    qs("#metric-queue").textContent = String(running + queued);
 
-    const miniDot = $("#gpu-status-dot");
+    const miniDot = qs("#gpu-status-dot");
     if (gpu) {
       miniDot.className = `status-dot ${running ? "busy" : "ok"}`;
-      $("#gpu-mini-name").textContent = gpu.name || "NVIDIA GPU";
-      $("#gpu-mini-value").textContent =
+      qs("#gpu-mini-name").textContent = gpu.name || "NVIDIA GPU";
+      qs("#gpu-mini-value").textContent =
         `${gpu.memory_used_mb} / ${gpu.memory_total_mb} MB`;
-      $("#metric-gpu").textContent = (gpu.name || "RTX 3090").replace(
+      qs("#metric-gpu").textContent = (gpu.name || "RTX 3090").replace(
         "NVIDIA GeForce ",
         ""
       );
-      $("#metric-vram").textContent =
+      qs("#metric-vram").textContent =
         `${(gpu.memory_used_mb / 1024).toFixed(1)} / ${(
           gpu.memory_total_mb / 1024
         ).toFixed(0)} GB VRAM`;
-      $("#metric-util").textContent = `${gpu.utilization}%`;
-      $("#metric-temp").textContent = `${gpu.temperature} °C`;
+      qs("#metric-util").textContent = `${gpu.utilization}%`;
+      qs("#metric-temp").textContent = `${gpu.temperature} °C`;
     } else {
       miniDot.className = "status-dot error";
-      $("#gpu-mini-value").textContent = "nvidia-smi недоступен";
-      $("#metric-gpu").textContent = "Нет данных";
-      $("#metric-vram").textContent = "—";
-      $("#metric-util").textContent = "—";
-      $("#metric-temp").textContent = "—";
+      qs("#gpu-mini-value").textContent = "nvidia-smi недоступен";
+      qs("#metric-gpu").textContent = "Нет данных";
+      qs("#metric-vram").textContent = "—";
+      qs("#metric-util").textContent = "—";
+      qs("#metric-temp").textContent = "—";
     }
 
-    $("#metric-disk").textContent = humanBytes(state.system?.disk_free || 0);
+    qs("#metric-disk").textContent = humanBytes(state.system?.disk_free || 0);
   };
 
   const kindLabel = (kind) =>
@@ -387,11 +386,11 @@
       .join("|");
 
   const libraryHasPlayingVideo = () =>
-    $$("#media-grid video").some((video) => !video.paused && !video.ended);
+    qsa("#media-grid video").some((video) => !video.paused && !video.ended);
 
   const renderMedia = (media) => {
-    const grid = $("#media-grid");
-    const empty = $("#media-empty");
+    const grid = qs("#media-grid");
+    const empty = qs("#media-empty");
     empty.classList.toggle("show", !media.length);
 
     grid.innerHTML = media
@@ -533,8 +532,8 @@
   };
 
   const renderJobs = (jobs) => {
-    const list = $("#job-list");
-    const empty = $("#job-empty");
+    const list = qs("#job-list");
+    const empty = qs("#job-empty");
     empty.classList.toggle("show", !jobs.length);
 
     list.innerHTML = jobs
@@ -604,7 +603,7 @@
   };
 
   const renderPagination = (containerId, pagination, target) => {
-    const container = $(containerId);
+    const container = qs(containerId);
     if (!pagination || pagination.total <= pagination.page_size) {
       container.innerHTML = pagination?.total
         ? `<span class="pagination-info">${pagination.total} записей · по ${pagination.page_size} на странице</span>`
@@ -688,12 +687,12 @@
     }
   });
 
-  $("#refresh-library").addEventListener("click", () => {
+  qs("#refresh-library").addEventListener("click", () => {
     lastMediaSignature = "";
     refreshState(false, true);
   });
 
-  $("#clear-library").addEventListener("click", async () => {
+  qs("#clear-library").addEventListener("click", async () => {
     if (
       !confirm(
         "Удалить все ролики из библиотеки? Ролики, которые нужны активной задаче, будут сохранены."
@@ -702,7 +701,7 @@
       return;
     }
 
-    const button = $("#clear-library");
+    const button = qs("#clear-library");
     button.disabled = true;
     try {
       const result = await api("/api/media", { method: "DELETE" });
@@ -720,7 +719,7 @@
     }
   });
 
-  $("#clear-queue").addEventListener("click", async () => {
+  qs("#clear-queue").addEventListener("click", async () => {
     if (
       !confirm(
         "Очистить очередь? Будут удалены завершённые, ошибочные, отменённые и ожидающие задачи. Работающие останутся."
@@ -729,7 +728,7 @@
       return;
     }
 
-    const button = $("#clear-queue");
+    const button = qs("#clear-queue");
     button.disabled = true;
     try {
       const result = await api("/api/jobs", { method: "DELETE" });
@@ -758,8 +757,8 @@
     input.value = "";
     if (!card) return;
 
-    const preview = $(".upload-preview", card);
-    const name = $(".upload-name", card);
+    const preview = qs(".upload-preview", card);
+    const name = qs(".upload-name", card);
     if (preview) {
       preview.removeAttribute("src");
       preview.hidden = true;
@@ -785,8 +784,8 @@
     const objectUrl = URL.createObjectURL(file);
     uploadObjectUrls.set(input, objectUrl);
 
-    const preview = $(".upload-preview", card);
-    const name = $(".upload-name", card);
+    const preview = qs(".upload-preview", card);
+    const name = qs(".upload-name", card);
     if (preview) {
       preview.src = objectUrl;
       preview.hidden = false;
@@ -813,7 +812,7 @@
       event.preventDefault();
       event.stopPropagation();
       const card = button.closest(".upload-card");
-      const input = card ? $('input[type="file"]', card) : null;
+      const input = card ? qs('input[type="file"]', card) : null;
       clearUploadPreview(input);
     });
   });
@@ -825,15 +824,15 @@
 
   generationForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const button = $("#generate-button");
+    const button = qs("#generate-button");
     const data = new FormData(generationForm);
-    const [width, height] = $("#resolution").value.split("x");
+    const [width, height] = qs("#resolution").value.split("x");
 
     data.delete("resolution");
     data.set("width", width);
     data.set("height", height);
 
-    if (!$("#generate-audio").checked) {
+    if (!qs("#generate-audio").checked) {
       data.delete("generate_audio");
     }
 
@@ -852,35 +851,35 @@
     }
   });
 
-  const dialog = $("#action-dialog");
-  const actionForm = $("#action-form");
+  const dialog = qs("#action-dialog");
+  const actionForm = qs("#action-form");
 
   const openActionDialog = (mediaId, type) => {
-    $("#action-media-id").value = mediaId;
-    $("#action-type").value = type;
+    qs("#action-media-id").value = mediaId;
+    qs("#action-type").value = type;
     const isLipSync = type === "lipsync";
 
-    $("#dialog-kicker").textContent = isLipSync
+    qs("#dialog-kicker").textContent = isLipSync
       ? "LATENTSYNC 1.6"
       : "FFMPEG AUDIO";
-    $("#dialog-title").textContent = isLipSync
+    qs("#dialog-title").textContent = isLipSync
       ? "LipSync по вокалу"
       : "Наложить аудио";
-    $("#audio-label").textContent = isLipSync
+    qs("#audio-label").textContent = isLipSync
       ? "Вокал / песня"
       : "Аудиодорожка";
-    $("#lipsync-options").style.display = isLipSync ? "" : "none";
+    qs("#lipsync-options").style.display = isLipSync ? "" : "none";
     dialog.showModal();
   };
 
-  $$("[data-close-dialog]").forEach((button) => {
+  qsa("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => dialog.close());
   });
 
   actionForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const mediaId = $("#action-media-id").value;
-    const type = $("#action-type").value;
+    const mediaId = qs("#action-media-id").value;
+    const type = qs("#action-type").value;
     const data = new FormData(actionForm);
     data.delete("media_id");
     data.delete("action");
@@ -890,7 +889,7 @@
         ? `/api/media/${encodeURIComponent(mediaId)}/lipsync`
         : `/api/media/${encodeURIComponent(mediaId)}/audio`;
 
-    $("#action-submit").disabled = true;
+    qs("#action-submit").disabled = true;
     try {
       await api(endpoint, { method: "POST", body: data });
       dialog.close();
@@ -905,11 +904,11 @@
     } catch (error) {
       showToast(error.message, "error");
     } finally {
-      $("#action-submit").disabled = false;
+      qs("#action-submit").disabled = false;
     }
   });
 
-  const infoDialog = $("#media-info-dialog");
+  const infoDialog = qs("#media-info-dialog");
 
   const profileLabel = (value) =>
     ({ fast: "Fast · Turbo 8", quality: "Quality · Base 20", max: "Max · Base 30" }[
@@ -924,8 +923,8 @@
     }
 
     const meta = item.meta || {};
-    $("#media-info-prompt").value = meta.prompt || "";
-    $("#media-info-seed").value =
+    qs("#media-info-prompt").value = meta.prompt || "";
+    qs("#media-info-seed").value =
       meta.seed === undefined || meta.seed === null ? "" : String(meta.seed);
 
     const rows = [
@@ -945,7 +944,7 @@
       ["Создан", shortDate(item.created_at)],
     ];
 
-    $("#media-info-grid").innerHTML = rows
+    qs("#media-info-grid").innerHTML = rows
       .map(
         ([label, value]) => `
           <div class="info-row">
@@ -959,7 +958,7 @@
     infoDialog.showModal();
   };
 
-  $$("[data-close-info-dialog]").forEach((button) => {
+  qsa("[data-close-info-dialog]").forEach((button) => {
     button.addEventListener("click", () => infoDialog.close());
   });
 
@@ -980,7 +979,7 @@
     helper.remove();
   };
 
-  $$("[data-copy-target]").forEach((button) => {
+  qsa("[data-copy-target]").forEach((button) => {
     button.addEventListener("click", async () => {
       const target = document.getElementById(button.dataset.copyTarget);
       if (!target) return;
@@ -993,7 +992,7 @@
     });
   });
 
-  $("#media-grid").addEventListener("click", async (event) => {
+  qs("#media-grid").addEventListener("click", async (event) => {
     const target = event.target.closest("[data-action]");
     if (!target) return;
 
@@ -1053,7 +1052,7 @@
     }
   });
 
-  $("#job-list").addEventListener("click", async (event) => {
+  qs("#job-list").addEventListener("click", async (event) => {
     const target = event.target.closest("[data-job-action]");
     if (!target) return;
 
