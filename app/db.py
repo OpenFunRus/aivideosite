@@ -445,6 +445,9 @@ def active_media_ids() -> set[str]:
         media_id = payload.get("media_id")
         if media_id:
             protected.add(str(media_id))
+        for clip in payload.get("clips") or []:
+            if isinstance(clip, dict) and clip.get("media_id"):
+                protected.add(str(clip["media_id"]))
     return protected
 
 
