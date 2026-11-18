@@ -112,6 +112,7 @@ class JobWorker(threading.Thread):
                 "fps": payload.get("fps"),
                 "profile": payload.get("profile"),
                 "seed": result.get("seed"),
+                "generate_audio": bool(payload.get("generate_audio", False)),
                 "reference_count": len(payload.get("images") or []),
                 "comfy_prompt_id": result.get("prompt_id"),
             }
