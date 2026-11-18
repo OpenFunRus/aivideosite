@@ -433,7 +433,10 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .editor-clip-volume input { height: 18px; padding: 0; border: 0; accent-color: var(--primary); background: transparent; }
 .editor-audio-track { overflow: hidden; }
 .editor-audio-track .editor-track-empty { min-height: 92px; }
-.editor-audio-block { position: absolute; top: 13px; bottom: 13px; min-width: 84px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; overflow: hidden; color: #dff8e5; background: linear-gradient(135deg, rgba(47,179,68,.26), rgba(47,179,68,.12)); border: 1px solid rgba(89,210,111,.34); border-radius: 9px; }
+.editor-audio-block { position: absolute; top: 13px; bottom: 13px; min-width: 84px; padding: 10px 18px 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; overflow: hidden; color: #dff8e5; background: linear-gradient(135deg, rgba(47,179,68,.26), rgba(47,179,68,.12)); border: 1px solid rgba(89,210,111,.34); border-radius: 9px; cursor: grab; user-select: none; touch-action: none; }
+.editor-audio-block.dragging { cursor: grabbing; box-shadow: 0 0 0 2px rgba(89,210,111,.18); }
+.editor-audio-block.resizing { cursor: ew-resize; box-shadow: 0 0 0 2px rgba(89,210,111,.18); }
+.editor-audio-resize { position: absolute; inset: 0 0 0 auto; width: 12px; cursor: ew-resize; background: linear-gradient(90deg, transparent, rgba(155,230,170,.22)); border-left: 1px solid rgba(155,230,170,.3); }
 .editor-audio-block > div { min-width: 0; }
 .editor-audio-block strong, .editor-audio-block small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .editor-audio-block strong { font-size: 11px; }
