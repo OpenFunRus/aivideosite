@@ -8,6 +8,7 @@
 
   const SETTINGS_KEY = "aivideosite-settings-v1";
   const STORAGE_PREFIX = "aivideosite-";
+  const EDITOR_EXPORT_JOB_KEY = "aivideosite-editor-export-job";
 
   let stateTimer = null;
   let lastState = null;
@@ -18,6 +19,19 @@
   let serverClockPerfAtFetch = null;
   let currentView = localStorage.getItem("aivideosite-view") || "generate";
   const uploadObjectUrls = new Map();
+  let editorMedia = [];
+  let editorClips = [];
+  let editorDraggedClipIndex = null;
+  let refreshEditorMedia = async () => {};
+  let editorAudio = {
+    file: null,
+    objectUrl: "",
+    duration: 0,
+    offset: 0,
+    trimStart: 0,
+    trimDuration: 0,
+    volume: 1,
+  };
 
   const icon = (name) =>
     `<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-${name}"></use></svg>`;
@@ -165,7 +179,7 @@
   };
 
   const switchView = (view, refresh = false, persist = true) => {
-    if (!["generate", "library", "queue"].includes(view)) view = "generate";
+    if (!["generate", "editor", "library", "queue"].includes(view)) view = "generate";
     currentView = view;
     if (persist) {
       localStorage.setItem("aivideosite-view", view);
@@ -180,11 +194,15 @@
 
     const titles = {
       generate: "Генерация",
+      editor: "Монтаж",
       library: "Библиотека",
       queue: "Очередь",
     };
     qs("#page-title").textContent = titles[view];
 
+    if (view === "editor") {
+      refreshEditorMedia();
+    }
     if (refresh) {
       refreshState(true, view === "library");
     }
@@ -378,6 +396,7 @@
       lipsync: "LipSync",
       audio: "Audio",
       silent: "Silent",
+      edited: "Монтаж",
     }[kind] || kind);
 
   const mediaSignature = (media) =>
@@ -468,12 +487,237 @@
       .join("");
   };
 
+  const editorMediaById = (mediaId) =>
+    editorMedia.find((item) => item.id === mediaId) || null;
+
+  const editorClock = (seconds) => {
+    const safe = Math.max(0, Number(seconds) || 0);
+    const minutes = Math.floor(safe / 60);
+    const secs = Math.floor(safe % 60);
+    return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
+
+  const editorTotalDuration = () =>
+    editorClips.reduce((total, clip) => {
+      const media = editorMediaById(clip.mediaId);
+      return total + Math.max(0, Number(media?.duration || 0));
+    }, 0);
+
+  const renderEditorMedia = () => {
+    const pool = qs("#editor-media-pool");
+    const empty = qs("#editor-media-empty");
+    if (!pool || !empty) return;
+    empty.classList.toggle("show", !editorMedia.length);
+    pool.innerHTML = editorMedia
+      .map((item) => `
+        <article class="editor-pool-card" draggable="true" data-editor-media-id="${escapeHtml(item.id)}">
+          <div class="editor-pool-preview">
+            <video src="/media/${encodeURIComponent(item.id)}" muted playsinline preload="metadata"></video>
+          </div>
+          <div class="editor-pool-body">
+            <div>
+              <strong title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</strong>
+              <small>${escapeHtml(kindLabel(item.kind))} · ${escapeHtml(humanDuration(item.duration))}</small>
+            </div>
+            <button class="btn btn-secondary btn-compact" type="button" data-editor-add="${escapeHtml(item.id)}">
+              ${icon("player-play")} На таймлайн
+            </button>
+          </div>
+        </article>
+      `)
+      .join("");
+  };
+
+  const renderEditorTimeline = () => {
+    const track = qs("#editor-video-track");
+    if (!track) return;
+    const total = editorTotalDuration();
+    const empty = qs("#editor-video-empty");
+    const clipWord =
+      editorClips.length % 10 === 1 && editorClips.length % 100 !== 11
+        ? "клип"
+        : [2, 3, 4].includes(editorClips.length % 10) &&
+            ![12, 13, 14].includes(editorClips.length % 100)
+          ? "клипа"
+          : "клипов";
+    qs("#editor-clip-count").textContent = `${editorClips.length} ${clipWord}`;
+    qs("#editor-total-duration").textContent = editorClock(total);
+    qs("#editor-export").disabled = editorClips.length === 0;
+
+    const first = editorClips.length ? editorMediaById(editorClips[0].mediaId) : null;
+    const firstMeta = first?.meta || {};
+    qs("#editor-output-summary").textContent = first
+      ? `${firstMeta.width && firstMeta.height ? `${firstMeta.width} × ${firstMeta.height} · ` : ""}${editorClips.length} клипов · ${editorClock(total)}`
+      : "Добавьте видео на таймлайн";
+
+    qsa(".editor-clip", track).forEach((node) => node.remove());
+    empty.classList.toggle("show", editorClips.length === 0);
+
+    editorClips.forEach((clip, index) => {
+      const media = editorMediaById(clip.mediaId);
+      if (!media) return;
+      const duration = Math.max(0.1, Number(media.duration || 0.1));
+      const card = document.createElement("article");
+      card.className = "editor-clip";
+      card.draggable = true;
+      card.dataset.editorClipIndex = String(index);
+      card.style.setProperty("--clip-grow", String(Math.max(1, duration)));
+      card.innerHTML = `
+        <div class="editor-clip-top">
+          <span class="editor-clip-index">${index + 1}</span>
+          <div>
+            <strong title="${escapeHtml(media.title)}">${escapeHtml(media.title)}</strong>
+            <small>${escapeHtml(humanDuration(media.duration))}</small>
+          </div>
+          <button type="button" class="editor-clip-remove" data-editor-remove="${index}" title="Убрать с таймлайна">
+            ${icon("x")}
+          </button>
+        </div>
+        <label class="editor-clip-volume">
+          <span>Звук <b>${Math.round(clip.volume * 100)}%</b></span>
+          <input type="range" min="0" max="200" step="1" value="${Math.round(clip.volume * 100)}" data-editor-volume="${index}">
+        </label>
+      `;
+      track.appendChild(card);
+    });
+
+    renderEditorAudioTrack();
+  };
+
+  const renderEditorAudioTrack = () => {
+    const total = editorTotalDuration();
+    const block = qs("#editor-audio-block");
+    const empty = qs("#editor-audio-empty");
+    const controls = qs("#editor-audio-controls");
+    const hasAudio = Boolean(editorAudio.file);
+    if (!block || !empty || !controls) return;
+
+    block.hidden = !hasAudio;
+    empty.classList.toggle("show", !hasAudio);
+    controls.hidden = !hasAudio;
+    if (!hasAudio) return;
+
+    const available = Math.max(0, editorAudio.duration - editorAudio.trimStart);
+    const requested = editorAudio.trimDuration > 0 ? editorAudio.trimDuration : available;
+    const audibleDuration = Math.max(0, Math.min(available, requested));
+    qs("#editor-audio-name").textContent = editorAudio.file.name;
+    qs("#editor-audio-block-meta").textContent = `${editorClock(audibleDuration)} · +${editorAudio.offset.toFixed(1)} сек`;
+    qs("#editor-audio-volume-value").textContent = `${Math.round(editorAudio.volume * 100)}%`;
+
+    const base = Math.max(total, editorAudio.offset + audibleDuration, 1);
+    const left = Math.max(0, Math.min(100, (editorAudio.offset / base) * 100));
+    const width = Math.max(3, Math.min(100 - left, (audibleDuration / base) * 100));
+    block.style.left = `${left}%`;
+    block.style.width = `${width}%`;
+  };
+
+  const addEditorClip = (mediaId, atIndex = null) => {
+    if (!editorMediaById(mediaId)) return;
+    const clip = { mediaId, volume: 1 };
+    if (Number.isInteger(atIndex) && atIndex >= 0 && atIndex <= editorClips.length) {
+      editorClips.splice(atIndex, 0, clip);
+    } else {
+      editorClips.push(clip);
+    }
+    renderEditorTimeline();
+  };
+
+  const clearEditorAudio = () => {
+    if (editorAudio.objectUrl) {
+      URL.revokeObjectURL(editorAudio.objectUrl);
+    }
+    editorAudio = {
+      file: null,
+      objectUrl: "",
+      duration: 0,
+      offset: 0,
+      trimStart: 0,
+      trimDuration: 0,
+      volume: 1,
+    };
+    const input = qs("#editor-audio-input");
+    if (input) input.value = "";
+    renderEditorAudioTrack();
+  };
+
+  const loadEditorAudio = (file) => {
+    clearEditorAudio();
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    editorAudio.file = file;
+    editorAudio.objectUrl = objectUrl;
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    audio.src = objectUrl;
+    audio.addEventListener("loadedmetadata", () => {
+      editorAudio.duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+      editorAudio.trimDuration = editorAudio.duration;
+      qs("#editor-audio-offset").value = "0";
+      qs("#editor-audio-trim-start").value = "0";
+      qs("#editor-audio-trim-duration").value = editorAudio.duration
+        ? editorAudio.duration.toFixed(1)
+        : "0";
+      qs("#editor-audio-volume").value = "100";
+      renderEditorAudioTrack();
+    }, { once: true });
+    audio.addEventListener("error", () => {
+      showToast("Не удалось прочитать длительность аудиофайла.", "error");
+      renderEditorAudioTrack();
+    }, { once: true });
+    renderEditorAudioTrack();
+  };
+
+  refreshEditorMedia = async () => {
+    if (!qs("#editor-media-pool")) return;
+    try {
+      const result = await api("/api/editor/media");
+      editorMedia = result.items || [];
+      editorClips = editorClips.filter((clip) => editorMediaById(clip.mediaId));
+      renderEditorMedia();
+      renderEditorTimeline();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  };
+
+  const startEditorDownload = (mediaId) => {
+    const link = document.createElement("a");
+    link.href = `/media/${encodeURIComponent(mediaId)}?download=1`;
+    link.download = "";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handlePendingEditorExport = (state) => {
+    const pendingId = localStorage.getItem(EDITOR_EXPORT_JOB_KEY);
+    if (!pendingId) return;
+    const job = (state.jobs || []).find((item) => item.id === pendingId);
+    if (!job) return;
+    if (job.status === "done" && job.result_media_id) {
+      localStorage.removeItem(EDITOR_EXPORT_JOB_KEY);
+      startEditorDownload(job.result_media_id);
+      showToast("Монтаж готов. Скачивание началось.");
+      return;
+    }
+    if (job.status === "failed" || job.status === "canceled") {
+      localStorage.removeItem(EDITOR_EXPORT_JOB_KEY);
+      showToast(
+        job.status === "failed"
+          ? "Экспорт монтажа завершился с ошибкой."
+          : "Экспорт монтажа отменён.",
+        "error"
+      );
+    }
+  };
+
   const jobLabel = (kind) =>
     ({
       generate: "MiniMax H3",
       lipsync: "LatentSync",
       audio_replace: "Наложение аудио",
       audio_remove: "Удаление звука",
+      editor_export: "Монтаж / экспорт",
     }[kind] || kind);
 
   const statusBadge = (status) => {
@@ -640,6 +884,7 @@
 
       renderSystem(state);
       renderJobs(state.jobs || []);
+      handlePendingEditorExport(state);
       renderPagination("#job-pagination", state.jobs_pagination, "jobs");
       renderPagination("#media-pagination", state.media_pagination, "media");
 
@@ -684,6 +929,195 @@
     } else {
       jobsPage = page;
       refreshState(true, false);
+    }
+  });
+
+  const editorPool = qs("#editor-media-pool");
+  const editorVideoTrack = qs("#editor-video-track");
+
+  if (editorPool) {
+    editorPool.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-editor-add]");
+      if (!button) return;
+      addEditorClip(button.dataset.editorAdd);
+    });
+
+    editorPool.addEventListener("dragstart", (event) => {
+      const card = event.target.closest("[data-editor-media-id]");
+      if (!card || !event.dataTransfer) return;
+      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData("application/x-aivideosite-media", card.dataset.editorMediaId);
+      event.dataTransfer.setData("text/plain", card.dataset.editorMediaId);
+    });
+  }
+
+  if (editorVideoTrack) {
+    editorVideoTrack.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect =
+          editorDraggedClipIndex === null ? "copy" : "move";
+      }
+      editorVideoTrack.classList.add("drag-over");
+    });
+    editorVideoTrack.addEventListener("dragleave", (event) => {
+      if (!editorVideoTrack.contains(event.relatedTarget)) {
+        editorVideoTrack.classList.remove("drag-over");
+      }
+    });
+    editorVideoTrack.addEventListener("drop", (event) => {
+      event.preventDefault();
+      editorVideoTrack.classList.remove("drag-over");
+      const targetClip = event.target.closest("[data-editor-clip-index]");
+      let targetIndex = targetClip
+        ? Number(targetClip.dataset.editorClipIndex)
+        : editorClips.length;
+
+      if (editorDraggedClipIndex !== null) {
+        const from = editorDraggedClipIndex;
+        editorDraggedClipIndex = null;
+        if (from < 0 || from >= editorClips.length) return;
+        const [clip] = editorClips.splice(from, 1);
+        if (from < targetIndex) targetIndex -= 1;
+        targetIndex = Math.max(0, Math.min(editorClips.length, targetIndex));
+        editorClips.splice(targetIndex, 0, clip);
+        renderEditorTimeline();
+        return;
+      }
+
+      const mediaId =
+        event.dataTransfer?.getData("application/x-aivideosite-media") ||
+        event.dataTransfer?.getData("text/plain");
+      if (mediaId) addEditorClip(mediaId, targetIndex);
+    });
+
+    editorVideoTrack.addEventListener("dragstart", (event) => {
+      const clip = event.target.closest("[data-editor-clip-index]");
+      if (!clip || !event.dataTransfer) return;
+      editorDraggedClipIndex = Number(clip.dataset.editorClipIndex);
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", `clip:${editorDraggedClipIndex}`);
+      clip.classList.add("dragging");
+    });
+    editorVideoTrack.addEventListener("dragend", (event) => {
+      editorDraggedClipIndex = null;
+      editorVideoTrack.classList.remove("drag-over");
+      event.target.closest("[data-editor-clip-index]")?.classList.remove("dragging");
+    });
+
+    editorVideoTrack.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-editor-remove]");
+      if (!button) return;
+      const index = Number(button.dataset.editorRemove);
+      if (!Number.isInteger(index) || !editorClips[index]) return;
+      editorClips.splice(index, 1);
+      renderEditorTimeline();
+    });
+
+    editorVideoTrack.addEventListener("input", (event) => {
+      const input = event.target.closest("[data-editor-volume]");
+      if (!input) return;
+      const index = Number(input.dataset.editorVolume);
+      if (!editorClips[index]) return;
+      editorClips[index].volume = Math.max(
+        0,
+        Math.min(2, Number(input.value) / 100)
+      );
+      const label = input.closest(".editor-clip-volume")?.querySelector("b");
+      if (label) {
+        label.textContent = `${Math.round(editorClips[index].volume * 100)}%`;
+      }
+    });
+  }
+
+  qs("#editor-refresh-media")?.addEventListener("click", refreshEditorMedia);
+  qs("#editor-audio-input")?.addEventListener("change", (event) => {
+    loadEditorAudio(event.target.files?.[0] || null);
+  });
+  qs("#editor-remove-audio")?.addEventListener("click", clearEditorAudio);
+
+  const syncEditorAudioControls = () => {
+    if (!editorAudio.file) return;
+    editorAudio.offset = Math.max(
+      0,
+      Number(qs("#editor-audio-offset").value) || 0
+    );
+    editorAudio.trimStart = Math.max(
+      0,
+      Number(qs("#editor-audio-trim-start").value) || 0
+    );
+    editorAudio.trimDuration = Math.max(
+      0,
+      Number(qs("#editor-audio-trim-duration").value) || 0
+    );
+    editorAudio.volume = Math.max(
+      0,
+      Math.min(2, Number(qs("#editor-audio-volume").value) / 100)
+    );
+    renderEditorAudioTrack();
+  };
+  [
+    "#editor-audio-offset",
+    "#editor-audio-trim-start",
+    "#editor-audio-trim-duration",
+    "#editor-audio-volume",
+  ].forEach((selector) => {
+    qs(selector)?.addEventListener("input", syncEditorAudioControls);
+    qs(selector)?.addEventListener("change", syncEditorAudioControls);
+  });
+
+  qs("#editor-clear")?.addEventListener("click", () => {
+    if (editorClips.length || editorAudio.file) {
+      if (!confirm("Очистить весь таймлайн и аудиодорожку?")) return;
+    }
+    editorClips = [];
+    clearEditorAudio();
+    renderEditorTimeline();
+  });
+
+  qs("#editor-export")?.addEventListener("click", async () => {
+    if (!editorClips.length) {
+      showToast("Добавьте хотя бы один ролик на таймлайн.", "error");
+      return;
+    }
+
+    const button = qs("#editor-export");
+    const project = {
+      title: `Монтаж · ${new Date().toLocaleString("ru-RU")}`,
+      clips: editorClips.map((clip) => ({
+        media_id: clip.mediaId,
+        volume: clip.volume,
+      })),
+      audio: {
+        enabled: Boolean(editorAudio.file),
+        offset: editorAudio.offset,
+        trim_start: editorAudio.trimStart,
+        trim_duration: editorAudio.trimDuration,
+        volume: editorAudio.volume,
+      },
+    };
+    const data = new FormData();
+    data.set("project", JSON.stringify(project));
+    if (editorAudio.file) {
+      data.set("audio", editorAudio.file, editorAudio.file.name);
+    }
+
+    button.disabled = true;
+    try {
+      const result = await api("/api/editor/export", {
+        method: "POST",
+        body: data,
+      });
+      localStorage.setItem(EDITOR_EXPORT_JOB_KEY, result.job_id);
+      jobsPage = 1;
+      switchView("queue");
+      showToast(
+        "Экспорт добавлен в очередь. После завершения файл скачается автоматически."
+      );
+      await refreshState(true, false);
+    } catch (error) {
+      showToast(error.message, "error");
+      button.disabled = false;
     }
   });
 
@@ -820,6 +1254,9 @@
   window.addEventListener("beforeunload", () => {
     uploadObjectUrls.forEach((url) => URL.revokeObjectURL(url));
     uploadObjectUrls.clear();
+    if (editorAudio.objectUrl) {
+      URL.revokeObjectURL(editorAudio.objectUrl);
+    }
   });
 
   generationForm.addEventListener("submit", async (event) => {
