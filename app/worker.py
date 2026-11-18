@@ -62,6 +62,8 @@ class JobWorker(threading.Thread):
             return self._replace_audio(job)
         if kind == "audio_remove":
             return self._remove_audio(job)
+        if kind == "editor_export":
+            return self._editor_export(job)
         raise RuntimeError(f"Unknown job type: {kind}")
 
     @staticmethod
@@ -652,6 +654,219 @@ class JobWorker(threading.Thread):
             output_path.unlink(missing_ok=True)
             raise
 
+    def _editor_export(self, job: dict[str, Any]) -> str:
+        payload = job["payload"]
+        job_id = job["id"]
+        clip_specs = payload.get("clips") or []
+        if not clip_specs:
+            raise RuntimeError("Timeline is empty.")
+
+        sources: list[dict[str, Any]] = []
+        total_duration = 0.0
+        for spec in clip_specs:
+            source = _require_media(str(spec["media_id"]))
+            source_path = settings.library_dir / source["filename"]
+            duration = probe_duration(source_path)
+            if not duration or duration <= 0:
+                raise RuntimeError(
+                    f"Could not determine duration for '{source['title']}'."
+                )
+            volume = max(0.0, min(2.0, float(spec.get("volume", 1.0))))
+            sources.append(
+                {
+                    "media": source,
+                    "path": source_path,
+                    "duration": float(duration),
+                    "volume": volume,
+                    "has_audio": probe_has_audio(source_path),
+                }
+            )
+            total_duration += float(duration)
+
+        output_size = probe_video_size(sources[0]["path"])
+        if output_size is None:
+            raise RuntimeError("Could not determine output video dimensions.")
+        width, height = output_size
+        width -= width % 2
+        height -= height % 2
+        if width < 2 or height < 2:
+            raise RuntimeError("Invalid output video dimensions.")
+
+        media_id = uuid.uuid4().hex
+        output_path = settings.library_dir / f"{media_id}_edit.mp4"
+        audio_path_value = payload.get("audio_path")
+        audio_path = Path(audio_path_value) if audio_path_value else None
+        audio_settings = payload.get("audio") or {}
+        use_audio_track = bool(audio_settings.get("enabled")) and audio_path is not None
+        if use_audio_track and not audio_path.is_file():
+            raise RuntimeError("Editor audio track file is missing.")
+
+        should_cancel = lambda: db.is_cancel_requested(job_id)
+        command = [str(settings.ffmpeg_bin), "-y"]
+        for source in sources:
+            command.extend(["-i", str(source["path"])])
+        if use_audio_track:
+            command.extend(["-i", str(audio_path)])
+
+        filters: list[str] = []
+        concat_parts: list[str] = []
+        for index, source in enumerate(sources):
+            duration = source["duration"]
+            filters.append(
+                f"[{index}:v:0]"
+                f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,"
+                "setsar=1,setpts=PTS-STARTPTS,fps=24,format=yuv420p"
+                f"[v{index}]"
+            )
+            if source["has_audio"] and source["volume"] > 0:
+                filters.append(
+                    f"[{index}:a:0]"
+                    "aresample=48000,"
+                    "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                    f"volume={source['volume']:.4f},"
+                    f"apad,atrim=duration={duration:.6f},asetpts=PTS-STARTPTS"
+                    f"[a{index}]"
+                )
+            else:
+                filters.append(
+                    "anullsrc=r=48000:cl=stereo,"
+                    f"atrim=duration={duration:.6f},asetpts=PTS-STARTPTS"
+                    f"[a{index}]"
+                )
+            concat_parts.append(f"[v{index}][a{index}]")
+
+        filters.append(
+            "".join(concat_parts)
+            + f"concat=n={len(sources)}:v=1:a=1[vcat][acat]"
+        )
+
+        if use_audio_track:
+            audio_input = len(sources)
+            offset = max(0.0, float(audio_settings.get("offset") or 0.0))
+            trim_start = max(0.0, float(audio_settings.get("trim_start") or 0.0))
+            trim_duration = max(
+                0.0,
+                float(audio_settings.get("trim_duration") or 0.0),
+            )
+            track_volume = max(
+                0.0,
+                min(2.0, float(audio_settings.get("volume", 1.0))),
+            )
+            trim_filter = f"atrim=start={trim_start:.6f}"
+            if trim_duration > 0:
+                trim_filter += f":duration={trim_duration:.6f}"
+            delay_ms = int(round(offset * 1000))
+            filters.append(
+                f"[{audio_input}:a:0]"
+                "aresample=48000,"
+                "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                f"{trim_filter},asetpts=PTS-STARTPTS,"
+                f"volume={track_volume:.4f},"
+                f"adelay={delay_ms}:all=1,"
+                f"apad,atrim=duration={total_duration:.6f}"
+                "[track]"
+            )
+            filters.append(
+                "[acat][track]"
+                "amix=inputs=2:duration=first:dropout_transition=0:normalize=0"
+                "[aout]"
+            )
+        else:
+            filters.append("[acat]anull[aout]")
+
+        command.extend(
+            [
+                "-filter_complex",
+                ";".join(filters),
+                "-map",
+                "[vcat]",
+                "-map",
+                "[aout]",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "medium",
+                "-crf",
+                "18",
+                "-pix_fmt",
+                "yuv420p",
+                "-r",
+                "24",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-movflags",
+                "+faststart",
+                str(output_path),
+            ]
+        )
+
+        try:
+            self._check_cancel(job_id)
+            db.update_job(job_id, progress=8, stage="Монтаж: подготовка клипов")
+            db.update_job(job_id, progress=18, stage="FFmpeg: склейка таймлайна")
+            run_command(
+                command,
+                timeout=7200,
+                should_cancel=should_cancel,
+            )
+            self._check_cancel(job_id)
+            db.update_job(job_id, progress=95, stage="Монтаж: сохранение")
+
+            if not output_path.is_file():
+                raise RuntimeError("FFmpeg finished without producing the edited video.")
+
+            title = str(payload.get("title") or "Монтаж").strip() or "Монтаж"
+            db.insert_media(
+                media_id=media_id,
+                filename=output_path.name,
+                kind="edited",
+                title=title,
+                parent_id=None,
+                metadata={
+                    "operation": "editor_export",
+                    "clip_count": len(sources),
+                    "source_media_ids": [
+                        source["media"]["id"] for source in sources
+                    ],
+                    "clip_volumes": [source["volume"] for source in sources],
+                    "audio_track": use_audio_track,
+                    "audio_offset": (
+                        float(audio_settings.get("offset") or 0.0)
+                        if use_audio_track
+                        else None
+                    ),
+                    "audio_trim_start": (
+                        float(audio_settings.get("trim_start") or 0.0)
+                        if use_audio_track
+                        else None
+                    ),
+                    "audio_trim_duration": (
+                        float(audio_settings.get("trim_duration") or 0.0)
+                        if use_audio_track
+                        else None
+                    ),
+                    "audio_volume": (
+                        float(audio_settings.get("volume", 1.0))
+                        if use_audio_track
+                        else None
+                    ),
+                    "width": width,
+                    "height": height,
+                    "fps": 24,
+                },
+                size_bytes=output_path.stat().st_size,
+                duration=probe_duration(output_path),
+            )
+            if audio_path is not None:
+                _remove_uploads([audio_path])
+            return media_id
+        except Exception:
+            output_path.unlink(missing_ok=True)
+            raise
+
 
 def _require_media(media_id: str) -> dict[str, Any]:
     media = db.get_media(media_id)
@@ -716,6 +931,31 @@ def probe_video_size(path: Path) -> tuple[int, int] | None:
         return width, height
     except Exception:
         return None
+
+
+def probe_has_audio(path: Path) -> bool:
+    try:
+        result = subprocess.run(
+            [
+                str(settings.ffprobe_bin),
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "csv=p=0",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return bool(result.stdout.strip())
+    except Exception:
+        return False
 
 
 def probe_duration(path: Path) -> float | None:
