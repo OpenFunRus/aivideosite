@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Вход · AI Video Studio{% endblock %}
+{% block body_class %}login-page{% endblock %}
+{% block body %}
+<main class="login-shell">
+  <section class="login-card">
+    <div class="brand-mark brand-mark-lg">
+      <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
+    </div>
+    <div class="login-heading">
+      <span class="eyebrow">LOCAL AI VIDEO</span>
+      <h1>AI Video Studio</h1>
+      <p>MiniMax H3 · LatentSync · RTX 3090</p>
+    </div>
+
+    {% if error %}
+      <div class="alert alert-danger" role="alert">
+        <svg class="icon"><use href="/static/icons.svg#icon-alert"></use></svg>
+        <span>{{ error }}</span>
+      </div>
+    {% endif %}
+
+    <form method="post" action="/login" class="stack-lg">
+      <label class="field">
+        <span class="field-label">Пароль</span>
+        <div class="input-with-icon">
+          <svg class="icon"><use href="/static/icons.svg#icon-lock"></use></svg>
+          <input
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            inputmode="numeric"
+            autofocus
+            required
+            placeholder="Введите пароль">
+        </div>
+      </label>
+      <button class="btn btn-primary btn-lg w-full" type="submit">
+        <svg class="icon"><use href="/static/icons.svg#icon-login"></use></svg>
+        Войти
+      </button>
+    </form>
+
+    <p class="login-note">
+      Локальный интерфейс. Соединение по HTTP внутри вашей сети.
+    </p>
+  </section>
+</main>
+{% endblock %}
