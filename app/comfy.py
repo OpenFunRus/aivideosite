@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
 import time
 import uuid
 from pathlib import Path
@@ -361,6 +362,25 @@ class ComfyUIClient:
         return candidates[-1] if candidates else None
 
     def _download_output(self, output: dict[str, str], destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        # ComfyUI and the site normally run on the same VM. Move the local
+        # output instead of copying the entire MP4 through loopback HTTP.
+        if output.get("type", "output") == "output":
+            root = settings.comfyui_output_dir.resolve()
+            local_source = (
+                root
+                / str(output.get("subfolder") or "")
+                / output["filename"]
+            ).resolve()
+            try:
+                local_source.relative_to(root)
+            except ValueError:
+                local_source = Path()
+            if local_source.is_file():
+                shutil.move(str(local_source), str(destination))
+                return
+
         params = urlencode(
             {
                 "filename": output["filename"],
@@ -378,7 +398,6 @@ class ComfyUIClient:
                 f"Failed to download ComfyUI output ({response.status_code})."
             )
 
-        destination.parent.mkdir(parents=True, exist_ok=True)
         with destination.open("wb") as handle:
             for chunk in response.iter_content(1024 * 1024):
                 if chunk:
