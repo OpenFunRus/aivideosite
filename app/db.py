@@ -353,6 +353,8 @@ def list_media_page(page: int, page_size: int = PAGE_SIZE) -> dict[str, Any]:
     page_size = max(1, min(100, int(page_size)))
     with connect() as conn:
         total = int(conn.execute("SELECT COUNT(*) FROM media").fetchone()[0])
+        pages = max(1, (total + page_size - 1) // page_size)
+        page = min(page, pages)
         rows = conn.execute(
             """
             SELECT *
@@ -389,6 +391,8 @@ def list_jobs_page(page: int, page_size: int = PAGE_SIZE) -> dict[str, Any]:
     page_size = max(1, min(100, int(page_size)))
     with connect() as conn:
         total = int(conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
+        pages = max(1, (total + page_size - 1) // page_size)
+        page = min(page, pages)
         rows = conn.execute(
             """
             SELECT *
