@@ -4,11 +4,13 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const appPage = $(".app-page");
-
   if (!appPage) return;
 
-  let lastState = null;
   let stateTimer = null;
+  let lastState = null;
+  let lastMediaSignature = "";
+  let mediaPage = 1;
+  let jobsPage = 1;
   let currentView = localStorage.getItem("aivideosite-view") || "generate";
 
   const icon = (name) =>
@@ -45,7 +47,7 @@
     }
 
     if (!response.ok) {
-      throw new Error(body.error || body.detail || `HTTP ${response.status}`);
+      throw new Error(body.detail || body.error || `HTTP ${response.status}`);
     }
     return body;
   };
@@ -83,18 +85,35 @@
   };
 
   const shortDate = (iso) => {
-    if (!iso) return "";
+    if (!iso) return "—";
     const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return "";
+    if (Number.isNaN(date.getTime())) return "—";
     return new Intl.DateTimeFormat("ru-RU", {
       day: "2-digit",
       month: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
+      second: "2-digit",
     }).format(date);
   };
 
-  const switchView = (view) => {
+  const formatHms = (seconds) => {
+    const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+    const hours = Math.floor(safe / 3600);
+    const minutes = Math.floor((safe % 3600) / 60);
+    const secs = safe % 60;
+    return [hours, minutes, secs].map((part) => String(part).padStart(2, "0")).join(":");
+  };
+
+  const jobElapsed = (job) => {
+    if (!job.started_at) return null;
+    const start = new Date(job.started_at).getTime();
+    const end = job.finished_at ? new Date(job.finished_at).getTime() : Date.now();
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return Math.max(0, (end - start) / 1000);
+  };
+
+  const switchView = (view, refresh = false) => {
     if (!["generate", "library", "queue"].includes(view)) view = "generate";
     currentView = view;
     localStorage.setItem("aivideosite-view", view);
@@ -112,10 +131,14 @@
       queue: "Очередь",
     };
     $("#page-title").textContent = titles[view];
+
+    if (refresh) {
+      refreshState(true, view === "library");
+    }
   };
 
   $$("[data-nav]").forEach((button) => {
-    button.addEventListener("click", () => switchView(button.dataset.nav));
+    button.addEventListener("click", () => switchView(button.dataset.nav, true));
   });
   switchView(currentView);
 
@@ -170,6 +193,12 @@
     silent: "Silent",
   }[kind] || kind);
 
+  const mediaSignature = (media) =>
+    (media || []).map((item) => `${item.id}:${item.size_bytes}:${item.created_at}`).join("|");
+
+  const libraryHasPlayingVideo = () =>
+    $$("#media-grid video").some((video) => !video.paused && !video.ended);
+
   const renderMedia = (media) => {
     const grid = $("#media-grid");
     const empty = $("#media-empty");
@@ -179,7 +208,11 @@
       const meta = item.meta || {};
       const details = [];
       if (meta.width && meta.height) details.push(`${meta.width}×${meta.height}`);
-      if (meta.profile) details.push(meta.profile === "fast" ? "Turbo" : "Quality");
+      if (meta.profile) {
+        const profile = { fast: "Fast", quality: "Quality", max: "Max" }[meta.profile] || meta.profile;
+        details.push(profile);
+      }
+      if (meta.fps) details.push(`${meta.fps} FPS`);
       if (meta.seed !== undefined && meta.seed !== null) details.push(`seed ${meta.seed}`);
       details.push(humanDuration(item.duration));
       details.push(humanBytes(item.size_bytes));
@@ -238,9 +271,35 @@
       running: ["В работе", "yellow"],
       done: ["Готово", "green"],
       failed: ["Ошибка", "red"],
+      canceled: ["Отменено", "gray"],
     };
     const [label, color] = labels[status] || [status, "gray"];
     return `<span class="badge badge-${color}">${escapeHtml(label)}</span>`;
+  };
+
+  const jobActions = (job) => {
+    if (job.status === "queued" || job.status === "running") {
+      return `
+        <button class="btn btn-danger btn-compact" type="button" data-job-action="cancel" data-job-id="${escapeHtml(job.id)}">
+          ${icon("x")} Отменить
+        </button>
+      `;
+    }
+    if (job.status === "failed") {
+      return `
+        <button class="btn btn-secondary btn-compact" type="button" data-job-action="retry" data-job-id="${escapeHtml(job.id)}">
+          ${icon("refresh")} Повторить
+        </button>
+      `;
+    }
+    if (job.status === "done" && job.result_media_id) {
+      return `
+        <button class="btn btn-secondary btn-compact" type="button" data-job-action="library" data-media-id="${escapeHtml(job.result_media_id)}">
+          ${icon("library")} Открыть библиотеку
+        </button>
+      `;
+    }
+    return "";
   };
 
   const renderJobs = (jobs) => {
@@ -250,41 +309,91 @@
 
     list.innerHTML = jobs.map((job) => {
       const payload = job.payload || {};
-      const subtitle = job.kind === "generate"
-        ? payload.prompt || ""
-        : job.stage || "";
+      const prompt = job.kind === "generate" ? payload.prompt || "" : "";
       const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
+      const elapsed = jobElapsed(job);
+      const progressText = job.status === "running"
+        ? `≈ ${Math.round(progress)}%`
+        : `${Math.round(progress)}%`;
 
       return `
-        <article class="job-card">
+        <article class="job-card" data-job-id="${escapeHtml(job.id)}">
           <div class="job-top">
             <div class="job-name">
-              <span class="metric-icon" style="width:34px;height:34px">
+              <span class="metric-icon job-icon">
                 ${icon(job.kind === "generate" ? "wand" : job.kind === "lipsync" ? "microphone" : "settings")}
               </span>
               <div>
                 <strong>${escapeHtml(jobLabel(job.kind))}</strong>
-                <small>${escapeHtml(job.stage || subtitle || shortDate(job.created_at))}</small>
+                <small>${escapeHtml(job.stage || "В очереди")}</small>
               </div>
             </div>
             ${statusBadge(job.status)}
           </div>
+
+          ${prompt ? `<div class="job-prompt">${escapeHtml(prompt)}</div>` : ""}
+
+          <div class="job-stats">
+            <span><b>Создано:</b> ${escapeHtml(shortDate(job.created_at))}</span>
+            <span><b>Начало:</b> ${job.started_at ? escapeHtml(shortDate(job.started_at)) : "—"}</span>
+            <span><b>Время:</b> ${elapsed === null ? "—" : formatHms(elapsed)}</span>
+            <span><b>Прогресс:</b> ${progressText}</span>
+          </div>
+
           <div class="job-progress" style="--progress:${progress}%">
             <span></span>
           </div>
+
           ${job.error ? `<pre class="job-error">${escapeHtml(job.error)}</pre>` : ""}
+          <div class="job-actions">${jobActions(job)}</div>
         </article>
       `;
     }).join("");
   };
 
-  const refreshState = async (quiet = true) => {
+  const renderPagination = (containerId, pagination, target) => {
+    const container = $(containerId);
+    if (!pagination || pagination.total <= pagination.page_size) {
+      container.innerHTML = pagination?.total
+        ? `<span class="pagination-info">${pagination.total} записей · по ${pagination.page_size} на странице</span>`
+        : "";
+      return;
+    }
+
+    const page = Number(pagination.page || 1);
+    const pages = Number(pagination.pages || 1);
+    container.innerHTML = `
+      <button type="button" data-page-target="${target}" data-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>
+        ←
+      </button>
+      <span class="pagination-info">Страница <strong>${page}</strong> из ${pages} · ${pagination.total} записей</span>
+      <button type="button" data-page-target="${target}" data-page="${page + 1}" ${page >= pages ? "disabled" : ""}>
+        →
+      </button>
+    `;
+  };
+
+  const refreshState = async (quiet = true, forceMedia = false) => {
     try {
-      const state = await api("/api/state");
+      const state = await api(
+        `/api/state?media_page=${mediaPage}&jobs_page=${jobsPage}`
+      );
       lastState = state;
+
+      mediaPage = Number(state.media_pagination?.page || mediaPage);
+      jobsPage = Number(state.jobs_pagination?.page || jobsPage);
+
       renderSystem(state);
-      renderMedia(state.media || []);
       renderJobs(state.jobs || []);
+      renderPagination("#job-pagination", state.jobs_pagination, "jobs");
+      renderPagination("#media-pagination", state.media_pagination, "media");
+
+      const signature = mediaSignature(state.media || []);
+      const safeToRenderMedia = forceMedia || !libraryHasPlayingVideo();
+      if (safeToRenderMedia && (forceMedia || signature !== lastMediaSignature)) {
+        renderMedia(state.media || []);
+        lastMediaSignature = signature;
+      }
     } catch (error) {
       if (!quiet) showToast(error.message, "error");
     } finally {
@@ -295,17 +404,45 @@
   const scheduleRefresh = () => {
     clearTimeout(stateTimer);
     stateTimer = setTimeout(
-      () => refreshState(true),
+      () => refreshState(true, false),
       document.hidden ? 15000 : 3000
     );
   };
 
   document.addEventListener("visibilitychange", () => {
     clearTimeout(stateTimer);
-    refreshState(true);
+    refreshState(true, false);
   });
 
-  $("#refresh-library").addEventListener("click", () => refreshState(false));
+  document.addEventListener("click", (event) => {
+    const pageButton = event.target.closest("[data-page-target]");
+    if (!pageButton || pageButton.disabled) return;
+
+    const page = Math.max(1, Number(pageButton.dataset.page || 1));
+    if (pageButton.dataset.pageTarget === "media") {
+      mediaPage = page;
+      lastMediaSignature = "";
+      refreshState(true, true);
+    } else {
+      jobsPage = page;
+      refreshState(true, false);
+    }
+  });
+
+  $("#refresh-library").addEventListener("click", () => {
+    lastMediaSignature = "";
+    refreshState(false, true);
+  });
+
+  const secondsRange = $("#seconds-range");
+  const secondsValue = $("#seconds-value");
+  if (secondsRange && secondsValue) {
+    const updateSeconds = () => {
+      secondsValue.textContent = `${secondsRange.value} сек`;
+    };
+    secondsRange.addEventListener("input", updateSeconds);
+    updateSeconds();
+  }
 
   $$(".upload-card input[type=file]").forEach((input) => {
     input.addEventListener("change", () => {
@@ -329,9 +466,10 @@
     button.disabled = true;
     try {
       await api("/api/generate", { method: "POST", body: data });
-      showToast("Задача H3 добавлена в очередь.");
+      jobsPage = 1;
       switchView("queue");
-      await refreshState(true);
+      showToast("Задача H3 добавлена в очередь.");
+      await refreshState(true, false);
     } catch (error) {
       showToast(error.message, "error");
     } finally {
@@ -374,11 +512,12 @@
     try {
       await api(endpoint, { method: "POST", body: data });
       dialog.close();
+      jobsPage = 1;
+      switchView("queue");
       showToast(type === "lipsync"
         ? "LipSync добавлен в очередь."
         : "Обработка аудио добавлена в очередь.");
-      switchView("queue");
-      await refreshState(true);
+      await refreshState(true, false);
     } catch (error) {
       showToast(error.message, "error");
     } finally {
@@ -405,9 +544,10 @@
         await api(`/api/media/${encodeURIComponent(mediaId)}/remove-audio`, {
           method: "POST",
         });
-        showToast("Удаление звука добавлено в очередь.");
+        jobsPage = 1;
         switchView("queue");
-        await refreshState(true);
+        showToast("Удаление звука добавлено в очередь.");
+        await refreshState(true, false);
       } catch (error) {
         showToast(error.message, "error");
       }
@@ -415,18 +555,69 @@
     }
 
     if (action === "delete") {
-      if (!confirm("Удалить этот файл из библиотеки? Исходные производные версии не удаляются.")) return;
+      if (!confirm("Удалить этот файл из библиотеки? Производные версии не удаляются.")) return;
       try {
         await api(`/api/media/${encodeURIComponent(mediaId)}`, {
           method: "DELETE",
         });
+        lastMediaSignature = "";
         showToast("Ролик удалён.");
-        await refreshState(true);
+        await refreshState(true, true);
       } catch (error) {
         showToast(error.message, "error");
       }
     }
   });
 
-  refreshState(true);
+  $("#job-list").addEventListener("click", async (event) => {
+    const target = event.target.closest("[data-job-action]");
+    if (!target) return;
+
+    const action = target.dataset.jobAction;
+    if (action === "library") {
+      mediaPage = 1;
+      lastMediaSignature = "";
+      switchView("library");
+      await refreshState(true, true);
+      return;
+    }
+
+    const jobId = target.dataset.jobId;
+    if (!jobId) return;
+
+    if (action === "cancel") {
+      if (!confirm("Отменить эту задачу?")) return;
+      target.disabled = true;
+      try {
+        await api(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, {
+          method: "POST",
+        });
+        showToast("Отмена запрошена.");
+        await refreshState(true, false);
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        target.disabled = false;
+      }
+      return;
+    }
+
+    if (action === "retry") {
+      target.disabled = true;
+      try {
+        await api(`/api/jobs/${encodeURIComponent(jobId)}/retry`, {
+          method: "POST",
+        });
+        jobsPage = 1;
+        showToast("Задача повторно добавлена в очередь.");
+        await refreshState(true, false);
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        target.disabled = false;
+      }
+    }
+  });
+
+  refreshState(true, currentView === "library");
 })();
