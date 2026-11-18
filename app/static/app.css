@@ -331,7 +331,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .media-body { padding: 13px; }
 .media-title { margin: 0; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .media-meta { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 6px; color: var(--muted); font-size: 10px; }
-.media-actions { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 12px; }
+.media-actions { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 12px; }
 .media-actions button, .media-actions a { min-width: 0; height: 34px; display: grid; place-items: center; color: var(--muted); background: #0d1320; border: 1px solid var(--border-soft); border-radius: 8px; }
 .media-actions button:hover, .media-actions a:hover { color: var(--text); background: var(--surface-2); }
 .media-actions .danger:hover { color: #ffadb2; border-color: rgba(232,89,95,.3); }
@@ -485,7 +485,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   .dashboard-strip { grid-template-columns: 1fr; }
   .field-row { grid-template-columns: 1fr; }
   .segmented { grid-template-columns: 1fr; }
-  .media-actions { grid-template-columns: repeat(5, minmax(0,1fr)); }
+  .media-actions { grid-template-columns: repeat(6, minmax(0,1fr)); }
   .login-card { padding: 24px 18px; }
 }
 
@@ -603,5 +603,164 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   }
   .job-actions .btn {
     width: 100%;
+  }
+}
+
+
+/* Persistent settings, native audio toggle and metadata dialogs */
+.section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.toggle-field {
+  position: relative;
+  margin-top: 18px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: rgba(8, 12, 20, .55);
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  cursor: pointer;
+}
+.toggle-field input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.toggle-control {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 auto;
+  background: #2a3347;
+  border: 1px solid #38445d;
+  border-radius: 99px;
+  transition: .16s ease;
+}
+.toggle-control::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background: #9aa7ba;
+  border-radius: 50%;
+  transition: .16s ease;
+}
+.toggle-field input:checked + .toggle-control {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.toggle-field input:checked + .toggle-control::after {
+  left: 18px;
+  background: #fff;
+}
+.toggle-field input:focus-visible + .toggle-control {
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, .18);
+}
+.toggle-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.toggle-copy strong {
+  font-size: 12px;
+  color: #dce5f2;
+}
+.toggle-copy small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.info-dialog {
+  width: min(680px, calc(100vw - 24px));
+}
+.info-dialog-body {
+  padding: 20px;
+}
+.info-dialog textarea[readonly],
+.info-dialog input[readonly] {
+  color: #e5ecf6;
+  background: #090e18;
+}
+.copy-link {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  color: var(--primary-hover);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.copy-link:hover {
+  background: var(--primary-soft);
+}
+.copy-link .icon {
+  width: 15px;
+  height: 15px;
+}
+.info-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.info-row {
+  min-width: 0;
+  min-height: 52px;
+  padding: 10px 11px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  background: #0b101b;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+}
+.info-row span {
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.info-row strong {
+  min-width: 0;
+  color: #dce5f2;
+  font-size: 11px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 650px) {
+  .section-heading {
+    flex-wrap: wrap;
+  }
+  .section-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .section-actions .btn {
+    flex: 1 1 auto;
+  }
+  .generator-settings .panel-header {
+    align-items: flex-start;
+  }
+  #reset-settings {
+    padding-inline: 9px;
+    font-size: 10px;
+  }
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  .info-dialog-body {
+    padding: 15px;
   }
 }
