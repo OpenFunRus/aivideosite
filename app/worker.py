@@ -96,6 +96,7 @@ class JobWorker(threading.Thread):
             size_bytes=output_path.stat().st_size,
             duration=duration,
         )
+        _remove_uploads(payload.get("images") or [])
         return media_id
 
     def _lipsync(self, job: dict[str, Any]) -> str:
@@ -213,6 +214,7 @@ class JobWorker(threading.Thread):
                 size_bytes=output_path.stat().st_size,
                 duration=probe_duration(output_path),
             )
+            _remove_uploads([audio_path])
             return media_id
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -266,6 +268,7 @@ class JobWorker(threading.Thread):
             size_bytes=output_path.stat().st_size,
             duration=probe_duration(output_path),
         )
+        _remove_uploads([audio_path])
         return media_id
 
     def _remove_audio(self, job: dict[str, Any]) -> str:
@@ -370,6 +373,16 @@ def run_command(
             f"{combined[-6000:]}"
         )
     return result
+
+
+def _remove_uploads(paths: list[Any]) -> None:
+    for value in paths:
+        try:
+            path = Path(value)
+            if path.parent.resolve() == settings.upload_dir.resolve():
+                path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def _format_error(exc: Exception) -> str:
