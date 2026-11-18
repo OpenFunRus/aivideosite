@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hmac
+import json
+import math
 import shutil
 import subprocess
 import threading
@@ -244,10 +246,16 @@ async def api_retry_job(
     audio_path = payload.get("audio_path")
     if audio_path and not Path(audio_path).is_file():
         missing.append(str(audio_path))
+    for clip in payload.get("clips") or []:
+        if not isinstance(clip, dict) or not clip.get("media_id"):
+            continue
+        media = db.get_media(str(clip["media_id"]))
+        if media is None or not (settings.library_dir / media["filename"]).is_file():
+            missing.append(f"media:{clip['media_id']}")
     if missing:
         raise HTTPException(
             409,
-            "Исходные загруженные файлы уже отсутствуют. Создайте задачу заново.",
+            "Исходные файлы уже отсутствуют. Создайте задачу заново.",
         )
 
     new_job_id = uuid.uuid4().hex
@@ -364,6 +372,112 @@ async def api_remove_audio(
     return {"ok": True, "job_id": job_id}
 
 
+@app.get("/api/editor/media")
+async def api_editor_media(
+    _: None = Depends(require_auth),
+):
+    return {"items": db.list_media(500)}
+
+
+@app.post("/api/editor/export")
+async def api_editor_export(
+    project: Annotated[str, Form()],
+    audio: UploadFile | None = File(None),
+    _: None = Depends(require_auth),
+):
+    try:
+        data = json.loads(project)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, "Некорректный проект монтажа.") from exc
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Некорректный проект монтажа.")
+
+    clips = data.get("clips")
+    if not isinstance(clips, list) or not clips:
+        raise HTTPException(400, "Добавьте хотя бы один ролик на таймлайн.")
+    if len(clips) > 50:
+        raise HTTPException(400, "На один экспорт можно добавить не более 50 роликов.")
+
+    normalized_clips: list[dict] = []
+    for index, clip in enumerate(clips, start=1):
+        if not isinstance(clip, dict):
+            raise HTTPException(400, f"Некорректный клип #{index}.")
+        media_id = str(clip.get("media_id") or "").strip()
+        if not media_id:
+            raise HTTPException(400, f"Не указан ролик для клипа #{index}.")
+        _ensure_media(media_id)
+        volume = _editor_float(
+            clip.get("volume", 1.0),
+            f"Громкость клипа #{index}",
+            0.0,
+            2.0,
+        )
+        normalized_clips.append({"media_id": media_id, "volume": volume})
+
+    audio_settings = data.get("audio")
+    if audio_settings is None:
+        audio_settings = {}
+    if not isinstance(audio_settings, dict):
+        raise HTTPException(400, "Некорректные настройки аудиодорожки.")
+
+    audio_enabled = bool(audio_settings.get("enabled", False))
+    audio_offset = _editor_float(
+        audio_settings.get("offset", 0.0),
+        "Позиция аудиодорожки",
+        0.0,
+        86400.0,
+    )
+    audio_trim_start = _editor_float(
+        audio_settings.get("trim_start", 0.0),
+        "Начало обрезки аудио",
+        0.0,
+        86400.0,
+    )
+    audio_trim_duration = _editor_float(
+        audio_settings.get("trim_duration", 0.0),
+        "Длина аудиодорожки",
+        0.0,
+        86400.0,
+    )
+    audio_volume = _editor_float(
+        audio_settings.get("volume", 1.0),
+        "Громкость аудиодорожки",
+        0.0,
+        2.0,
+    )
+
+    audio_path: Path | None = None
+    if audio is not None and audio.filename:
+        audio_path = await save_upload(
+            audio,
+            kind="audio",
+            max_bytes=settings.max_audio_upload_bytes,
+        )
+        audio_enabled = True
+    elif audio_enabled:
+        raise HTTPException(400, "Выберите аудиофайл для дорожки.")
+
+    title = " ".join(str(data.get("title") or "Монтаж").split())[:120] or "Монтаж"
+    job_id = uuid.uuid4().hex
+    db.enqueue_job(
+        job_id,
+        "editor_export",
+        {
+            "title": title,
+            "clips": normalized_clips,
+            "audio_path": str(audio_path) if audio_path else None,
+            "audio": {
+                "enabled": audio_enabled,
+                "offset": audio_offset,
+                "trim_start": audio_trim_start,
+                "trim_duration": audio_trim_duration,
+                "volume": audio_volume,
+            },
+        },
+    )
+    return {"ok": True, "job_id": job_id}
+
+
 @app.delete("/api/media")
 async def api_clear_media(
     _: None = Depends(require_auth),
@@ -392,11 +506,8 @@ async def api_delete_media(
     _: None = Depends(require_auth),
 ):
     media = _ensure_media(media_id)
-    for job in db.list_jobs(200):
-        if job["status"] not in {"queued", "running"}:
-            continue
-        if (job.get("payload") or {}).get("media_id") == media_id:
-            raise HTTPException(409, "Этот ролик используется активной задачей.")
+    if media_id in db.active_media_ids():
+        raise HTTPException(409, "Этот ролик используется активной задачей.")
 
     path = settings.library_dir / media["filename"]
     path.unlink(missing_ok=True)
@@ -476,6 +587,24 @@ def _cleanup_job_uploads(job: dict) -> None:
                 path.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def _editor_float(
+    value: object,
+    label: str,
+    minimum: float,
+    maximum: float,
+) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(400, f"{label}: некорректное значение.") from exc
+    if not math.isfinite(number) or number < minimum or number > maximum:
+        raise HTTPException(
+            400,
+            f"{label}: допустимый диапазон {minimum:g}–{maximum:g}.",
+        )
+    return number
 
 
 def _ensure_media(media_id: str) -> dict:
