@@ -202,7 +202,7 @@ class ComfyUIClient:
                 "class_type": "ModelAttentionBackend",
                 "inputs": {
                     "model": ["24", 0] if profile == "fast" else ["2", 0],
-                    "attention_backend": settings.h3_attention_backend,
+                    "attention": settings.h3_attention_backend,
                 },
             },
             "5": {
