@@ -1,0 +1,20 @@
+[Unit]
+Description=AI Video Site
+After=network-online.target comfyui.service
+Wants=network-online.target comfyui.service
+
+[Service]
+Type=simple
+User=openfun
+Group=openfun
+WorkingDirectory=/opt/ai/aivideosite
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/opt/ai/aivideosite/.env
+ExecStart=/opt/ai/aivideosite/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
