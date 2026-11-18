@@ -18,6 +18,7 @@ from fastapi import (
     HTTPException,
     Request,
     UploadFile,
+    Query,
 )
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -121,10 +122,22 @@ async def dashboard(request: Request):
 
 
 @app.get("/api/state")
-async def api_state(_: None = Depends(require_auth)):
+async def api_state(
+    media_page: int = Query(1, ge=1),
+    jobs_page: int = Query(1, ge=1),
+    _: None = Depends(require_auth),
+):
+    media_data = db.list_media_page(media_page, 20)
+    jobs_data = db.list_jobs_page(jobs_page, 20)
     return {
-        "jobs": db.list_jobs(80),
-        "media": db.list_media(120),
+        "jobs": jobs_data["items"],
+        "media": media_data["items"],
+        "jobs_pagination": {
+            key: jobs_data[key] for key in ("page", "page_size", "total", "pages")
+        },
+        "media_pagination": {
+            key: media_data[key] for key in ("page", "page_size", "total", "pages")
+        },
         "counts": db.state_counts(),
         "system": get_system_status(),
     }
@@ -156,11 +169,12 @@ async def api_generate(
         raise HTTPException(400, "Размер должен быть от 256 до 2048.")
     if width % 32 or height % 32:
         raise HTTPException(400, "Ширина и высота должны делиться на 32.")
-    if seconds < 0.2 or seconds > 30:
-        raise HTTPException(400, "Длительность должна быть от 0.2 до 30 секунд.")
-    if fps < 1 or fps > 60:
-        raise HTTPException(400, "FPS вне допустимого диапазона.")
-    if profile not in {"fast", "quality"}:
+    if seconds < 1 or seconds > 30:
+        raise HTTPException(400, "Длительность должна быть от 1 до 30 секунд.")
+    allowed_fps = {12.0, 16.0, 20.0, 24.0, 25.0, 30.0}
+    if float(fps) not in allowed_fps:
+        raise HTTPException(400, "Поддерживаются FPS: 12, 16, 20, 24, 25, 30.")
+    if profile not in {"fast", "quality", "max"}:
         raise HTTPException(400, "Неизвестный профиль.")
 
     image_paths: list[str] = []
@@ -189,6 +203,53 @@ async def api_generate(
         },
     )
     return {"ok": True, "job_id": job_id}
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+async def api_cancel_job(
+    job_id: str,
+    _: None = Depends(require_auth),
+):
+    job = db.request_cancel(job_id)
+    if job is None:
+        raise HTTPException(404, "Задача не найдена.")
+
+    if job["status"] == "running" and job["kind"] == "generate":
+        prompt_id = job.get("external_id")
+        if prompt_id:
+            ComfyUIClient().cancel_prompt(str(prompt_id))
+
+    return {"ok": True, "status": job["status"]}
+
+
+@app.post("/api/jobs/{job_id}/retry")
+async def api_retry_job(
+    job_id: str,
+    _: None = Depends(require_auth),
+):
+    source = db.get_job(job_id)
+    if source is None:
+        raise HTTPException(404, "Задача не найдена.")
+    if source["status"] != "failed":
+        raise HTTPException(409, "Повторить можно только задачу с ошибкой.")
+
+    payload = source.get("payload") or {}
+    missing = []
+    for path in payload.get("images") or []:
+        if not Path(path).is_file():
+            missing.append(str(path))
+    audio_path = payload.get("audio_path")
+    if audio_path and not Path(audio_path).is_file():
+        missing.append(str(audio_path))
+    if missing:
+        raise HTTPException(
+            409,
+            "Исходные загруженные файлы уже отсутствуют. Создайте задачу заново.",
+        )
+
+    new_job_id = uuid.uuid4().hex
+    db.clone_failed_job(job_id, new_job_id)
+    return {"ok": True, "job_id": new_job_id}
 
 
 @app.post("/api/media/{media_id}/lipsync")
