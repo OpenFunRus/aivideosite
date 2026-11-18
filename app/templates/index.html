@@ -97,23 +97,35 @@
             </label>
 
             <div class="reference-grid">
-              <label class="upload-card">
+              <label class="upload-card" data-upload-card="first">
                 <input type="file" name="first_frame" accept="image/png,image/jpeg,image/webp">
-                <span class="upload-icon">
-                  <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+                <img class="upload-preview" alt="Превью первого кадра" hidden>
+                <button class="upload-remove" type="button" aria-label="Убрать первый кадр" title="Убрать кадр">
+                  <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+                </button>
+                <span class="upload-content">
+                  <span class="upload-icon">
+                    <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+                  </span>
+                  <strong>Первый кадр</strong>
+                  <small>Необязательно · PNG/JPG/WebP</small>
+                  <span class="upload-name">Выбрать изображение</span>
                 </span>
-                <strong>Первый кадр</strong>
-                <small>Необязательно · PNG/JPG/WebP</small>
-                <span class="upload-name">Выбрать изображение</span>
               </label>
-              <label class="upload-card">
+              <label class="upload-card" data-upload-card="last">
                 <input type="file" name="last_frame" accept="image/png,image/jpeg,image/webp">
-                <span class="upload-icon">
-                  <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+                <img class="upload-preview" alt="Превью последнего кадра" hidden>
+                <button class="upload-remove" type="button" aria-label="Убрать последний кадр" title="Убрать кадр">
+                  <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+                </button>
+                <span class="upload-content">
+                  <span class="upload-icon">
+                    <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+                  </span>
+                  <strong>Последний кадр</strong>
+                  <small>Необязательно · нужен только для First/Last</small>
+                  <span class="upload-name">Выбрать изображение</span>
                 </span>
-                <strong>Последний кадр</strong>
-                <small>Необязательно · нужен только для First/Last</small>
-                <span class="upload-name">Выбрать изображение</span>
               </label>
             </div>
           </section>
