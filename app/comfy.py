@@ -133,6 +133,18 @@ class ComfyUIClient:
             "seed": int(payload.get("seed", 0)),
         }
 
+    def free_memory(self) -> bool:
+        """Ask ComfyUI to unload all models and release cached GPU memory."""
+        try:
+            response = self.session.post(
+                f"{self.base_url}/free",
+                json={"unload_models": True, "free_memory": True},
+                timeout=15,
+            )
+            return response.ok
+        except requests.RequestException:
+            return False
+
     def cancel_prompt(self, prompt_id: str) -> bool:
         try:
             response = self.session.post(
