@@ -211,6 +211,14 @@ class JobWorker(threading.Thread):
             guidance = float(payload.get("guidance") or 1.5)
 
             self._check_cancel(job_id)
+            db.update_job(
+                job_id,
+                progress=16,
+                stage="LatentSync: освобождение VRAM от H3",
+            )
+            self._prepare_gpu_for_latentsync(job_id)
+
+            self._check_cancel(job_id)
             db.update_job(job_id, progress=18, stage="LatentSync: синхронизация губ")
             command = [
                 str(settings.latentsync_python),
@@ -237,6 +245,9 @@ class JobWorker(threading.Thread):
                 cwd=settings.latentsync_dir,
                 timeout=7200,
                 should_cancel=should_cancel,
+                env_overrides={
+                    "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+                },
             )
             self._check_cancel(job_id)
             db.update_job(job_id, progress=95, stage="LipSync: сохранение")
@@ -268,6 +279,59 @@ class JobWorker(threading.Thread):
             raise
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
+
+    def _prepare_gpu_for_latentsync(self, job_id: str) -> None:
+        """Unload ComfyUI models and wait until enough VRAM is actually free."""
+        self._check_cancel(job_id)
+
+        if self._comfy.health():
+            if not self._comfy.free_memory():
+                raise RuntimeError(
+                    "ComfyUI did not accept the VRAM release request."
+                )
+
+        deadline = time.monotonic() + 90
+        last_free_mb: int | None = None
+        last_total_mb: int | None = None
+
+        while time.monotonic() < deadline:
+            self._check_cancel(job_id)
+            free_mb, total_mb = _gpu_memory_mb()
+            if free_mb is None or total_mb is None:
+                # If nvidia-smi is unexpectedly unavailable, do not block
+                # forever. ComfyUI's /free request is still authoritative.
+                time.sleep(2)
+                return
+
+            last_free_mb = free_mb
+            last_total_mb = total_mb
+            db.update_job(
+                job_id,
+                progress=17,
+                stage=(
+                    "LatentSync: ожидание VRAM "
+                    f"({free_mb / 1024:.1f} / {total_mb / 1024:.1f} ГБ свободно)"
+                ),
+            )
+
+            # LatentSync 1.6 needs roughly 18 GiB. Keep a little headroom.
+            if free_mb >= 19000:
+                return
+            time.sleep(1)
+
+        used_text = "неизвестно"
+        if last_free_mb is not None and last_total_mb is not None:
+            used_mb = max(0, last_total_mb - last_free_mb)
+            used_text = (
+                f"свободно {last_free_mb / 1024:.1f} ГБ из "
+                f"{last_total_mb / 1024:.1f} ГБ; занято {used_mb / 1024:.1f} ГБ"
+            )
+        processes = _gpu_processes_summary()
+        extra = f" GPU-процессы: {processes}" if processes else ""
+        raise RuntimeError(
+            "Не удалось освободить достаточно VRAM для LatentSync: "
+            f"{used_text}.{extra}"
+        )
 
     def _replace_audio(self, job: dict[str, Any]) -> str:
         payload = job["payload"]
@@ -444,8 +508,13 @@ def run_command(
     cwd: Path | None = None,
     timeout: int = 3600,
     should_cancel: Callable[[], bool] | None = None,
+    env_overrides: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     started = time.monotonic()
+    child_env = os.environ.copy()
+    if env_overrides:
+        child_env.update(env_overrides)
+
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as log:
         process = subprocess.Popen(
             command,
@@ -453,7 +522,7 @@ def run_command(
             stdout=log,
             stderr=subprocess.STDOUT,
             text=True,
-            env=os.environ.copy(),
+            env=child_env,
             start_new_session=True,
         )
 
@@ -508,6 +577,45 @@ def _terminate_process_group(process: subprocess.Popen) -> None:
         process.wait(timeout=2)
     except subprocess.TimeoutExpired:
         pass
+
+
+def _gpu_memory_mb() -> tuple[int | None, int | None]:
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=memory.free,memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        line = result.stdout.strip().splitlines()[0]
+        free_text, total_text = [part.strip() for part in line.split(",")[:2]]
+        return int(free_text), int(total_text)
+    except Exception:
+        return None, None
+
+
+def _gpu_processes_summary() -> str:
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-compute-apps=pid,process_name,used_gpu_memory",
+                "--format=csv,noheader,nounits",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        return "; ".join(lines[:8])
+    except Exception:
+        return ""
 
 
 def _remove_uploads(paths: list[Any]) -> None:
