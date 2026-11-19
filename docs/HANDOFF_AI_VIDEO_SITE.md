@@ -210,10 +210,10 @@ Site venv:
 ```bash
 cd /opt/ai/ComfyUI
 source .venv/bin/activate
-python main.py --listen 127.0.0.1 --port 8188
+python main.py --listen 0.0.0.0 --port 8188
 ```
 
-Для ручной работы с UI при необходимости можно временно слушать `0.0.0.0`, но штатный backend сайта использует:
+ComfyUI services слушают `0.0.0.0`, чтобы UI был доступен из локальной сети. Штатный backend сайта при этом использует localhost URL:
 
 ```text
 http://127.0.0.1:8188
@@ -752,6 +752,22 @@ MAX_AUDIO_UPLOAD_MB=300
 
 ---
 
+### LAN-доступ к ComfyUI
+
+Оба ComfyUI backend слушают на всех интерфейсах:
+
+- H3: `0.0.0.0:8188`;
+- Wan: `0.0.0.0:8189`.
+
+При текущем IP VM `192.168.1.244` UI доступны из локальной сети по:
+
+```text
+http://192.168.1.244:8188
+http://192.168.1.244:8189
+```
+
+UFW на момент настройки был inactive, поэтому отдельное firewall-правило не требовалось. ComfyUI UI не имеет встроенной авторизации в этой схеме, поэтому не пробрасывать 8188/8189 в интернет.
+
 ## 18. systemd
 
 ### ComfyUI
@@ -768,7 +784,7 @@ Current assumptions:
 User=openfun
 Group=openfun
 WorkingDirectory=/opt/ai/ComfyUI
-ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 127.0.0.1 --port 8188
+ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8188
 ```
 
 ### ComfyUI Wan / GPU 0
@@ -800,7 +816,7 @@ Group=openfun
 WorkingDirectory=/opt/ai/ComfyUI
 Environment=PYTHONUNBUFFERED=1
 Environment=CUDA_VISIBLE_DEVICES=0
-ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 127.0.0.1 --port 8189
+ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8189
 Restart=always
 ```
 
