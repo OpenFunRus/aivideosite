@@ -200,13 +200,20 @@ class ComfyUIClient:
         payload: dict[str, Any],
         uploaded_images: list[str],
     ) -> dict[str, Any]:
-        profile = str(payload.get("profile") or "fast").lower()
+        profile = str(payload.get("profile") or "steps8").lower()
         profiles = {
+            "steps4": {"steps": 4, "turbo": True},
+            "steps8": {"steps": 8, "turbo": True},
+            "steps12": {"steps": 12, "turbo": False},
+            "steps16": {"steps": 16, "turbo": False},
+            "steps20": {"steps": 20, "turbo": False},
+            # Legacy aliases keep old queued/retried jobs working, but 30-step
+            # generation is intentionally retired.
             "fast": {"steps": 8, "turbo": True},
             "quality": {"steps": 20, "turbo": False},
-            "max": {"steps": 30, "turbo": False},
+            "max": {"steps": 20, "turbo": False},
         }
-        profile_config = profiles.get(profile, profiles["fast"])
+        profile_config = profiles.get(profile, profiles["steps8"])
         steps = int(profile_config["steps"])
         use_turbo = bool(profile_config["turbo"])
         seed = int(payload.get("seed", -1))
