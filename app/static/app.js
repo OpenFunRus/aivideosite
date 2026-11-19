@@ -380,8 +380,7 @@
       prompt: qs("#prompt")?.value || "",
       resolution: qs("#resolution")?.value || DEFAULT_RESOLUTION,
       resolution_shape:
-        qs('[name="resolution_shape"]:checked', generationForm)?.value ||
-        DEFAULT_RESOLUTION_SHAPE,
+        qs("#resolution-shape", generationForm)?.value || DEFAULT_RESOLUTION_SHAPE,
       seconds: secondsRange?.value || "5",
       fps: qs('[name="fps"]', generationForm)?.value || "24",
       profile: checkedProfile?.value || "steps8",
@@ -391,6 +390,12 @@
         qs('[name="generation_mode"]:checked', generationForm)?.value || "frames",
       reference_task: qs("#reference-task")?.value || "reference_generation",
       ref_image_size: qs("#ref-image-size")?.value || "match",
+      control_mode: qs("#control-mode")?.value || "none",
+      control_strength: qs("#control-strength")?.value || "1",
+      control_start_percent: qs("#control-start")?.value || "0",
+      control_end_percent: qs("#control-end")?.value || "1",
+      control_canny_low: qs("#control-canny-low")?.value || "0.4",
+      control_canny_high: qs("#control-canny-high")?.value || "0.8",
     };
   };
 
@@ -473,7 +478,7 @@
       audio.checked = Boolean(saved.generate_audio);
     }
 
-    const savedMode = ["frames", "reference", "digital_human"].includes(saved.generation_mode)
+    const savedMode = ["frames", "reference", "multiframe", "digital_human"].includes(saved.generation_mode)
       ? saved.generation_mode
       : "frames";
     const modeInput = qs(
@@ -497,6 +502,25 @@
       refSize.value = String(saved.ref_image_size);
     }
 
+    const controlMode = qs("#control-mode");
+    if (
+      controlMode &&
+      [...controlMode.options].some((option) => option.value === String(saved.control_mode))
+    ) {
+      controlMode.value = String(saved.control_mode);
+    }
+    const numericSettings = [
+      ["#control-strength", saved.control_strength],
+      ["#control-start", saved.control_start_percent],
+      ["#control-end", saved.control_end_percent],
+      ["#control-canny-low", saved.control_canny_low],
+      ["#control-canny-high", saved.control_canny_high],
+    ];
+    numericSettings.forEach(([selector, value]) => {
+      const input = qs(selector);
+      if (input && value !== undefined && value !== null) input.value = String(value);
+    });
+
     updateSeconds();
   };
 
@@ -515,9 +539,12 @@
       clearUploadPreview(input);
     });
     ["images", "videos", "audios"].forEach((kind) => renderReferenceList(kind));
+    renderGuideList();
     renderGeneratorCharacters();
     buildReferenceManifest();
+    buildGuideManifest();
     updateGenerationModeUI();
+    updateControlNetUI();
 
     mediaPage = 1;
     jobsPage = 1;
@@ -539,6 +566,7 @@
     videos: qs("#reference-videos"),
     audios: qs("#reference-audios"),
   };
+  const guideInput = qs("#guide-images");
 
   const roleOptions = {
     images: [
@@ -672,20 +700,128 @@
     return manifest;
   };
 
+  const guideFiles = () => [...(guideInput?.files || [])];
+
+  const renderGuideList = () => {
+    const container = qs("#timeline-guide-list");
+    if (!container) return;
+    const files = guideFiles();
+    if (!files.length) {
+      container.innerHTML = "";
+      const hidden = qs("#guide-manifest");
+      if (hidden) hidden.value = JSON.stringify({ guides: [] });
+      return;
+    }
+    const duration = Math.max(1, Number(secondsRange?.value || 5));
+    container.innerHTML = files
+      .map((file, index) => {
+        const time =
+          files.length === 1
+            ? 0
+            : Math.round((duration * index / (files.length - 1)) * 100) / 100;
+        return `
+          <div class="timeline-guide-row" data-guide-index="${index}">
+            <div class="reference-file-name">
+              <strong>Guide ${index + 1}</strong>
+              <span title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+            </div>
+            <label>
+              <span>секунда</span>
+              <input class="guide-time" type="number" min="0" max="${duration}" step="0.01" value="${time}">
+            </label>
+            <input class="guide-note" maxlength="240" placeholder="Что должно совпасть в этом кадре · необязательно">
+          </div>`;
+      })
+      .join("");
+    buildGuideManifest();
+  };
+
+  const buildGuideManifest = () => {
+    const guides = qsa(".timeline-guide-row").map((row) => ({
+      time: Number(qs(".guide-time", row)?.value || 0),
+      note: qs(".guide-note", row)?.value || "",
+    }));
+    const hidden = qs("#guide-manifest");
+    if (hidden) hidden.value = JSON.stringify({ guides });
+    return guides;
+  };
+
+  const updateControlNetUI = () => {
+    const mode = qs("#control-mode")?.value || "none";
+    const panel = qs("#controlnet-inputs");
+    if (panel) panel.hidden = mode === "none";
+
+    const sourceField = qs("#control-source-field");
+    const maskField = qs("#control-mask-field");
+    const videoField = qs("#control-video-field");
+    const isInpaint = mode === "inpaint";
+    if (sourceField) sourceField.hidden = !isInpaint;
+    if (maskField) maskField.hidden = !isInpaint;
+    if (videoField) videoField.hidden = mode === "none";
+
+    qsa(".canny-threshold-field").forEach((field) => {
+      field.hidden = mode !== "canny_auto";
+    });
+
+    const title = qs("#control-video-title");
+    const help = qs("#control-video-help");
+    const note = qs("#control-mode-note");
+    if (title) {
+      title.textContent = isInpaint
+        ? "Control video · optional"
+        : mode === "canny_auto"
+          ? "Raw motion video"
+          : "Prepared control video";
+    }
+    if (help) {
+      if (mode === "canny_auto") {
+        help.textContent = "Сайт сам применит built-in Canny к каждому кадру.";
+      } else if (isInpaint) {
+        help.textContent = "Необязательно: добавьте структуру поверх source + mask.";
+      } else if (mode !== "none") {
+        help.textContent =
+          "Видео должно быть заранее подготовлено как " + mode.toUpperCase() + " control.";
+      }
+    }
+    if (note) {
+      const notes = {
+        canny_auto:
+          "Raw RGB → built-in Canny → H3 Fun ControlNet. Дополнительные модели-препроцессоры не нужны.",
+        canny:
+          "Готовое Canny/edge control video подаётся напрямую в Union.",
+        pose:
+          "Загрузите заранее построенное Pose control video (например SDPose/SAM3D Body).",
+        depth:
+          "Загрузите заранее построенное Depth control video (например Depth Anything 3 / MoGe).",
+        hed:
+          "HED поддерживается Union, но built-in HED-preprocessor в ComfyUI отсутствует: нужен заранее подготовленный ролик.",
+        mlsd:
+          "MLSD поддерживается Union, но built-in MLSD-preprocessor в ComfyUI отсутствует: нужен заранее подготовленный ролик.",
+        inpaint:
+          "Source + mask обязательны. Белое в mask video = regenerate. Control video можно добавить дополнительно.",
+      };
+      note.textContent = notes[mode] || "";
+    }
+  };
+
   const updateGenerationModeUI = () => {
     const mode = currentGenerationMode();
     const frames = qs("#frames-mode-panel");
     const references = qs("#reference-mode-panel");
     if (frames) frames.hidden = mode !== "frames";
     if (references) references.hidden = mode === "frames";
+    const timelineSection = qs("#timeline-guide-section");
+    if (timelineSection) timelineSection.hidden = mode !== "multiframe";
     const kicker = qs("#generator-mode-kicker");
     if (kicker) {
       kicker.textContent =
         mode === "frames"
           ? "MiniMax H3 FL2VA"
-          : mode === "digital_human"
-            ? "MiniMax H3 DIGITAL HUMAN"
-            : "MiniMax H3 REF2VA";
+          : mode === "multiframe"
+            ? "MiniMax H3 MULTIFRAME GUIDE"
+            : mode === "digital_human"
+              ? "MiniMax H3 DIGITAL HUMAN"
+              : "MiniMax H3 REF2VA";
     }
     const audioInput = referenceInputs.audios;
     if (audioInput) audioInput.multiple = mode !== "digital_human";
@@ -699,7 +835,10 @@
           : "до 3 standalone audio";
     }
     const taskField = qs("#reference-task-field");
-    if (taskField) taskField.hidden = mode === "digital_human";
+    if (taskField) taskField.hidden = mode === "digital_human" || mode === "multiframe";
+    if (mode === "multiframe" && qs("#reference-task")) {
+      qs("#reference-task").value = "keyframe_completion";
+    }
 
     qsa('[name="profile"]', generationForm).forEach((input) => {
       const small = input.closest("label")?.querySelector("small");
@@ -716,7 +855,9 @@
       note.textContent =
         mode === "digital_human"
           ? "Digital Human: минимум один визуальный reference и ровно один Audio reference. Это driving track, а не обычная подсказка тембра."
-          : "Ref2VA: Pictures/Videos/Audio — референсы. Storyboard images задают ориентиры, но не являются точными latent-keyframes на произвольной секунде.";
+          : mode === "multiframe"
+            ? "Timeline Guides используют native Add Guide и реально привязываются к frame_idx. Обычные Pictures/Videos/Audio выше остаются semantic Ref2VA references."
+            : "Ref2VA: Pictures/Videos/Audio — semantic references. Роль Storyboard сама по себе не является точным latent-keyframe — для этого выберите «Таймлайн».";
     }
     updateReferenceBudget();
   };
@@ -732,6 +873,17 @@
     buildReferenceManifest();
     updateReferenceBudget();
   });
+  guideInput?.addEventListener("change", () => {
+    renderGuideList();
+  });
+  qs("#timeline-guide-list")?.addEventListener("input", buildGuideManifest);
+  qs("#control-mode")?.addEventListener("change", () => {
+    updateControlNetUI();
+    saveGeneratorSettings();
+  });
+  qs("#controlnet-inputs")?.addEventListener("input", saveGeneratorSettings);
+  updateControlNetUI();
+
   qsa('[name="generation_mode"]', generationForm).forEach((input) => {
     input.addEventListener("change", () => {
       updateGenerationModeUI();
@@ -1967,6 +2119,7 @@
 
     syncCharacterSelection();
     buildReferenceManifest();
+    const guides = buildGuideManifest();
     const budget = updateReferenceBudget();
 
     if (mode !== "frames") {
@@ -1979,12 +2132,43 @@
         showToast("Превышен лимит Ref2VA: 9 images, 3 videos, 3 audio, 15 media всего.", "error");
         return;
       }
-      if (budget.images + budget.videos < 1) {
+      if (mode !== "multiframe" && budget.images + budget.videos < 1) {
         showToast("Ref2VA нужен хотя бы один визуальный reference: изображение, видео или Character.", "error");
         return;
       }
+      if (mode === "multiframe") {
+        const files = guideFiles();
+        if (files.length < 1 || files.length > 16) {
+          showToast("Timeline Guides: выберите от 1 до 16 guide images.", "error");
+          return;
+        }
+        const duration = Number(secondsRange?.value || 5);
+        if (
+          guides.length !== files.length ||
+          guides.some((guide) => !Number.isFinite(guide.time) || guide.time < 0 || guide.time > duration)
+        ) {
+          showToast(`Время каждого Guide должно быть от 0 до ${duration} сек.`, "error");
+          return;
+        }
+      }
       if (mode === "digital_human" && budget.audios !== 1) {
         showToast("Digital Human требует ровно один driving audio, включая голос выбранного Character.", "error");
+        return;
+      }
+    }
+
+    const controlMode = qs("#control-mode")?.value || "none";
+    if (controlMode !== "none") {
+      const controlVideo = qs("#control-video")?.files?.[0];
+      const sourceVideo = qs("#control-source-video")?.files?.[0];
+      const maskVideo = qs("#control-mask-video")?.files?.[0];
+      if (controlMode === "inpaint") {
+        if (!sourceVideo || !maskVideo) {
+          showToast("Video inpainting требует Source video и Mask video.", "error");
+          return;
+        }
+      } else if (!controlVideo) {
+        showToast("Для ControlNet загрузите control video.", "error");
         return;
       }
     }
@@ -2091,6 +2275,8 @@
       ["Режим H3", meta.generation_mode || "frames"],
       ["Reference task", meta.reference_task || "—"],
       ["Ref image size", meta.ref_image_size || "—"],
+      ["Timeline guides", Array.isArray(meta.timeline_guides) ? meta.timeline_guides.length : 0],
+      ["ControlNet", meta.control?.mode || "none"],
       ["GPU", meta.gpu_backend || "—"],
       ["Нативный звук H3", meta.generate_audio ? "Да" : "Нет"],
       ["Референсов", meta.reference_count ?? "—"],
