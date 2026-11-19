@@ -501,6 +501,11 @@ async def api_generate(
                 settings.max_audio_upload_bytes,
             )
 
+            media_order = {"image": 0, "video": 1, "audio": 2}
+            reference_items.sort(
+                key=lambda item: media_order.get(str(item.get("type") or ""), 99)
+            )
+
             try:
                 validate_reference_items(
                     reference_items,
