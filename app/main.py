@@ -237,6 +237,8 @@ async def api_retry_job(
         raise HTTPException(404, "Задача не найдена.")
     if source["status"] != "failed":
         raise HTTPException(409, "Повторить можно только задачу с ошибкой.")
+    if source["kind"] not in {"generate", "audio_replace", "audio_remove", "editor_export"}:
+        raise HTTPException(409, "Этот тип задачи больше не поддерживается.")
 
     payload = source.get("payload") or {}
     missing = []
