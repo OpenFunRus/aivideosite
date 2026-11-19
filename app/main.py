@@ -30,7 +30,13 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import db
 from .comfy import ComfyUIClient
 from .config import settings
-from .worker import JobWorker
+from .h3_references import (
+    REFERENCE_TASKS,
+    build_reference_prompt,
+    parse_reference_manifest,
+    validate_reference_items,
+)
+from .worker import JobWorker, probe_has_audio
 
 
 @asynccontextmanager
@@ -170,6 +176,136 @@ async def api_state(
     }
 
 
+@app.get("/api/characters")
+async def api_characters(user_id: str = Depends(require_user)):
+    return {"characters": [_character_public(item) for item in db.list_characters(user_id)]}
+
+
+@app.post("/api/characters")
+async def api_create_character(
+    name: Annotated[str, Form()],
+    description: Annotated[str, Form()] = "",
+    images: list[UploadFile] | None = File(None),
+    voice: UploadFile | None = File(None),
+    user_id: str = Depends(require_user),
+):
+    name = name.strip()
+    description = description.strip()
+    if not name or len(name) > 80:
+        raise HTTPException(400, "Имя персонажа должно содержать 1–80 символов.")
+    if len(description) > 2000:
+        raise HTTPException(400, "Описание персонажа слишком длинное.")
+
+    uploads = [item for item in (images or []) if item.filename]
+    if not uploads:
+        raise HTTPException(400, "Добавьте хотя бы одно изображение персонажа.")
+    if len(uploads) > 4:
+        raise HTTPException(400, "Для одного персонажа можно сохранить до 4 изображений.")
+
+    character_id = uuid.uuid4().hex
+    target_dir = settings.character_dir / user_id / character_id
+    target_dir.mkdir(parents=True, exist_ok=False)
+    image_files: list[str] = []
+    voice_file: str | None = None
+    temp_paths: list[Path] = []
+    try:
+        for index, upload in enumerate(uploads, start=1):
+            path = await save_upload(
+                upload,
+                kind="image",
+                max_bytes=settings.max_image_upload_bytes,
+            )
+            temp_paths.append(path)
+            destination = target_dir / f"image_{index}{path.suffix.lower()}"
+            shutil.move(str(path), str(destination))
+            temp_paths.remove(path)
+            image_files.append(str(destination))
+
+        if voice is not None and voice.filename:
+            path = await save_upload(
+                voice,
+                kind="audio",
+                max_bytes=settings.max_audio_upload_bytes,
+            )
+            temp_paths.append(path)
+            destination = target_dir / f"voice{path.suffix.lower()}"
+            shutil.move(str(path), str(destination))
+            temp_paths.remove(path)
+            voice_file = str(destination)
+
+        db.insert_character(
+            character_id=character_id,
+            owner_id=user_id,
+            name=name,
+            description=description,
+            images=image_files,
+            voice_file=voice_file,
+        )
+    except Exception:
+        for path in temp_paths:
+            path.unlink(missing_ok=True)
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
+
+    character = db.get_character(character_id, user_id)
+    return {"ok": True, "character": _character_public(character)}
+
+
+@app.post("/api/characters/{character_id}")
+async def api_update_character(
+    character_id: str,
+    name: Annotated[str, Form()],
+    description: Annotated[str, Form()] = "",
+    user_id: str = Depends(require_user),
+):
+    name = name.strip()
+    description = description.strip()
+    if not name or len(name) > 80:
+        raise HTTPException(400, "Имя персонажа должно содержать 1–80 символов.")
+    if len(description) > 2000:
+        raise HTTPException(400, "Описание персонажа слишком длинное.")
+    character = db.update_character(
+        character_id,
+        user_id,
+        name=name,
+        description=description,
+    )
+    if character is None:
+        raise HTTPException(404, "Персонаж не найден.")
+    return {"ok": True, "character": _character_public(character)}
+
+
+@app.delete("/api/characters/{character_id}")
+async def api_delete_character(
+    character_id: str,
+    user_id: str = Depends(require_user),
+):
+    character = db.delete_character(character_id, user_id)
+    if character is None:
+        raise HTTPException(404, "Персонаж не найден.")
+    target_dir = settings.character_dir / user_id / character_id
+    shutil.rmtree(target_dir, ignore_errors=True)
+    return {"ok": True}
+
+
+@app.get("/characters/{character_id}/image/{image_index}")
+async def character_image(
+    character_id: str,
+    image_index: int,
+    user_id: str = Depends(require_user),
+):
+    character = db.get_character(character_id, user_id)
+    if character is None:
+        raise HTTPException(404, "Персонаж не найден.")
+    images = character.get("images") or []
+    if image_index < 0 or image_index >= len(images):
+        raise HTTPException(404, "Изображение не найдено.")
+    path = Path(images[image_index])
+    if not path.is_file():
+        raise HTTPException(404, "Файл изображения не найден.")
+    return FileResponse(path)
+
+
 @app.post("/api/generate")
 async def api_generate(
     request: Request,
@@ -181,8 +317,17 @@ async def api_generate(
     profile: Annotated[str, Form()] = "steps8",
     seed: Annotated[int, Form()] = -1,
     generate_audio: Annotated[bool, Form()] = False,
+    generation_mode: Annotated[str, Form()] = "frames",
+    keyframe_role: Annotated[str, Form()] = "first",
+    reference_task: Annotated[str, Form()] = "reference_generation",
+    ref_image_size: Annotated[str, Form()] = "match",
+    character_ids: Annotated[str, Form()] = "[]",
+    reference_manifest: Annotated[str, Form()] = "{}",
     first_frame: UploadFile | None = File(None),
     last_frame: UploadFile | None = File(None),
+    reference_images: list[UploadFile] | None = File(None),
+    reference_videos: list[UploadFile] | None = File(None),
+    reference_audios: list[UploadFile] | None = File(None),
     user_id: str = Depends(require_user),
 ):
     del request
@@ -190,7 +335,7 @@ async def api_generate(
     prompt = " ".join(prompt.split()) if "\n" not in prompt else prompt.strip()
     if not prompt:
         raise HTTPException(400, "Введите prompt.")
-    if len(prompt) > 12000:
+    if len(prompt) > 16000:
         raise HTTPException(400, "Prompt слишком длинный.")
 
     if width < 256 or width > 2048 or height < 256 or height > 2048:
@@ -210,33 +355,172 @@ async def api_generate(
     if profile not in {"steps4", "steps8", "steps12", "steps16", "steps20"}:
         raise HTTPException(400, "Неизвестный профиль шагов.")
 
-    image_paths: list[str] = []
-    for upload in (first_frame, last_frame):
-        if upload is not None and upload.filename:
-            path = await save_upload(
-                upload,
-                kind="image",
-                max_bytes=settings.max_image_upload_bytes,
-            )
-            image_paths.append(str(path))
+    generation_mode = generation_mode.strip().lower()
+    if generation_mode not in {"frames", "reference", "digital_human"}:
+        raise HTTPException(400, "Неизвестный режим H3.")
+    keyframe_role = "last" if keyframe_role == "last" else "first"
+    if reference_task not in REFERENCE_TASKS:
+        reference_task = "reference_generation"
+    if ref_image_size not in {"match", "1k", "1.5k", "2k", "original"}:
+        ref_image_size = "match"
 
-    job_id = uuid.uuid4().hex
-    db.enqueue_job(
-        job_id,
-        "generate",
-        {
-            "prompt": prompt,
-            "width": width,
-            "height": height,
-            "seconds": seconds,
-            "fps": fps,
-            "profile": profile,
-            "seed": seed,
-            "generate_audio": bool(generate_audio),
-            "images": image_paths,
-        },
-        owner_id=user_id,
-    )
+    temporary_paths: list[Path] = []
+    image_paths: list[str] = []
+    reference_items: list[dict] = []
+    reference_map: list[dict] = []
+    original_prompt = prompt
+
+    try:
+        if generation_mode == "frames":
+            for upload in (first_frame, last_frame):
+                if upload is not None and upload.filename:
+                    path = await save_upload(
+                        upload,
+                        kind="image",
+                        max_bytes=settings.max_image_upload_bytes,
+                    )
+                    temporary_paths.append(path)
+                    image_paths.append(str(path))
+            if len(image_paths) > 2:
+                raise HTTPException(400, "FL2VA принимает максимум два кадра.")
+        else:
+            try:
+                raw_character_ids = json.loads(character_ids or "[]")
+            except json.JSONDecodeError as exc:
+                raise HTTPException(400, "Некорректный список персонажей.") from exc
+            if not isinstance(raw_character_ids, list):
+                raise HTTPException(400, "Некорректный список персонажей.")
+
+            seen_characters: set[str] = set()
+            for value in raw_character_ids:
+                character_id = str(value).strip()
+                if not character_id or character_id in seen_characters:
+                    continue
+                seen_characters.add(character_id)
+                character = db.get_character(character_id, user_id)
+                if character is None:
+                    raise HTTPException(404, "Один из выбранных персонажей не найден.")
+                for path_value in character.get("images") or []:
+                    path = Path(path_value)
+                    if not path.is_file():
+                        raise HTTPException(409, f"У персонажа «{character['name']}» отсутствует файл изображения.")
+                    reference_items.append(
+                        {
+                            "type": "image",
+                            "path": str(path),
+                            "temporary": False,
+                            "source_name": path.name,
+                            "role": "character",
+                            "retention": "fully_preserved",
+                            "character_id": character_id,
+                            "character_name": character["name"],
+                            "character_description": character.get("description") or "",
+                        }
+                    )
+                voice_path = character.get("voice_file")
+                if voice_path:
+                    path = Path(voice_path)
+                    if not path.is_file():
+                        raise HTTPException(409, f"У персонажа «{character['name']}» отсутствует файл голоса.")
+                    reference_items.append(
+                        {
+                            "type": "audio",
+                            "path": str(path),
+                            "temporary": False,
+                            "source_name": path.name,
+                            "role": "voice",
+                            "retention": "reference",
+                            "character_id": character_id,
+                            "character_name": character["name"],
+                            "character_description": character.get("description") or "",
+                        }
+                    )
+
+            manifest = parse_reference_manifest(reference_manifest)
+
+            async def append_uploads(
+                uploads: list[UploadFile] | None,
+                media_type: str,
+                manifest_key: str,
+                kind: str,
+                max_bytes: int,
+            ) -> None:
+                active = [item for item in (uploads or []) if item.filename]
+                for index, upload in enumerate(active):
+                    path = await save_upload(upload, kind=kind, max_bytes=max_bytes)
+                    temporary_paths.append(path)
+                    spec = manifest.get(manifest_key, [])
+                    meta = spec[index] if index < len(spec) else {}
+                    item = {
+                        "type": media_type,
+                        "path": str(path),
+                        "temporary": True,
+                        "source_name": Path(upload.filename or path.name).name,
+                        "role": meta.get("role") or ("audio" if media_type == "audio" else "character"),
+                        "retention": meta.get("retention") or ("reference" if media_type == "audio" else "fully_preserved"),
+                        "note": meta.get("note") or "",
+                    }
+                    if media_type == "video":
+                        item["has_audio"] = probe_has_audio(path)
+                        item["audio_retention"] = "reference"
+                    reference_items.append(item)
+
+            await append_uploads(
+                reference_images, "image", "images", "image",
+                settings.max_image_upload_bytes,
+            )
+            await append_uploads(
+                reference_videos, "video", "videos", "video",
+                settings.max_video_upload_bytes,
+            )
+            await append_uploads(
+                reference_audios, "audio", "audios", "audio",
+                settings.max_audio_upload_bytes,
+            )
+
+            try:
+                validate_reference_items(
+                    reference_items,
+                    digital_human=generation_mode == "digital_human",
+                )
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+
+            prompt, reference_map = build_reference_prompt(
+                prompt,
+                task=reference_task,
+                items=reference_items,
+            )
+
+        job_id = uuid.uuid4().hex
+        db.enqueue_job(
+            job_id,
+            "generate",
+            {
+                "prompt": prompt,
+                "user_prompt": original_prompt,
+                "width": width,
+                "height": height,
+                "seconds": seconds,
+                "fps": fps,
+                "profile": profile,
+                "seed": seed,
+                "generate_audio": bool(generate_audio),
+                "generation_mode": generation_mode,
+                "keyframe_role": keyframe_role,
+                "reference_task": reference_task,
+                "ref_image_size": ref_image_size,
+                "images": image_paths,
+                "references": reference_items,
+                "reference_map": reference_map,
+            },
+            owner_id=user_id,
+        )
+    except Exception:
+        for path in temporary_paths:
+            path.unlink(missing_ok=True)
+        raise
+
     return {"ok": True, "job_id": job_id}
 
 
@@ -277,6 +561,9 @@ async def api_retry_job(
     for path in payload.get("images") or []:
         if not Path(path).is_file():
             missing.append(str(path))
+    for item in payload.get("references") or []:
+        if isinstance(item, dict) and item.get("path") and not Path(str(item["path"])).is_file():
+            missing.append(str(item["path"]))
     audio_path = payload.get("audio_path")
     if audio_path and not Path(audio_path).is_file():
         missing.append(str(audio_path))
@@ -549,6 +836,7 @@ async def save_upload(
 
     allowed = {
         "image": {".png", ".jpg", ".jpeg", ".webp"},
+        "video": {".mp4", ".mov", ".mkv", ".webm", ".m4v"},
         "audio": {".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus"},
     }
     if extension not in allowed[kind]:
@@ -578,6 +866,9 @@ async def save_upload(
 def _cleanup_job_uploads(job: dict) -> None:
     payload = job.get("payload") or {}
     paths = list(payload.get("images") or [])
+    for item in payload.get("references") or []:
+        if isinstance(item, dict) and item.get("temporary") and item.get("path"):
+            paths.append(item["path"])
     if payload.get("audio_path"):
         paths.append(payload["audio_path"])
 
@@ -589,6 +880,22 @@ def _cleanup_job_uploads(job: dict) -> None:
                 path.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def _character_public(character: dict | None) -> dict:
+    if not character:
+        return {}
+    images = character.get("images") or []
+    return {
+        "id": character["id"],
+        "name": character["name"],
+        "description": character.get("description") or "",
+        "image_count": len(images),
+        "voice": bool(character.get("voice_file")),
+        "preview_url": f"/characters/{character['id']}/image/0" if images else None,
+        "created_at": character.get("created_at"),
+        "updated_at": character.get("updated_at"),
+    }
 
 
 def _editor_float(
