@@ -1,6 +1,6 @@
 # MiniMax H3 GPU benchmarks
 
-Этот файл хранит воспроизводимые локальные benchmark-тесты MiniMax H3 на текущей dual-GPU машине. Использовать те же prompt, seed и настройки при сравнении оптимизаций, драйверов, attention backend и GPU unlock.
+Этот файл хранит воспроизводимые локальные benchmark-тесты MiniMax H3 на текущей dual-GPU машине. Использовать те же prompt, seed и настройки при сравнении драйверов, attention backend и других оптимизаций H3.
 
 ## Baseline — 2026-11-19
 
@@ -35,71 +35,5 @@ Observed from the site Queue after both completed. The same prompt/settings were
 
 ### Notes
 
-- This is the baseline before any planned GPU unlock / tensor-core unlock experiments.
-- Keep this exact prompt, seed and settings for before/after comparisons.
+- Keep this exact prompt, seed and settings for future performance comparisons.
 - Runtime/visual tests are performed manually on the Ubuntu VM.
-
-
-## RTX 3090 GPU unlock — 2026-11-19
-
-Same exact benchmark prompt, seed and settings as the baseline.
-
-| GPU | State | Generation time | Change vs baseline |
-| --- | --- | ---: | ---: |
-| RTX 3090 24 GB | stock | 00:03:36 | baseline |
-| RTX 3090 24 GB | gpu-unlock enabled | 00:03:04 | 32 sec faster |
-
-Measured H3 improvement:
-
-- wall-clock reduction: 32 seconds;
-- time reduction: about 14.8%;
-- throughput speedup: about 1.17x, or ~17.4% faster;
-- kernel log confirmed `gpu_unlock: unlocked` for PCI `0000:01:00.0`;
-- RTX 2080 Ti was not unlocked in this test.
-
-This is the real application-level gain for the current H3 Fast / Turbo 8 workflow. Synthetic FP16/BF16 matrix benchmarks can show much larger gains, but they should not be treated as equivalent to end-to-end H3 generation speed.
-
-
-## RTX 2080 Ti unlock status — 2026-11-19
-
-Turing unlock succeeded after switching to the Turing fix branch.
-
-Kernel confirmation for PCI `0000:02:00.0`:
-
-```text
-gpu_unlock: stage=flr_skipped (Turing clean handoff)
-gpu_unlock: stage=handoff ret=0 state=4 retained=0 pages=0/7179 cleanup=0
-gpu_unlock: unlocked
-```
-
-The RTX 2080 Ti returned normally in `nvidia-smi` with 22528 MiB VRAM and its ComfyUI process active.
-
-Baseline before unlock remains:
-
-```text
-RTX 2080 Ti mod 22 GB: 00:06:15
-```
-
-Next measurement: rerun the exact same H3 benchmark prompt, seed and settings to measure the real application-level gain.
-
-
-## Dual-unlock H3 retest — 2026-11-19
-
-After enabling the Turing unlock path and booting with both targets:
-
-```text
-gpu_unlock.targets=0000:01:00.0,0000:02:00.0
-```
-
-the exact same H3 benchmark produced:
-
-| GPU | Baseline | Best previous unlocked | Current dual-unlock run | Practical result |
-| --- | ---: | ---: | ---: | --- |
-| RTX 3090 24 GB | 00:03:36 | 00:03:04 | 00:03:35 | back to stock-like speed |
-| RTX 2080 Ti mod 22 GB | 00:06:15 | — | 00:06:12 | effectively no H3 gain |
-
-Interpretation:
-
-- RTX 2080 Ti unlock is confirmed by kernel logs, but this current H3 Fast/Turbo 8 workload shows essentially no end-to-end speedup.
-- RTX 3090 previously showed a real H3 gain (3:36 -> 3:04), but the later dual-target/Turing-branch boot did not preserve that application-level gain even though the card remained functional.
-- Do not treat synthetic FP16 GEMM gains as equivalent to H3 runtime gains.
