@@ -23,22 +23,15 @@
 3. Хранить очередь и библиотеку независимо от браузера.
 4. Позволять закрыть сайт, вернуться позже и увидеть результат.
 5. Делать простые операции со звуком через FFmpeg.
-7. В перспективе добавить отдельный audio-driven генератор Wan2.2 S2V:
-   - reference image;
-   - audio/vocal;
-   - prompt;
-   - генерация видео сразу синхронно с аудио.
-8. Позже построить клиповый workflow:
-   - полный трек;
-   - выделение вокала;
-   - разбиение на музыкальные фразы;
-   - генерация S2V-сегментов;
-   - склейка;
-   - возврат оригинального финального трека.
+7. Использовать обе GPU для MiniMax H3 с автоматическим распределением:
+   - RTX 3090 — primary;
+   - RTX 2080 Ti mod 22 GB — secondary;
+   - если primary занят генерацией сайта, следующая H3-задача запускается на secondary.
+8. Сохранять монтажный и аудио workflow через FFmpeg.
 
 ### Важное архитектурное решение: legacy lip-sync удалён
 
-19 ноября 2026 пользователь решил полностью отказаться от LatentSync. Причина: целевой музыкальный workflow должен генерировать видео сразу по аудио через Wan2.2 S2V, поэтому отдельная постобработка губ больше не нужна.
+19 ноября 2026 пользователь решил полностью отказаться от LatentSync. Причина: целевой музыкальный workflow должен генерировать видео сразу по аудио через removed legacy video engine, поэтому отдельная постобработка губ больше не нужна.
 
 Из проекта удалены:
 
@@ -733,7 +726,7 @@ PORT=8000
 
 DATA_DIR=/opt/ai/aivideosite/data
 COMFYUI_URL=http://127.0.0.1:8188
-COMFYUI_WAN_URL=http://127.0.0.1:8189
+COMFYUI_SECONDARY_URL=http://127.0.0.1:8189
 COMFYUI_OUTPUT_DIR=/opt/ai/ComfyUI/output
 FFMPEG_BIN=/usr/bin/ffmpeg
 FFPROBE_BIN=/usr/bin/ffprobe
@@ -756,8 +749,8 @@ MAX_AUDIO_UPLOAD_MB=300
 
 Оба ComfyUI backend слушают на всех интерфейсах:
 
-- H3: `0.0.0.0:8188`;
-- Wan: `0.0.0.0:8189`.
+- H3 primary / RTX 3090: `0.0.0.0:8188`;
+- H3 secondary / RTX 2080 Ti: `0.0.0.0:8189`.
 
 При текущем IP VM `192.168.1.244` UI доступны из локальной сети по:
 
@@ -787,18 +780,18 @@ WorkingDirectory=/opt/ai/ComfyUI
 ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8188
 ```
 
-### ComfyUI Wan / GPU 0
+### Secondary H3 / GPU 1
 
 Repo file:
 
 ```text
-systemd/comfyui-wan.service
+systemd/comfyui-secondary.service
 ```
 
 Схема GPU isolation:
 
-- `comfyui.service` -> `CUDA_VISIBLE_DEVICES=1` -> физическая RTX 2080 Ti mod 22 GB -> H3 -> port 8188;
-- `comfyui-wan.service` -> `CUDA_VISIBLE_DEVICES=0` -> физическая RTX 3090 24 GB -> Wan2.2 S2V -> port 8189.
+- `comfyui.service` -> `CUDA_VISIBLE_DEVICES=0` -> физическая RTX 3090 24 GB -> H3 primary -> port 8188;
+- `comfyui-secondary.service` -> `CUDA_VISIBLE_DEVICES=1` -> физическая RTX 2080 Ti mod 22 GB -> H3 secondary -> port 8189.
 
 Оба процесса используют один и тот же installation tree:
 
@@ -808,14 +801,14 @@ systemd/comfyui-wan.service
 
 и общие модели на диске, но CUDA context и VRAM полностью раздельные.
 
-WAN service:
+Secondary H3 service:
 
 ```ini
 User=openfun
 Group=openfun
 WorkingDirectory=/opt/ai/ComfyUI
 Environment=PYTHONUNBUFFERED=1
-Environment=CUDA_VISIBLE_DEVICES=0
+Environment=CUDA_VISIBLE_DEVICES=1
 ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8189
 Restart=always
 ```
@@ -825,7 +818,7 @@ Restart=always
 - внутри каждого процесса выбранная через `CUDA_VISIBLE_DEVICES` физическая GPU отображается приложению как локальная CUDA device 0 — это нормально;
 - текущий сайт пока использует только `COMFYUI_URL=http://127.0.0.1:8188`;
 - интеграция WAN backend `http://127.0.0.1:8189` в сайт ещё не реализована;
-- Wan2.2 S2V 14B FP8 целенаправленно запускается на RTX 3090 24 GB; runtime smoke test ещё требуется.
+- removed legacy video engine 14B FP8 целенаправленно запускается на RTX 3090 24 GB; runtime smoke test ещё требуется.
 
 ### Site
 
@@ -851,12 +844,12 @@ Install:
 cd /opt/ai/aivideosite
 
 sudo cp systemd/comfyui.service /etc/systemd/system/comfyui.service
-sudo cp systemd/comfyui-wan.service /etc/systemd/system/comfyui-wan.service
+sudo cp systemd/comfyui-secondary.service /etc/systemd/system/comfyui-secondary.service
 sudo cp systemd/aivideosite.service /etc/systemd/system/aivideosite.service
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now comfyui.service
-sudo systemctl enable --now comfyui-wan.service
+sudo systemctl enable --now comfyui-secondary.service
 sudo systemctl enable --now aivideosite.service
 ```
 
@@ -886,333 +879,153 @@ journalctl -u aivideosite -f
 
 ---
 
-## 19. Wan2.2 S2V — следующий большой этап
+## 19. Dual H3 dispatcher — актуальная архитектура
 
-### Почему
+19 ноября 2026 пользователь отказался от removed legacy video engine после ручного теста качества. Wan больше не является частью проекта и не должен возвращаться без нового прямого запроса.
 
-Текущий pipeline:
-
-```text
-H3 -> готовый video -> FFmpeg/монтаж -> final
-```
-
-Для музыкального клипа лучше:
+Текущая схема:
 
 ```text
-reference image + vocal/audio + prompt -> S2V video already driven by audio
+RTX 3090 24 GB
+  -> comfyui.service
+  -> CUDA_VISIBLE_DEVICES=0
+  -> 0.0.0.0:8188
+  -> H3 primary
+
+RTX 2080 Ti mod 22 GB
+  -> comfyui-secondary.service
+  -> CUDA_VISIBLE_DEVICES=1
+  -> 0.0.0.0:8189
+  -> H3 secondary
 ```
 
-Wan2.2 S2V подходит для:
-
-- dialogue;
-- singing;
-- performance;
-- facial motion;
-- head/body motion.
-
-### Выбранный стартовый вариант для dual-GPU VM
-
-Использовать native ComfyUI Wan2.2 S2V на отдельном backend `http://127.0.0.1:8189`, закреплённом за RTX 3090 24 GB. MiniMax H3 работает через `http://127.0.0.1:8188`, закреплённый за RTX 2080 Ti mod 22 GB.
-
-Основная модель:
+Оба процесса используют один installation tree и один набор файлов моделей:
 
 ```text
-wan2.2_s2v_14B_fp8_scaled.safetensors
+/opt/ai/ComfyUI
 ```
 
-Text encoder:
+Внутри сайта:
+
+```dotenv
+COMFYUI_URL=http://127.0.0.1:8188
+COMFYUI_SECONDARY_URL=http://127.0.0.1:8189
+```
+
+Правило диспетчеризации генераций:
+
+1. первая свободная H3-задача всегда назначается RTX 3090;
+2. если RTX 3090 уже занята H3-задачей сайта, следующая H3-задача запускается на RTX 2080 Ti;
+3. обе генерации могут идти параллельно;
+4. если обе GPU заняты, следующие H3-задачи остаются queued;
+5. FFmpeg audio/editor jobs имеют отдельную CPU-линию и не блокируют выдачу новой H3-задачи на свободную GPU;
+6. Cancel направляется именно в тот ComfyUI backend, где реально работает job.
+
+В metadata готового ролика сохраняется:
 
 ```text
-umt5_xxl_fp8_e4m3fn_scaled.safetensors
+gpu_backend = RTX 3090
 ```
 
-VAE:
+или:
 
 ```text
-wan_2.1_vae.safetensors
+gpu_backend = RTX 2080 Ti
 ```
 
-Audio encoder:
+Это позволяет сравнивать фактические результаты и скорость двух GPU.
 
-```text
-wav2vec2_large_english_fp16.safetensors
-```
+### Подтверждённый runtime
 
-Опционально для быстрых preview:
+До перехода на эту финальную схему пользователь уже подтвердил, что MiniMax H3 успешно работает на RTX 2080 Ti mod 22 GB. По субъективному времени та же генерация была примерно в 2 раза медленнее, чем на RTX 3090.
 
-```text
-wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors
-```
+Следующий обязательный runtime test после установки новой версии:
 
-Этот LoRA НЕ специально обучен для S2V. ComfyUI documentation предупреждает:
-
-- много ключей LoRA не совпадают;
-- он ускоряет до примерно 4 steps;
-- может значительно ухудшить динамику и качество;
-- финальное качество лучше проверять стандартным S2V около 20 steps.
-
-### Папки
-
-```text
-/opt/ai/ComfyUI/models/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors
-/opt/ai/ComfyUI/models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors
-/opt/ai/ComfyUI/models/vae/wan_2.1_vae.safetensors
-/opt/ai/ComfyUI/models/audio_encoders/wav2vec2_large_english_fp16.safetensors
-/opt/ai/ComfyUI/models/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors
-```
-
-### Одна команда на скачивание
-
-```bash
-bash -lc 'set -euo pipefail; C=/opt/ai/ComfyUI; mkdir -p "$C/models/"{diffusion_models,text_encoders,vae,audio_encoders,loras}; curl -fL --retry 10 --retry-all-errors -C - -o "$C/models/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors" "https://huggingface.co/Comfy-Org/Wan-2.2/resolve/main/split_files/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors"; curl -fL --retry 10 --retry-all-errors -C - -o "$C/models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" "https://huggingface.co/Comfy-Org/Wan-2.2/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"; curl -fL --retry 10 --retry-all-errors -C - -o "$C/models/vae/wan_2.1_vae.safetensors" "https://huggingface.co/Comfy-Org/Wan-2.2/resolve/main/split_files/vae/wan_2.1_vae.safetensors"; curl -fL --retry 10 --retry-all-errors -C - -o "$C/models/audio_encoders/wav2vec2_large_english_fp16.safetensors" "https://huggingface.co/Comfy-Org/Wan-2.2/resolve/main/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors"; curl -fL --retry 10 --retry-all-errors -C - -o "$C/models/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors" "https://huggingface.co/Comfy-Org/Wan-2.2/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors"; echo "Wan2.2 S2V files downloaded"; ls -lh "$C/models/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors" "$C/models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" "$C/models/vae/wan_2.1_vae.safetensors" "$C/models/audio_encoders/wav2vec2_large_english_fp16.safetensors" "$C/models/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors"'
-```
-
-Ориентировочный общий download для этого набора: около 25 GB.
-
-### Первый S2V smoke test, который надо сделать после скачивания
-
-Не интегрировать сразу в сайт.
-
-Сначала вручную проверить в ComfyUI:
-
-- reference portrait;
-- 4–5 sec audio fragment;
-- желательно русский вокал из текущей песни;
-- 832x480 или аналогичный 480p старт;
-- 16 FPS;
-- один chunk около 77 frames;
-- standard quality path сначала 20 steps;
-- затем отдельно попробовать Lightning 4-step;
-- torch.compile не использовать на первом тесте;
-- перед тестом выгрузить H3 из VRAM.
-
-Нужно записать:
-
-- peak VRAM;
-- wall-clock generation time;
-- стабильность identity;
-- lip timing на русском;
-- head/body motion;
-- качество рта;
-- поведение с music+vocal против isolated vocal.
-
-### Почему 77 frames
-
-Native S2V workflow строится chunk-ами.
-
-При 16 FPS:
-
-```text
-77 / 16 = 4.8125 sec
-```
-
-Для более длинного audio используются S2V Extend chunks.
-
-Для 14 sec:
-
-```text
-14 * 16 = 224 frames
-224 / 77 ~= 2.91
-=> 3 chunks
-```
-
-### План будущей интеграции сайта
-
-Добавить model/engine selector:
-
-```text
-MiniMax H3
-Wan2.2 S2V
-```
-
-При H3 оставить текущую форму.
-
-При Wan S2V показать:
-
-- reference image;
-- audio;
-- prompt;
-- audio start/end;
-- output resolution;
-- quality profile;
-- seed;
-- optional automatic vocal separation later.
-
-Worker должен:
-
-1. сериализовать S2V с остальными GPU jobs на соответствующем backend;
-2. использовать audio as conditioning;
-3. сохранить output в Library;
-4. записать prompt/seed/audio metadata;
-5. mux original requested audio в final file, если Comfy graph выдаёт silent video.
+- поставить две H3-задачи подряд;
+- убедиться, что первая идёт на RTX 3090;
+- убедиться, что вторая одновременно стартует на RTX 2080 Ti;
+- проверить Cancel отдельно для каждой задачи;
+- проверить, что в Library metadata указан правильный GPU.
 
 ---
 
-## 20. План клипа из полного трека
+## 20. Wan удалён
 
-Предпочтительный будущий pipeline:
+removed legacy video engine признан неподходящим по качеству для этого проекта.
 
-```text
-full song
-  -> vocal separation (Demucs/UVR)
-  -> phrase segmentation
-  -> for each phrase:
-       reference image
-       vocal chunk
-       prompt
-       Wan2.2 S2V
-  -> concatenate generated clips
-  -> mux original full-quality song
-  -> final clip
-```
+Удалить с Ubuntu:
 
-Важно:
+- старый `comfyui-wan.service`;
+- Wan diffusion model;
+- Wan text encoder;
+- Wan VAE;
+- Wan audio encoder;
+- Wan Lightning LoRA.
 
-- не резать механически каждые ровно 5 секунд;
-- резать по фразам / паузам / строкам;
-- S2V должен получать тот audio segment, под который он генерирует;
-- в финал возвращать original master track, а не separated vocal;
-- отдельный vocal нужен primarily как motion/lip driver.
-
-Demucs/UVR пока НЕ установлен и не интегрирован.
+Не удалять H3 модели, H3 custom node или общий ComfyUI.
 
 ---
 
 ## 21. Известные ограничения
 
-1. Runtime visual/GPU tests выполняются на Ubuntu VM пользователем.
-2. Site-side Wan2.2 S2V ещё не реализован.
-3. Wan2.2 S2V ещё не прошёл runtime smoke test на RTX 3090 в новой dual-GPU схеме; H3 также нужно отдельно подтвердить на RTX 2080 Ti mod 22 GB.
-4. Русский singing lip timing через English Wav2Vec2 audio encoder надо проверить empirically.
-5. Lightning LoRA для S2V не является специально обученной S2V LoRA и может портить результат.
-6. H3 quality/max profiles в текущем сайте нельзя считать полностью runtime-tested так же хорошо, как Fast.
-7. 1536x864 H3 presets не считать гарантированно проверенными по VRAM/performance.
-9. Demucs/UVR отсутствует.
-10. Полноценный timeline editor отсутствует.
-11. Browser не может восстановить local file input после F5 — это ограничение браузера.
-12. Сайт без HTTPS и рассчитан на LAN.
+1. Runtime/визуальные GPU-тесты выполняет пользователь на Ubuntu VM.
+2. RTX 2080 Ti примерно в 2 раза медленнее RTX 3090 в уже проверенном H3-тесте.
+3. Приоритет диспетчера учитывает занятость задачами сайта; ручные задания, отправленные напрямую через ComfyUI UI, не являются штатным способом работы сайта.
+4. H3 quality/max profiles проверены слабее Fast.
+5. 1536x864 H3 presets не считать гарантированно проверенными по VRAM/performance.
+6. Browser не может восстановить local file input после F5.
+7. Сайт без HTTPS и рассчитан на LAN.
+8. ComfyUI 8188/8189 доступны в LAN без собственной авторизации — не пробрасывать их в интернет.
 
 ---
 
 ## 22. Быстрая диагностика
 
-### Site
+Site:
 
 ```bash
 curl -I http://127.0.0.1:8000/
-ss -ltnp | grep 8000
 ```
 
-### ComfyUI
+Primary H3 / RTX 3090:
 
 ```bash
 curl -s http://127.0.0.1:8188/system_stats | head
-ss -ltnp | grep 8188
 ```
 
-### GPU
+Secondary H3 / RTX 2080 Ti:
+
+```bash
+curl -s http://127.0.0.1:8189/system_stats | head
+```
+
+Порты:
+
+```bash
+ss -ltnp | grep -E '8000|8188|8189'
+```
+
+GPU:
 
 ```bash
 nvidia-smi
 ```
 
-### Disk
+Сервисы:
 
 ```bash
-df -h /
-df -h /opt/ai
+systemctl status comfyui.service --no-pager
+systemctl status comfyui-secondary.service --no-pager
+systemctl status aivideosite.service --no-pager
 ```
 
-### Site logs
-
-Manual mode: смотреть terminal с Uvicorn.
-
-systemd:
+Логи:
 
 ```bash
-journalctl -u aivideosite -n 150 --no-pager
+journalctl -u comfyui.service -n 150 --no-pager
+journalctl -u comfyui-secondary.service -n 150 --no-pager
+journalctl -u aivideosite.service -n 150 --no-pager
 ```
-
-### ComfyUI logs
-
-```bash
-journalctl -u comfyui -n 200 --no-pager
-```
-
----
-
-## 23. Что делать в новом чате
-
-Если задача продолжается по `aivideosite`:
-
-1. Открыть этот файл.
-2. Прочитать актуальный README.
-3. Прочитать актуальный `main` GitHub.
-4. Не считать SHA из этого документа актуальным HEAD.
-5. Если пользователь сообщает runtime error:
-   - сначала исправить текущий этап;
-   - не переходить к следующему большому feature.
-6. Если Wan2.2 S2V файлы уже скачаны:
-   - проверить размеры файлов;
-   - проверить, видит ли их ComfyUI;
-   - вручную собрать/открыть native Wan2.2 S2V workflow;
-   - сделать 4–5 sec smoke test;
-   - только после этого добавлять Wan engine в сайт.
-7. После каждого существенного этапа:
-   - commit main;
-   - назвать полный SHA;
-   - дать конкретный manual checklist.
-
----
-
-## 24. Последние важные исправления перед этим handoff
-
-По хронологии:
-
-- background persistent queue;
-- H3 T2V/I2V/First+Last;
-- native H3 audio;
-- Library;
-- FFmpeg audio tools;
-- responsive mobile UI;
-- localStorage;
-- paginated Queue/Library;
-- Cancel/Retry/Delete/Clear;
-- server-synchronized job timers;
-- first/last image preview + remove cross;
-- fix Library playback reset from polling;
-- fix JS selector regression by replacing ambiguous `$ / $$` with `qs / qsa`;
-- planned next engine: native Wan2.2 S2V.
-
----
-
-### Подтверждённый runtime-result dual-GPU схемы
-
-19 ноября 2026 пользователь подтвердил первый реальный H3-тест после переноса backend на RTX 2080 Ti mod 22 GB:
-
-- `comfyui.service` -> physical GPU 1 -> RTX 2080 Ti mod 22 GB -> port 8188;
-- MiniMax H3 успешно сгенерировал видео;
-- ошибок совместимости/VRAM в этом тесте не было;
-- по субъективному времени генерация стала примерно в 2 раза медленнее, чем на RTX 3090;
-- dual-GPU схема признана рабочей и сохраняется;
-- RTX 3090 остаётся выделенной под Wan2.2 S2V на port 8189.
-
-Следующий runtime этап: первый Wan2.2 S2V smoke test на RTX 3090.
-
-## 25. Current recommended next action
-
-Пока Wan models скачиваются:
-
-1. не менять H3 pipeline;
-2. после download перезапустить/обновить ComfyUI только если native S2V nodes отсутствуют;
-3. открыть native Wan2.2 S2V template;
-4. test reference image + 4–5 sec Russian vocal;
-5. записать speed/VRAM/quality;
-6. решить:
-   - 20-step quality;
-   - 4-step preview;
-7. после этого реализовать engine switch в сайте.
-
 
 ---
 
