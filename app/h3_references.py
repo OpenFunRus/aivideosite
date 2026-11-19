@@ -67,11 +67,23 @@ def parse_reference_manifest(raw: str | None) -> dict[str, list[dict[str, str]]]
                 continue
             role = str(item.get("role") or "").strip().lower()
             if role not in REFERENCE_ROLES:
-                role = "audio" if media_type == "audio" else "character"
+                role = (
+                    "audio"
+                    if media_type == "audio"
+                    else "motion"
+                    if key == "videos"
+                    else "character"
+                )
             retention = str(item.get("retention") or "").strip().lower()
             allowed = AUDIO_RETENTION if media_type == "audio" else VISUAL_RETENTION
             if retention not in allowed:
-                retention = "reference" if media_type == "audio" else "fully_preserved"
+                retention = (
+                    "reference"
+                    if media_type == "audio"
+                    else "partially_preserved"
+                    if key == "videos"
+                    else "fully_preserved"
+                )
             note = str(item.get("note") or "").strip()
             normalized.append({"role": role, "retention": retention, "note": note})
         result[key] = normalized
