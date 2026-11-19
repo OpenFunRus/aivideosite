@@ -1,273 +1,760 @@
 MiniMax H3 Prompting Guide for AI Agents
 AI Video Studio / OpenFunRus/aivideosite
-Version: 2026-11-19
+Version: 2026-11-19-ref2va
 
 PURPOSE
+
 Turn a user's idea into a production-ready MiniMax H3 prompt for this local site.
-This site uses the MiniMax H3 FL2VA path through ComfyUI-MiniMaxH3-Easy.
-Prompt optimization is disabled: the text you produce is sent to H3 as written.
-The site supports:
-1. T2V: no images.
-2. I2V: one FIRST frame.
-3. FL2V: FIRST + LAST frame.
-Do not write Ref2VA/Character/Video Reference instructions for this site unless the user explicitly says the site was upgraded to support them.
+
+This site uses ComfyUI-MiniMaxH3-Easy and has THREE distinct generation modes:
+
+1. FRAMES / FL2VA
+   - no image: text-to-video
+   - one FIRST image: image-to-video with an exact opening anchor
+   - one LAST image: last-frame-conditioned generation with an exact ending anchor
+   - FIRST + LAST: exact FL2VA endpoint interpolation
+
+2. REFERENCES / Ref2VA
+   - up to 9 image references
+   - up to 3 reference videos
+   - up to 3 standalone audio references
+   - up to 15 total media resources
+   - at least one visual image/video reference is required
+   - selected reusable Characters consume the same limits
+   - reference-video soundtrack is handled by H3 as associated audio when present
+
+3. DIGITAL HUMAN
+   - at least one visual image/video reference
+   - exactly one standalone driving audio reference
+   - selected Character voice counts as standalone audio
+   - do not combine a Character voice and another driving-audio file unless one is removed
+
+The local site also has:
+- reusable per-user Characters with 1–4 appearance images, immutable-description notes, and optional saved voice reference;
+- Ref2VA task selection: reference generation, keyframe completion, video editing, video continuation, audio reuse, audio reference;
+- per-reference role and retention controls;
+- H3 native audio output checkbox;
+- full local aspect ratios: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9.
+
+CRITICAL DISTINCTION
+
+FL2VA FIRST/LAST images are exact endpoint anchors.
+
+A Ref2VA Picture with role "storyboard" or "keyframe" is a REFERENCE, not an exact latent keyframe at an arbitrary timestamp. Never claim that Picture 3 will be reproduced exactly at 6.00 seconds unless it is actually an FL2VA First/Last endpoint supported by the selected mode.
+
+Do not mix FL2VA reference-line syntax and the six-field Ref2VA schema unless there is a concrete reason.
 
 OUTPUT POLICY
-- Return the finished H3 prompt first.
-- Do not wrap it in Markdown code fences unless the user asks.
-- Do not add explanations inside the H3 prompt.
-- Use English for structural labels, visual direction, camera direction and sound direction.
-- Preserve spoken dialogue, lyrics and visible on-screen text in the language requested by the user.
-- Never translate dialogue unless the user asks for translation.
-- Never invent extra dialogue, characters, cuts, music or events that contradict the brief.
-- Prefer concrete visible/audible actions over abstract story summaries.
-- Keep continuity explicit: identity, clothes, props, handedness, positions, lighting and environment should not change unless requested.
 
-BASE PROMPT FORMAT
+- Return the finished H3 prompt first.
+- Do not put explanations inside the prompt.
+- Do not wrap the prompt in Markdown fences unless the user requests code fences.
+- Use English for structural labels, visual direction, camera direction and sound direction.
+- Preserve spoken dialogue, lyrics and requested visible text in the user's exact language.
+- Never translate exact dialogue unless explicitly requested.
+- Never invent extra dialogue, people, props, cuts, music or events that contradict the user's brief.
+- Keep identity, clothing, props, handedness, body markings, positions, lighting and environment consistent unless a change is explicitly requested.
+- If a reusable Character is selected, treat its appearance notes and references as authoritative continuity constraints.
+- If the user supplied enough information, do not ask unnecessary follow-up questions.
+
+MODE SELECTION
+
+Use the selected site mode if it is explicitly provided.
+
+Otherwise infer:
+- no references / only first-last endpoint images -> FRAMES / FL2VA;
+- identity/style/object/motion/video/voice references -> REFERENCES / Ref2VA;
+- a visual subject + one driving speech/song audio -> DIGITAL HUMAN.
+
+If the user's desired control is incompatible with the current mode, state the necessary mode in one short note AFTER the ready prompt.
+
+======================================================================
+FRAMES / FL2VA
+======================================================================
+
+BASE FL2VA PROMPT FORMAT
+
 Use these three fields in this exact order:
 
 integrated_multimodal_description: ...
 overall_soundscape: ...
 non_diegetic_music: ...
 
-Leave a blank line between fields.
+Leave one blank line between fields.
 
-MODE SELECTION
+A) T2V / no endpoint images
 
-A) T2V / no frames
-Start directly with integrated_multimodal_description.
+Start directly with:
+integrated_multimodal_description: ...
 
-B) I2V / FIRST frame only
-The first line should anchor Picture 1 to the beginning of Shot 1. Then leave one blank line before the three fields.
-Treat the uploaded image as the exact opening composition. Preserve its identity, clothing, objects, scene layout, light direction and framing unless the user asks for a visible change.
-Describe what starts moving AFTER the opening frame.
+B) FIRST frame only
 
-Recommended first-line form:
+Treat Picture 1 as the exact opening composition at 0.00 seconds.
+
+Recommended alignment line:
+
 For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
 
-C) FL2V / FIRST + LAST frames
-The first line should state that Picture 1 is the opening and Picture 2 is the ending at the exact chosen duration. Then leave one blank line before the three fields.
-Do not waste the prompt by re-describing the two still images. Describe the continuous physical path between them.
-Prefer one continuous shot unless the user explicitly asks for cuts.
+Then use the three FL2VA fields.
 
-Recommended first-line form:
+Do not waste tokens re-describing obvious static details from the picture. Preserve identity, clothing, props, scene layout, lighting direction and framing unless the requested action changes them.
+
+Describe the FIRST visible movement that occurs after the opening frame.
+
+C) LAST frame only
+
+Treat the uploaded image as the exact endpoint.
+
+Describe a plausible physical path that converges into the final pose, prop state, spacing and camera composition.
+
+Do not claim it is the first frame.
+
+D) FIRST + LAST
+
+Picture 1 is the exact opening endpoint.
+Picture 2 is the exact final endpoint.
+
+Recommended alignment line:
+
 How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the S.SS-second mark of the target video.
 
 Replace:
-- N with the actual final shot number.
-- S.SS with the requested clip duration using two decimals, for example 5.00 or 10.00.
+- N with the actual final shot number;
+- S.SS with the exact requested duration, e.g. 5.00 or 10.00.
 
-SHOT GRAMMAR
-- Shot 1 has no timestamp.
-- Start Shot 1 with style + shot size + subject + place + starting state.
-- Later shots have an explicit increasing cut time.
-- Example syntax for a later shot:
-  [Shot 2] At 00:04.000, the camera cuts to a close-up of ...
-- Every cut should add new information: a new viewpoint, place, subject, state or time.
-- If only framing distance changes, prefer a camera move instead of a cut.
-- A continuous take should use one Shot 1 and explicitly say "in one continuous shot with no cuts".
-- Never ask for "one continuous shot" while also specifying multiple shots.
+Describe the VISIBLE physical path between endpoints, not two static captions.
+Prefer one continuous shot unless a cut is explicitly needed.
+Near the end, explicitly converge into Picture 2.
 
-WHAT EACH SHOT SHOULD CONTAIN
-Write in this order when practical:
-1. Style and shot size.
-2. Subject identity and exact starting pose/state.
-3. Environment, lighting and important props.
+======================================================================
+REFERENCES / Ref2VA
+======================================================================
+
+REFERENCE MEDIA LIMITS
+
+Per one Ref2VA generation:
+- Picture: max 9
+- Video: max 3
+- standalone Audio: max 3
+- total attached media: max 15
+- at least one visual image/video reference
+
+Selected Character images and saved voices count toward these limits.
+
+REFERENCE LABELS
+
+H3 reference labels are:
+- <Picture N>
+- <Video N>
+- <Audio N>
+- logical reusable subjects may be described as <Subject N>
+
+The site uses deterministic ordering:
+
+1. Character appearance images first among Pictures.
+2. Directly uploaded image references after Character images.
+3. Reference videos have their own Video numbering.
+4. A reference-video soundtrack may take an Audio ordinal associated with that Video.
+5. Character voices and directly uploaded standalone audio follow in the Audio sequence.
+
+For SIMPLE user prompts, the server builds the full six-field Ref2VA wrapper and its mapping automatically. The assistant does not need to manually calculate every reference ordinal unless the user asks for a fully explicit structured prompt and provides the actual current reference map.
+
+If the site/UI supplies a concrete reference map, use it exactly.
+
+FULL Ref2VA PROMPT FORMAT
+
+Use all six fields, in this order:
+
+subject_definitions:
+...
+
+summary: ...
+
+retention_analysis:
+...
+
+detailed_description: ...
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
+
+SUBJECT_DEFINITIONS
+
+Use this field to define what each logical subject or reference represents.
+
+Examples:
+
+subject_definitions:
+- <Subject 1>: the main survivor, defined by <Picture 1>, <Picture 2> and <Picture 3>.
+- <Picture 4>: outfit color reference only.
+- <Video 1>: body-motion reference.
+- <Audio 1>: voice-timbre reference.
+
+Do not assign the same source contradictory roles.
+
+SUMMARY / TASK TYPE
+
+The site exposes these task intentions:
+
+[reference generation]
+Create a new target video using supplied appearance/style/motion/audio references.
+
+[keyframe completion]
+Use supplied Pictures as storyboard/keyframe-like visual guidance.
+IMPORTANT: these are not exact arbitrary-time latent anchors.
+
+[video editing]
+Transform or alter an existing reference video while preserving specified source elements.
+
+[video continuation]
+Continue naturally from the source video's ending state, movement, camera language and ambience.
+
+[audio reuse]
+Reuse supplied audio strongly according to its retention setting.
+
+[audio reference]
+Use supplied audio as voice/timbre/rhythm guidance, not necessarily as an exact copied waveform.
+
+Make summary concise: usually one or two sentences.
+
+RETENTION ANALYSIS
+
+Supported visual retention terms:
+- fully_preserved
+- partially_preserved
+- attribute_transfer
+- weak_reference
+
+Supported audio retention terms:
+- fully_copy
+- partially_copy
+- reference
+- weak_reference
+
+The selected UI retention is authoritative if provided.
+
+Examples:
+
+retention_analysis:
+- <Picture 1>: fully_preserved; role=character.
+- <Picture 2>: attribute_transfer; role=object; transfer only the jacket design.
+- <Video 1>: partially_preserved; role=motion; preserve body rhythm but not source identity.
+- <Audio 1>: reference; role=voice; preserve timbre and speaking character, not exact wording.
+
+REFERENCE ROLES
+
+Visual roles:
+- character
+- object
+- setting
+- style
+- composition
+- storyboard
+- motion
+- camera_motion
+
+Audio roles:
+- voice
+- audio
+
+Interpret roles precisely:
+
+character:
+identity/body/clothing continuity.
+
+object:
+specific prop/product/item identity.
+
+setting:
+environment/layout/location.
+
+style:
+rendering, color, film/art treatment; do not accidentally copy identity.
+
+composition:
+framing, subject placement, spatial balance.
+
+storyboard:
+visual target/guidance for a phase of the scene; NOT exact arbitrary-time latent keyframe.
+
+motion:
+body/action timing and dynamics.
+
+camera_motion:
+operator/camera path, not subject identity.
+
+voice:
+speaker timbre, cadence, vocal character.
+
+audio:
+general rhythm, sound character or source-audio behavior.
+
+DETAILED DESCRIPTION
+
+This is the actual directed target video.
+
+Write:
+1. Shot/style/framing.
+2. Exact subject starting state.
+3. Environment/light/props.
 4. One primary camera behavior.
 5. Actions in chronological order.
-6. Reactions / secondary motion.
-7. Action-synchronized sound.
-8. Dialogue, if any.
-9. End state or transition into the next shot.
+6. Reactions and secondary motion.
+7. Synchronized action sounds.
+8. Dialogue if any.
+9. Ending state/transition.
 
-CAMERA VOCABULARY
-Use natural sentences, not a pile of tags.
+When multiple references are present, explicitly separate what is preserved from each one.
 
-- static shot: camera remains still.
-- push in: camera physically moves closer.
-- pull out: camera physically moves away.
-- zoom in / zoom out: focal length changes while camera stays in place.
-- pan left / right: camera rotates horizontally.
-- tilt up / down: camera rotates vertically.
-- truck left / right: camera slides sideways.
-- pedestal up / down: camera moves vertically as a whole.
-- tracking shot: camera follows a moving subject.
-- arc shot: camera moves around a subject.
-- POV: subject's point of view.
-- shake slightly / strongly: handheld or impact shake.
-- roll clockwise / counterclockwise: camera rolls around lens axis.
+Example:
+"Preserve Subject 1's face and outfit from Pictures 1–2. Use only the body rhythm from Video 1; do not copy the person, clothing or background visible in Video 1."
 
-Optional precision:
-- with small amplitude / with large amplitude
-- at slow speed / at fast speed
+======================================================================
+CHARACTERS
+======================================================================
 
-Do not stack multiple difficult camera moves unless the user explicitly wants them. One clear camera behavior per shot is usually more reliable.
+A Character in this site is a local reusable subject, isolated per user.
+
+It may contain:
+- 1–4 appearance reference images;
+- a text description of immutable visible features;
+- an optional saved voice reference.
+
+When a Character is selected:
+- keep its identity stable;
+- keep explicitly immutable features stable;
+- do not redesign its clothing/body/markings unless the user asks;
+- its pictures count toward Picture limits;
+- its saved voice counts toward standalone Audio limits.
+
+If multiple Characters are selected, keep them separately identifiable and do not swap clothing, voices or props between them.
+
+For speaking multi-character scenes:
+- use stable speaker IDs (S1), (S2), etc.;
+- if voice references exist, explicitly associate each voice with the correct Subject.
+
+======================================================================
+REFERENCE VIDEO / EDITING / CONTINUATION
+======================================================================
+
+REFERENCE GENERATION FROM VIDEO
+
+Use a reference video when the user wants:
+- motion;
+- body rhythm;
+- gait;
+- dance;
+- gesture pattern;
+- camera motion;
+- behavior;
+- temporal composition.
+
+Explicitly say which elements NOT to copy when needed.
+
+VIDEO EDITING
+
+Treat the source video as the temporal base.
+
+State:
+- what must remain unchanged;
+- what must be replaced or transformed;
+- whether camera motion should remain;
+- whether source subject identity should remain;
+- whether source ambience/audio should remain.
+
+Example:
+"Preserve Video 1's camera path, timing and actor motion. Replace only the environment with a rainy abandoned street and replace the jacket with the one shown in Picture 2."
+
+VIDEO CONTINUATION
+
+The target should begin as a natural continuation from Video 1's final state.
+
+Preserve where relevant:
+- subject identity;
+- facing direction;
+- velocity/momentum;
+- prop state;
+- camera height and direction;
+- lighting direction;
+- scene geography;
+- ambience.
+
+Avoid:
+- visible restart;
+- teleport;
+- unexplained pose reset;
+- reversed travel direction;
+- abrupt unrelated camera language.
+
+REFERENCE-VIDEO SOUNDTRACK
+
+A reference video may contain its own soundtrack.
+The local Easy workflow can pass this soundtrack with the Video reference.
+
+Do not assume the soundtrack should dominate merely because it exists.
+Use the user-selected task/retention or explicit prompt instructions.
+
+======================================================================
+DIGITAL HUMAN
+======================================================================
+
+Digital Human is audio-driven Ref2VA.
+
+Requirements in this site:
+- at least one visual Picture/Video/Character reference;
+- exactly one standalone driving Audio reference.
+
+The driving audio establishes the speech/song temporal structure.
+
+Prompt should focus on:
+- identity;
+- expression;
+- mouth/face behavior;
+- body movement;
+- shot/framing;
+- environment;
+- camera;
+- continuity.
+
+Do not add a second Character voice plus another driving audio.
+If a selected Character has a saved voice and a separate driving audio is required, tell the user to deselect/remove one of those audio sources.
+
+If native H3 audio output must be audible in the final MP4, enable "Генерировать со звуком".
+
+======================================================================
+SHOT GRAMMAR
+======================================================================
+
+- Shot 1 has no timestamp.
+- Later shots have increasing cut times.
+
+Example:
+[Shot 2] At 00:04.000, the camera cuts to a close-up of ...
+
+Every cut should add new information:
+- viewpoint;
+- location;
+- subject;
+- time;
+- meaningful state change.
+
+If framing merely becomes closer/farther, prefer a camera move instead of a cut.
+
+Continuous shot:
+Use only Shot 1 and explicitly state:
+"in one continuous shot with no cuts"
+
+Never request one continuous shot while also specifying multiple cuts.
 
 TIMING
-- The shot timeline must fit the exact clip length.
-- Do not place a cut after the end of the clip.
-- The final shot continues until the end.
-- Leave enough real speaking time for dialogue.
-- For a 5 second clip, usually 1 shot is safest; 2 short shots are possible.
-- For a 10 second clip, 1–3 shots is a practical range depending on action density.
-- When an action has several stages, state them in exact chronological order.
 
-DIALOGUE
-Assign a stable speaker ID only to characters who speak or vocalize:
-(S1), (S2), etc.
+All events must fit the exact clip duration.
 
-Describe the voice once, when first used:
-- apparent adult age range if relevant
-- masculine/feminine voice when relevant
-- pitch
-- timbre
-- pace
-- accent if requested
-- on-screen or off-screen delivery
-
-Put exact spoken words inside dialogue tags:
-<d>[Russian] Я люблю котика.</d>
-<d>[English] We leave at dawn.</d>
-
-Rules:
-- Language tag matches the spoken language.
-- Exact dialogue stays exactly as the user wrote it.
-- Do not repeat the dialogue in overall_soundscape.
-- Keep a short line short enough to be spoken naturally inside its shot.
-- For voiceover, explicitly say it is off-screen voiceover.
-- If the visible character must not lip-sync to voiceover, state that their lips remain closed.
-
-SOUND MODEL
-Treat audio as three layers.
-
-Layer 1 — synchronized action sound:
-Put it inside integrated_multimodal_description next to the action.
-Examples: door slam, hammer strike, cloth rustle, glass impact, laughter produced at a specific moment.
-
-Layer 2 — continuous ambience:
-Put it in overall_soundscape.
-Examples: wind, room tone, distant traffic, rain, birds, crowd murmur, machinery hum.
-Write 1–4 concise sentences.
-
-Layer 3 — audience-only score:
-Put it in non_diegetic_music.
-Describe instruments, tempo, rhythm and dynamics.
-Use N/A when no score is wanted.
-
-Important for this site:
-The "H3 native audio" checkbox controls whether generated H3 audio is decoded into the final video. When it is OFF, audio instructions may still be part of conditioning but the exported file will not contain the H3 audio track. If the user wants audible dialogue/sound from H3, tell them to enable native H3 audio.
-
-DIEGETIC MUSIC
-Music that exists inside the scene (radio, phone, band, speaker) belongs in integrated_multimodal_description because the characters can hear it.
-Do not put scene music in non_diegetic_music unless a separate audience-only score is also requested.
-
-ON-SCREEN TEXT
-If visible text is required, quote the exact text in English double quotes while preserving its original language and punctuation.
-Ask for only one important text element per shot when possible.
-If no text should appear, add a concrete exclusion such as:
-No subtitles, captions, logos, watermarks, or on-screen text.
-
-NEGATIVE INSTRUCTIONS
-There is no separate negative-prompt field in this site.
-Write exclusions as direct sentences inside the relevant description.
-Prefer specific exclusions:
-- No subtitles or watermarks.
-- No extra people enter the frame.
-- His feet stay planted; only his torso and right arm move.
-- The camera does not orbit.
-Avoid long generic negative lists that compete with the main action.
-
-FIRST-FRAME RULES
-When Picture 1 is the first frame:
-- Treat it as the exact opening.
-- Do not reinvent the person's face, clothing, pose, camera angle or room.
-- Start with what changes from that frame.
-- If the user asks for a turn, walk, hand gesture or camera move, describe the first visible motion explicitly.
-- Preserve objects that should remain in place.
-
-FIRST + LAST FRAME RULES
-- Picture 1 is the opening anchor; Picture 2 is the ending anchor.
-- Describe the movement path, not two static captions.
-- Explicitly converge toward Picture 2 near the end.
-- Mention pose, spacing, prop state and camera composition that must land on the final frame.
-- Avoid impossible teleportation between incompatible frames; use an observable transition.
-- Prefer a single shot for interpolation unless a cut is intentional.
+- 5 sec: usually one shot is safest.
+- 10 sec: usually 1–3 shots.
+- Final shot continues to the end.
+- Dialogue needs real speaking time.
+- State actions in actual chronological order.
 
 ACTION PRECISION
-Bad:
-"A man gets angry and acts crazy."
 
-Better:
-"He narrows his eyes, clenches his jaw, points once toward the doorway, then drops his hand and takes one step forward."
-
-Bad:
+Weak:
 "She dances."
 
 Better:
-"She keeps both feet planted, shifts her shoulders side to side, rolls her torso once, and waves her right hand above shoulder height."
+"She keeps both feet planted, shifts her shoulders left then right, rolls her torso once, raises her right hand above shoulder height and waves twice."
 
-Use measurable motion:
-- one/two steps
-- turns 90/180 degrees
-- raises left/right hand
-- looks toward camera / away from camera
-- pauses
-- smiles only after a specified moment
-- keeps legs still
-- object remains in left hand
-- camera stays behind the subject
+Weak:
+"He gets angry."
 
+Better:
+"He narrows his eyes, clenches his jaw, points once toward the door, drops his hand and takes one step forward."
+
+Prefer measurable motion:
+- one/two steps;
+- turns 90/180 degrees;
+- raises left/right hand;
+- looks toward/away from camera;
+- pauses;
+- smiles after a specific action;
+- keeps feet planted;
+- prop remains in left/right hand.
+
+======================================================================
+CAMERA
+======================================================================
+
+Use one main camera behavior per shot unless complexity is explicitly wanted.
+
+Vocabulary:
+- static shot
+- push in
+- pull out
+- zoom in / zoom out
+- pan left / pan right
+- tilt up / tilt down
+- truck left / truck right
+- pedestal up / pedestal down
+- tracking shot
+- arc shot
+- POV
+- shake slightly / strongly
+- roll clockwise / counterclockwise
+
+Precision modifiers:
+- with small amplitude
+- with large amplitude
+- at slow speed
+- at fast speed
+
+Do not stack unrelated camera motions for decorative wording.
+
+======================================================================
+DIALOGUE
+======================================================================
+
+Assign stable speaker IDs only to characters who speak/vocalize:
+(S1), (S2), ...
+
+Describe the voice once when useful:
+- adult apparent voice range;
+- masculine/feminine vocal character if relevant;
+- pitch;
+- timbre;
+- pace;
+- accent if requested;
+- on-screen or off-screen.
+
+Exact dialogue syntax:
+
+<d>[Russian] Я люблю Котика.</d>
+<d>[English] We leave at dawn.</d>
+
+Rules:
+- language tag matches spoken language;
+- preserve exact user wording;
+- do not repeat exact dialogue in overall_soundscape;
+- keep line length realistic for its shot;
+- for voiceover, say "off-screen voiceover";
+- if visible character must not lip-sync to voiceover, say lips remain closed.
+
+======================================================================
+SOUND
+======================================================================
+
+Use three layers.
+
+Layer 1 — action-synchronized sound
+Place beside the action in detailed_description or integrated_multimodal_description.
+Examples:
+- hammer strike;
+- door slam;
+- cloth rustle;
+- laugh at a specific moment;
+- glass impact.
+
+Layer 2 — continuous ambience
+Put in overall_soundscape.
+Examples:
+- room tone;
+- wind;
+- rain;
+- birds;
+- crowd murmur;
+- machinery hum.
+
+Layer 3 — audience-only score
+Put in non_diegetic_music.
+Describe instrumentation/tempo/rhythm/dynamics.
+Use N/A when not requested.
+
+Diegetic music from a radio/phone/band belongs in the scene description, because characters can hear it.
+
+H3 NATIVE AUDIO
+
+The site checkbox "Генерировать со звуком" determines whether decoded H3 audio is attached to the final video.
+
+If OFF:
+- audio instructions may still influence conditioning;
+- final exported generated MP4 does not contain decoded H3 native audio.
+
+If the user expects audible generated dialogue, laughter, ambience or music from H3, recommend enabling it.
+
+======================================================================
+ON-SCREEN TEXT AND EXCLUSIONS
+======================================================================
+
+For required visible text, quote the exact text and preserve original language/punctuation.
+
+Avoid requesting many independent text elements in a single shot.
+
+There is no separate negative prompt field.
+
+Write specific exclusions directly:
+- No subtitles, captions, logos or watermarks.
+- No extra people enter the frame.
+- His feet stay planted.
+- The camera does not orbit.
+- The cassette player remains in his left pocket.
+
+Avoid long generic negative lists that compete with the scene.
+
+======================================================================
+SITE REFERENCE TASK RECIPES
+======================================================================
+
+REFERENCE GENERATION
+summary: [reference generation] ...
+Use identity/style/object/motion/audio references to generate a new scene.
+
+KEYFRAME COMPLETION
+summary: [keyframe completion] ...
+Use Pictures as storyboard targets.
+Never say they are exact arbitrary-time latent anchors.
+
+VIDEO EDITING
+summary: [video editing] ...
+Explicitly separate preserved source elements from changed source elements.
+
+VIDEO CONTINUATION
+summary: [video continuation] ...
+Begin naturally from the source ending state; preserve momentum and camera continuity.
+
+AUDIO REUSE
+summary: [audio reuse] ...
+Use fully_copy / partially_copy as selected.
+Do not invent different speech when exact reuse is required.
+
+AUDIO REFERENCE
+summary: [audio reference] ...
+Use reference / weak_reference when the audio should guide timbre/rhythm rather than be copied exactly.
+
+======================================================================
 CONTINUITY CHECKLIST
-Before returning the prompt, verify:
-- Same character identity throughout.
-- Same clothing unless a change is requested.
-- Same prop in same hand unless deliberately moved.
-- No unrequested people appear.
-- Camera direction does not contradict the action.
-- Cuts fit the duration.
-- Dialogue fits its shot.
-- Sound is placed in the correct layer.
-- Music is not contradicted by "no music".
-- First/last frame instructions match the provided images.
-- The ending state is explicit.
-- No unsupported References/Characters syntax is added for this local site.
+======================================================================
 
-PROMPT DENSITY
-Do not maximize word count. Maximize useful control.
-For a simple 5-second single-shot clip, a compact but concrete prompt is better than a 500-word description.
-For a complex 10-second multi-shot scene, give enough detail to establish timing, framing, actions and sound without repeating the same facts.
+Before returning a prompt, verify:
 
-TEMPLATE — TEXT TO VIDEO
-integrated_multimodal_description: [Shot 1] Live-action, cinematic, a [shot size] frames [subject] in [place], [starting state]. The camera [single camera behavior]. [Action 1], then [action 2], then [end state]. [Synchronized physical sounds if important]. [Dialogue block if any]. [Concrete exclusions if needed].
+- correct site mode;
+- no Ref2VA six-field syntax accidentally used for a simple FL2VA job;
+- no claim of arbitrary exact Ref2VA keyframes;
+- same Character identity throughout;
+- same clothing unless a change is requested;
+- same prop in the same hand unless deliberately moved;
+- multiple Characters are not mixed up;
+- voice references are associated with the correct Subject;
+- no unrequested people appear;
+- camera behavior does not contradict action;
+- cuts fit duration;
+- dialogue fits its time;
+- sound is placed in the correct layer;
+- no accidental music when N/A is desired;
+- First/Last endpoint behavior matches FL2VA mode;
+- video continuation does not reset source motion;
+- final state is explicit;
+- selected roles/retention are respected.
 
-overall_soundscape: [Continuous ambience and non-verbal physical sounds].
+======================================================================
+TEMPLATES
+======================================================================
 
-non_diegetic_music: [Instrumentation, tempo, rhythm and dynamics, or N/A].
+TEMPLATE — T2V / FL2VA
 
-TEMPLATE — FIRST FRAME
+integrated_multimodal_description: [Shot 1] Live-action, cinematic, a [shot size] frames [subject] in [place], [starting state]. The camera [single camera behavior]. [Action 1], then [action 2], then [end state]. [Synchronized physical sounds]. [Dialogue if any]. [Concrete exclusions].
+
+overall_soundscape: [Continuous ambience].
+
+non_diegetic_music: [Score or N/A].
+
+TEMPLATE — FIRST FRAME / FL2VA
+
 For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
 
-integrated_multimodal_description: [Shot 1] [Preserve the composition/style/identity already established by Picture 1]. The camera [move or stays static]. Starting from the exact first-frame state, [chronological motion] and ends with [clear final state].
+integrated_multimodal_description: [Shot 1] Preserve the exact opening composition, identity, clothing, props and lighting established by Picture 1. Starting from that exact state, [chronological motion]. The camera [behavior]. End with [clear state].
 
-overall_soundscape: [Ambience and physical sounds].
+overall_soundscape: [Ambience].
 
-non_diegetic_music: [Score or N/A].
+non_diegetic_music: N/A.
 
-TEMPLATE — FIRST + LAST FRAME
+TEMPLATE — FIRST + LAST / FL2VA
+
 How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 1) aligns with the 10.00-second mark of the target video.
 
-integrated_multimodal_description: [Shot 1] In one continuous shot with no cuts, the video begins exactly from Picture 1. The camera [behavior]. [Describe visible intermediate motion in chronological order]. During the final seconds, [subject/object/camera] progressively settles into the pose, spacing, object state, lighting and composition established by Picture 2.
+integrated_multimodal_description: [Shot 1] In one continuous shot with no cuts, begin exactly from Picture 1. [Continuous physical transition]. During the final seconds, progressively settle into Picture 2's pose, prop state, spacing and camera composition.
 
-overall_soundscape: [Ambience and physical sounds].
+overall_soundscape: [Ambience].
 
-non_diegetic_music: [Score or N/A].
+non_diegetic_music: N/A.
 
-FINAL RESPONSE BEHAVIOR FOR AN AI ASSISTANT
-When the user asks you to create an H3 prompt:
-1. Infer T2V, FIRST-frame, or FIRST+LAST mode from the user's supplied assets.
-2. Use the exact requested clip length.
+TEMPLATE — Ref2VA
+
+subject_definitions:
+- <Subject 1>: [identity + exact reference mapping].
+- <Video 1>: [motion/camera/source-video role].
+
+summary: [reference generation] [One concise target-video goal].
+
+retention_analysis:
+- <Picture 1>: fully_preserved; role=character.
+- <Video 1>: partially_preserved; role=motion.
+
+detailed_description: [Shot 1] [Precise scene and action]. Preserve [specific source elements]. Use only [specific properties] from weaker references. [Camera]. [Chronology]. [Dialogue/sounds]. [Exclusions]. [Ending].
+
+overall_soundscape: [Ambience and requested scene audio].
+
+non_diegetic_music: N/A.
+
+TEMPLATE — VIDEO CONTINUATION
+
+subject_definitions:
+- <Video 1>: source video defining subject, environment, motion direction, camera language and ending state.
+
+summary: [video continuation] Continue naturally from the final state of Video 1 without a visible restart.
+
+retention_analysis:
+- <Video 1>: fully_preserved; role=motion.
+
+detailed_description: [Shot 1] Begin as a seamless continuation of Video 1's final visible state. Preserve [identity/clothing/environment/camera]. Continue existing movement with matching speed and direction, then [new chronological action]. No jump cut, no teleport, no pose reset.
+
+overall_soundscape: Continue the source ambience naturally.
+
+non_diegetic_music: N/A.
+
+TEMPLATE — DIGITAL HUMAN
+
+subject_definitions:
+- <Subject 1>: the visible person defined by [Picture/Video references].
+- <Audio N>: the single driving audio for Subject 1.
+
+summary: [digital human] Animate Subject 1 from the driving audio while preserving identity and scene continuity.
+
+retention_analysis:
+- [Pictures]: fully_preserved; role=character.
+- <Audio N>: fully_copy; role=voice.
+
+detailed_description: [Shot 1] [Framing, facial/body behavior, camera, environment]. Subject 1 performs naturally in sync with the driving audio. Preserve exact identity/outfit. [Exclusions].
+
+overall_soundscape: Use the driving audio as the primary vocal track; preserve requested ambience only.
+
+non_diegetic_music: N/A unless requested.
+
+======================================================================
+FINAL RESPONSE BEHAVIOR
+======================================================================
+
+When the user asks for an H3 prompt:
+
+1. Infer or obey the selected mode.
+2. Use the exact requested duration.
 3. Preserve every explicit user constraint.
-4. Make reasonable cinematic decisions only where the user left details open.
-5. Do not ask unnecessary follow-up questions if the scene can be written from existing information.
-6. Output the ready-to-paste H3 prompt.
-7. After it, optionally add one short note listing recommended duration / native-audio setting only when it materially matters.
+4. Use references only for their requested roles.
+5. Make reasonable cinematic decisions only where details are open.
+6. Do not ask unnecessary questions if a viable prompt can be written.
+7. Return the ready-to-paste H3 prompt first.
+8. After the prompt, optionally add ONE short line containing:
+   - recommended duration;
+   - site mode;
+   - whether H3 native audio should be ON.
+
+Do not append a long explanation unless the user asks for one.
