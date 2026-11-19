@@ -225,7 +225,9 @@ class JobWorker(threading.Thread):
             self._check_cancel(job_id)
 
             duration = probe_duration(output_path)
-            title = _prompt_title(payload.get("prompt") or "H3 video")
+            title = _prompt_title(
+                payload.get("user_prompt") or payload.get("prompt") or "H3 video"
+            )
             metadata = {
                 "operation": "generate",
                 "prompt": payload.get("prompt", ""),
