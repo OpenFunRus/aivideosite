@@ -47,3 +47,15 @@ A/B test on RTX 3090 with the exact saved benchmark:
 - difference: 3 seconds (~1.4%), treated as measurement noise / no practical gain.
 
 Result: reverted. Do not keep this flag solely for H3 performance on the current stack.
+
+## Experiment — DynamicVRAM headroom 2 GB
+
+Both H3 ComfyUI services are launched with:
+
+```text
+--vram-headroom 2
+```
+
+Purpose: keep 2 GB of additional VRAM free so DynamicVRAM does not run the H3 sampler/VAE at the memory-pressure edge. This does not change model weights, prompt, sampler, seed, steps, resolution or attention math.
+
+Benchmark rule: do not repeat an identical workflow+seed in the same ComfyUI process, because ComfyUI execution cache can return cached node outputs in a few seconds. For A/B runs either restart ComfyUI between identical-seed tests or use a fresh seed and record it.
