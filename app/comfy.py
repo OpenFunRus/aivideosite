@@ -55,8 +55,13 @@ class ComfyUIClient:
 
         uploaded_images: list[str] = []
         staged_references: list[dict[str, str]] = []
+        staged_guides: list[dict[str, Any]] = []
+        staged_control: dict[str, Any] = {}
         staging_dir: Path | None = None
         generation_mode = str(payload.get("generation_mode") or "frames")
+        guides = [item for item in (payload.get("guides") or []) if isinstance(item, dict)]
+        control = payload.get("control") if isinstance(payload.get("control"), dict) else {}
+        control_enabled = str(control.get("mode") or "none") != "none"
 
         if generation_mode == "frames":
             for index, local_path in enumerate(payload.get("images") or [], start=1):
@@ -64,28 +69,68 @@ class ComfyUIClient:
                     raise ComfyUICancelled("Generation cancelled.")
                 progress(3 + index * 2, f"Загрузка кадра {index} в ComfyUI")
                 uploaded_images.append(self.upload_image(Path(local_path)))
-        else:
+
+        needs_staging = generation_mode != "frames" or bool(guides) or control_enabled
+        if needs_staging:
             staging_dir = settings.comfyui_input_dir / "aivideosite" / job_id
             staging_dir.mkdir(parents=True, exist_ok=True)
-            references = payload.get("references") or []
+
+            def stage_file(local_path: str | Path, prefix: str) -> str:
+                source = Path(local_path)
+                if not source.is_file():
+                    raise ComfyUIError(f"Reference file not found: {source}")
+                suffix = source.suffix.lower()
+                destination = staging_dir / f"{prefix}_{uuid.uuid4().hex}{suffix}"
+                shutil.copy2(source, destination)
+                return destination.relative_to(settings.comfyui_input_dir).as_posix()
+
             try:
-                for index, item in enumerate(references, start=1):
+                if generation_mode != "frames":
+                    references = payload.get("references") or []
+                    for index, item in enumerate(references, start=1):
+                        if should_cancel and should_cancel():
+                            raise ComfyUICancelled("Generation cancelled.")
+                        if not isinstance(item, dict):
+                            continue
+                        media_type = str(item.get("type") or "").strip().lower()
+                        if media_type not in {"image", "video", "audio"}:
+                            raise ComfyUIError(f"Unsupported reference media type: {media_type!r}")
+                        staged_references.append(
+                            {
+                                "type": media_type,
+                                "name": stage_file(str(item.get("path") or ""), f"ref_{index:02d}"),
+                            }
+                        )
+                        progress(3 + min(index, 10), f"Подготовка reference media {index}")
+
+                for index, item in enumerate(guides, start=1):
                     if should_cancel and should_cancel():
                         raise ComfyUICancelled("Generation cancelled.")
-                    if not isinstance(item, dict):
-                        continue
-                    media_type = str(item.get("type") or "").strip().lower()
-                    if media_type not in {"image", "video", "audio"}:
-                        raise ComfyUIError(f"Unsupported reference media type: {media_type!r}")
-                    source = Path(str(item.get("path") or ""))
-                    if not source.is_file():
-                        raise ComfyUIError(f"Reference file not found: {source}")
-                    suffix = source.suffix.lower()
-                    destination = staging_dir / f"{index:02d}_{uuid.uuid4().hex}{suffix}"
-                    shutil.copy2(source, destination)
-                    relative = destination.relative_to(settings.comfyui_input_dir).as_posix()
-                    staged_references.append({"type": media_type, "name": relative})
-                    progress(3 + min(index, 10), f"Подготовка reference media {index}")
+                    staged_guides.append(
+                        {
+                            "name": stage_file(str(item.get("path") or ""), f"guide_{index:02d}"),
+                            "time_seconds": float(item.get("time_seconds") or 0.0),
+                            "source_name": str(item.get("source_name") or f"Guide {index}"),
+                        }
+                    )
+
+                if control_enabled:
+                    staged_control = {
+                        key: value
+                        for key, value in control.items()
+                        if key not in {"control_video_path", "source_video_path", "mask_video_path"}
+                    }
+                    for payload_key, staged_key in (
+                        ("control_video_path", "control_video"),
+                        ("source_video_path", "source_video"),
+                        ("mask_video_path", "mask_video"),
+                    ):
+                        path_value = control.get(payload_key)
+                        if path_value:
+                            staged_control[staged_key] = stage_file(
+                                str(path_value),
+                                f"control_{staged_key}",
+                            )
             except Exception:
                 shutil.rmtree(staging_dir, ignore_errors=True)
                 raise
@@ -97,6 +142,8 @@ class ComfyUIClient:
                 payload=payload,
                 uploaded_images=uploaded_images,
                 staged_references=staged_references,
+                staged_guides=staged_guides,
+                staged_control=staged_control,
             )
 
             progress(8, "Передача H3-задачи в ComfyUI")
@@ -242,6 +289,8 @@ class ComfyUIClient:
         payload: dict[str, Any],
         uploaded_images: list[str],
         staged_references: list[dict[str, str]] | None = None,
+        staged_guides: list[dict[str, Any]] | None = None,
+        staged_control: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         profile = str(payload.get("profile") or "steps8").lower()
         profiles = {
@@ -262,6 +311,7 @@ class ComfyUIClient:
         easy_mode = {
             "frames": "image",
             "reference": "reference",
+            "multiframe": "reference",
             "digital_human": "digital_human",
         }.get(generation_mode, "image")
         turbo_lora = (
@@ -293,6 +343,9 @@ class ComfyUIClient:
             raise ComfyUIError("Prompt is empty.")
 
         staged_references = staged_references or []
+        staged_guides = staged_guides or []
+        staged_control = staged_control or {}
+        control_mode = str(staged_control.get("mode") or "none")
         if easy_mode == "image" and len(uploaded_images) > 2:
             raise ComfyUIError("FL2VA image mode supports at most two keyframes.")
         if easy_mode != "image" and len(staged_references) > 15:
