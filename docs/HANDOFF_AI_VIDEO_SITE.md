@@ -6,9 +6,9 @@
 >
 > Основная ветка: `main`
 >
-> Кодовый checkpoint перед созданием этого handoff: `61136873957931a3099b55731b92d59b4ec7f23a`
+> Handoff обновлён 2026-11-19 после добавления Ref2VA, Characters, exact Timeline Guides и H3 Fun ControlNet Union.
 >
-> После чтения этого файла новый исполнитель ОБЯЗАН сначала перечитать актуальный `main` на GitHub, потому что код мог измениться после обновления документа.
+> После чтения этого файла новый исполнитель ОБЯЗАН сначала перечитать актуальный `main` на GitHub: SHA намеренно не фиксируется внутри handoff, чтобы не создавать самоссылочный устаревающий checkpoint.
 
 ---
 
@@ -19,7 +19,7 @@
 Основные задачи:
 
 1. Генерировать видео через MiniMax H3 в ComfyUI.
-2. Поддерживать T2V / I2V / First+Last Frame.
+2. Поддерживать FL2VA T2V/First/Last/First+Last, Ref2VA, exact Timeline Guides, Digital Human и H3 Fun ControlNet Union.
 3. Хранить очередь и библиотеку независимо от браузера.
 4. Позволять закрыть сайт, вернуться позже и увидеть результат.
 5. Делать простые операции со звуком через FFmpeg.
@@ -401,6 +401,7 @@ Runtime dirs:
 ```text
 data/uploads/
 data/library/
+data/characters/
 data/tmp/
 ```
 
@@ -478,14 +479,14 @@ UI:
 
 - кнопка `Гайд` находится слева в desktop topbar;
 - открывается native `<dialog>` на весь viewport;
-- внутри есть выбор FL2VA / Ref2VA / Digital Human, Characters, roles/retention, video editing/continuation, FL first/last endpoints, shots/timing, camera, dialogue/audio, exclusions и готовые examples;
+- внутри есть FL2VA / Ref2VA / exact Timeline Guides / Digital Human, Characters, roles/retention, H3 Fun ControlNet Union, video editing/continuation, FL first/last endpoints, shots/timing, camera, dialogue/audio, exclusions и готовые examples;
 - секция `Для нейронки и ChatGPT` содержит:
   - публичный LAN static text `/static/h3-prompting-guide-ai.txt`;
   - кнопку открытия machine guide;
   - кнопку копирования абсолютной ссылки;
   - полноценный copy-paste prompt для ChatGPT.
 
-Machine guide адаптирован к реальному сайту и теперь покрывает все три реально подключённых `MiniMaxH3Easy` режима: `image` (FL2VA), `reference` (Ref2VA) и `digital_human`. Он знает лимиты 9 Pictures / 3 Videos / 3 standalone Audio / 15 media, Characters, deterministic reference mapping, visual/audio retention, editing/continuation и важное ограничение: Ref2VA storyboard Picture не является точным arbitrary-time latent keyframe.
+Machine guide адаптирован к реальному сайту и покрывает четыре режима: `frames`, `reference`, `multiframe`, `digital_human`. Он знает лимиты 9 Pictures / 3 Videos / 3 standalone Audio / 15 semantic media, Characters, deterministic reference mapping, visual/audio retention, editing/continuation, exact native `MiniMaxH3AddGuide` timeline anchors и H3 Fun ControlNet Union. Важное различие зафиксировано явно: обычный Ref2VA storyboard Picture — semantic reference, а Timeline Guide — точный `frame_idx` anchor.
 
 Источники, на которых основана структура:
 
@@ -589,6 +590,7 @@ Browser security не позволяет восстановить выбранн
 - generation mode;
 - reference task;
 - ref image size;
+- ControlNet mode/strength/start/end/Canny thresholds;
 - текущий view.
 
 Key generator settings:
@@ -794,6 +796,7 @@ H3_VIDEO_VAE=minimax_h3_video_vae_fp16.safetensors
 H3_AUDIO_VAE=minimax_h3_audio_vae_fp32.safetensors
 H3_TURBO_LORA=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
 H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors
+H3_CONTROLNET_MODEL_PATCH=minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors
 H3_ATTENTION_BACKEND=comfy kitchen attention
 
 MAX_IMAGE_UPLOAD_MB=40
@@ -884,9 +887,9 @@ Restart=always
 ВАЖНО:
 
 - внутри каждого процесса выбранная через `CUDA_VISIBLE_DEVICES` физическая GPU отображается приложению как локальная CUDA device 0 — это нормально;
-- текущий сайт пока использует только `COMFYUI_URL=http://127.0.0.1:8188`;
-- интеграция WAN backend `http://127.0.0.1:8189` в сайт ещё не реализована;
-- removed legacy video engine 14B FP8 целенаправленно запускается на RTX 3090 24 GB; runtime smoke test ещё требуется.
+- сайт реально использует оба H3 backend: primary `127.0.0.1:8188` и secondary `127.0.0.1:8189`;
+- WAN/removed legacy video engine больше не является частью проекта;
+- новые Ref2VA/Timeline/ControlNet workflow должны быть доступны в обоих ComfyUI process, потому что оба используют один installation tree/custom nodes/models.
 
 ### Site
 
@@ -1063,13 +1066,16 @@ removed legacy video engine признан неподходящим по кач�
 1. Runtime/визуальные GPU-тесты выполняет пользователь на Ubuntu VM.
 2. RTX 2080 Ti примерно в 2 раза медленнее RTX 3090 в уже проверенном FL2VA baseline.
 3. Приоритет диспетчера учитывает занятость задачами сайта; ручные задания напрямую через ComfyUI UI не являются штатным способом работы сайта.
-4. FL2VA 8-step Turbo остаётся наиболее проверенным режимом. Ref2VA checkpoint, Ref2VA 4-step Turbo, video/audio references и Digital Human требуют нового runtime/visual smoke test.
-5. 1080p и особенно 21:9 2560×1088 требуют проверки VRAM/performance на обеих GPU.
-6. Browser не восстанавливает binary file inputs после F5; Characters постоянные, direct refs надо выбрать заново для новой задачи.
-7. Ref2VA storyboard/keyframe role — reference guidance, не точный arbitrary-time latent anchor. Exact endpoints даёт FL2VA First/Last.
-8. Ref2VA 4-step использует отдельную Ref Turbo LoRA; 8/12/16/20 идут через Base, чтобы не применять 4-step adapter на неподходящем расписании.
-9. Сайт без HTTPS и рассчитан на LAN.
-10. ComfyUI 8188/8189 доступны в LAN без собственной авторизации — не пробрасывать их в интернет.
+4. FL2VA 8-step Turbo остаётся наиболее проверенным режимом. Ref2VA, Ref Turbo, video/audio references, Timeline Guides, Digital Human и ControlNet требуют нового runtime/visual smoke test.
+5. Timeline Guides требуют native `MiniMaxH3AddGuide` (ComfyUI 0.34+); Fun ControlNet Union v1 требует native H3 ControlNet support (ComfyUI 0.35+).
+6. Текущий сайт использует Union v1 patch. Union 2.0 намеренно не включён автоматически до отдельного обновления/проверки более нового ComfyUI.
+7. Для Pose/Depth/HED/MLSD сайт ожидает уже подготовленный control video; автоматически из raw RGB строится только Canny.
+8. 1080p и особенно 21:9 2560×1088 требуют проверки VRAM/performance на обеих GPU.
+9. Browser не восстанавливает binary file inputs после F5; Characters постоянные, direct refs/guides/control media надо выбрать заново для новой задачи.
+10. Ref2VA storyboard/keyframe role — semantic reference guidance. Exact internal-time anchors даёт отдельный Timeline mode; exact endpoints также даёт FL2VA First/Last.
+11. Ref2VA/Timeline/Digital Human 4-step использует отдельную Ref Turbo LoRA; 8/12/16/20 идут через Base.
+12. Сайт без HTTPS и рассчитан на LAN.
+13. ComfyUI 8188/8189 доступны в LAN без собственной авторизации — не пробрасывать их в интернет.
 
 ---
 
@@ -1173,12 +1179,13 @@ journalctl -u aivideosite.service -n 150 --no-pager
 
 - `frames` -> Easy `mode=image`;
 - `reference` -> Easy `mode=reference`;
+- `multiframe` -> Easy `mode=reference` + native `MiniMaxH3AddGuide` chain;
 - `digital_human` -> Easy `mode=digital_human`.
 
 Модели в EasyLoader изолируются по режиму:
 
 - FL2VA job передаёт `fl2va_model=<H3_FL2VA_MODEL>`, `ref2va_model=none`;
-- Ref2VA/Digital Human job передаёт `fl2va_model=none`, `ref2va_model=<H3_REF2VA_MODEL>`.
+- Ref2VA/Timeline/Digital Human job передаёт `fl2va_model=none`, `ref2va_model=<H3_REF2VA_MODEL>`.
 
 Это специально сделано так, чтобы отсутствие нового Ref2VA checkpoint не ломало существующие FL2VA jobs.
 
@@ -1302,7 +1309,8 @@ Audio retention:
 ### Task presets
 
 - reference_generation;
-- keyframe_completion;
+- keyframe_completion — semantic storyboard;
+- timeline_guides — exact native timed guides;
 - video_editing;
 - video_continuation;
 - audio_reuse;
@@ -1315,7 +1323,7 @@ FL2VA:
 - steps4/steps8 -> `H3_TURBO_LORA`;
 - steps12/16/20 -> Base.
 
-Ref2VA/Digital Human:
+Ref2VA/Timeline/Digital Human:
 
 - steps4 -> `H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`;
 - steps8/12/16/20 -> Base.
@@ -1331,10 +1339,84 @@ app/templates/index.html
 app/static/h3-prompting-guide-ai.txt
 ```
 
-Оба гайда описывают новые режимы и предупреждают, что Ref2VA storyboard references не являются exact arbitrary-time keyframes.
+Оба гайда описывают FL2VA, Ref2VA, Characters, exact Timeline Guides, Digital Human и ControlNet. Они отдельно предупреждают, что обычный Ref2VA storyboard reference не является exact keyframe, а Timeline Guide через `MiniMaxH3AddGuide` является точным `frame_idx` anchor.
 
 План этапа:
 
 ```text
 docs/H3_REFERENCES_CHARACTERS_PLAN.md
 ```
+
+---
+
+## 25. Exact Timeline Guides / H3 Fun ControlNet Union
+
+Добавлено 19 ноября 2026.
+
+### Timeline / multiframe
+
+`generation_mode=multiframe` использует Ref2VA semantic context плюс native ComfyUI guide conditioning.
+
+API/UI:
+- 1–16 `guide_images`;
+- `guide_manifest` хранит время и note;
+- сервер проверяет 0 <= time <= clip duration;
+- `frame_idx = round(time_seconds * fps)`;
+- если semantic visual reference не выбран, первый guide дополнительно используется как Picture visual anchor для Easy Ref2VA context.
+
+Workflow:
+- каждый guide -> `LoadImage`;
+- guides цепочкой -> `MiniMaxH3AddGuide`;
+- positive conditioning идёт в `BasicGuider`;
+- sampling: `RandomNoise` + `SamplerCustomAdvanced`;
+- sampler для native guide/control веток = `res_multistep`;
+- обычный Easy path без guides/control остаётся на `euler`.
+
+Требование: ComfyUI 0.34+.
+
+### H3 Fun ControlNet Union
+
+Config:
+```dotenv
+H3_CONTROLNET_MODEL_PATCH=minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors
+```
+
+Model patch должен быть доступен ComfyUI в `models/model_patches`.
+
+Native workflow:
+- `ModelPatchLoader`;
+- `MiniMaxH3FunControlNetApply`;
+- patched model затем проходит через текущий `ModelAttentionBackend` и sampler.
+
+UI modes:
+- `canny_auto` — raw control video -> built-in `Canny`;
+- `canny` — prepared edge video;
+- `pose` — prepared pose video;
+- `depth` — prepared depth video;
+- `hed` — prepared HED video;
+- `mlsd` — prepared MLSD video;
+- `inpaint` — source video + black/white mask, optional extra control video.
+
+Inpaint mask:
+- mask video -> `GetVideoComponents` -> `ImageToMask(channel=red)`;
+- white = regenerate.
+
+Control parameters:
+- strength;
+- start_percent;
+- end_percent;
+- Canny low/high thresholds.
+
+Важно: сайт автоматически строит только Canny. Pose/Depth/HED/MLSD надо предварительно получить внешним/preprocessor workflow и загрузить как готовое control video. Не добавлять скрытый auto-preprocessor без отдельного решения.
+
+Требование: ComfyUI 0.35+ для Union v1. Union 2.0 не является default этого сайта и требует отдельной проверки более нового ComfyUI.
+
+### Temporary media lifecycle
+
+Ref media, Timeline guides и ControlNet videos сначала живут в `data/uploads/`, чтобы failed job можно было Retry. Перед выполнением они копируются в:
+
+```text
+COMFYUI_INPUT_DIR/aivideosite/<job_id>/
+```
+
+Каталог создаётся лениво только при необходимости и удаляется в `finally` после success/error/cancel. После успешной job исходные temporary uploads также удаляются worker-ом. Character assets остаются persistent.
