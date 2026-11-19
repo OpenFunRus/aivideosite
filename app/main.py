@@ -328,11 +328,22 @@ async def api_generate(
     ref_image_size: Annotated[str, Form()] = "match",
     character_ids: Annotated[str, Form()] = "[]",
     reference_manifest: Annotated[str, Form()] = "{}",
+    guide_manifest: Annotated[str, Form()] = "{}",
+    control_mode: Annotated[str, Form()] = "none",
+    control_strength: Annotated[float, Form()] = 1.0,
+    control_start_percent: Annotated[float, Form()] = 0.0,
+    control_end_percent: Annotated[float, Form()] = 1.0,
+    control_canny_low: Annotated[float, Form()] = 0.4,
+    control_canny_high: Annotated[float, Form()] = 0.8,
     first_frame: UploadFile | None = File(None),
     last_frame: UploadFile | None = File(None),
     reference_images: list[UploadFile] | None = File(None),
     reference_videos: list[UploadFile] | None = File(None),
     reference_audios: list[UploadFile] | None = File(None),
+    guide_images: list[UploadFile] | None = File(None),
+    control_video: UploadFile | None = File(None),
+    control_source_video: UploadFile | None = File(None),
+    control_mask_video: UploadFile | None = File(None),
     user_id: str = Depends(require_user),
 ):
     del request
@@ -361,7 +372,7 @@ async def api_generate(
         raise HTTPException(400, "Неизвестный профиль шагов.")
 
     generation_mode = generation_mode.strip().lower()
-    if generation_mode not in {"frames", "reference", "digital_human"}:
+    if generation_mode not in {"frames", "reference", "multiframe", "digital_human"}:
         raise HTTPException(400, "Неизвестный режим H3.")
     keyframe_role = "last" if keyframe_role == "last" else "first"
     if reference_task not in REFERENCE_TASKS:
@@ -369,13 +380,91 @@ async def api_generate(
     if ref_image_size not in {"match", "1k", "1.5k", "2k", "original"}:
         ref_image_size = "match"
 
+    control_mode = control_mode.strip().lower()
+    allowed_control_modes = {
+        "none",
+        "canny_auto",
+        "canny",
+        "pose",
+        "depth",
+        "hed",
+        "mlsd",
+        "inpaint",
+    }
+    if control_mode not in allowed_control_modes:
+        raise HTTPException(400, "Неизвестный режим H3 ControlNet.")
+    if not 0.0 <= control_strength <= 10.0:
+        raise HTTPException(400, "ControlNet strength должен быть от 0 до 10.")
+    if not 0.0 <= control_start_percent <= 1.0 or not 0.0 <= control_end_percent <= 1.0:
+        raise HTTPException(400, "ControlNet start/end должны быть от 0 до 1.")
+    if control_start_percent >= control_end_percent:
+        raise HTTPException(400, "ControlNet start должен быть меньше end.")
+    if not 0.01 <= control_canny_low <= 0.99 or not 0.01 <= control_canny_high <= 0.99:
+        raise HTTPException(400, "Canny thresholds должны быть от 0.01 до 0.99.")
+    if control_canny_low >= control_canny_high:
+        raise HTTPException(400, "Canny low threshold должен быть меньше high threshold.")
+
     temporary_paths: list[Path] = []
     image_paths: list[str] = []
     reference_items: list[dict] = []
     reference_map: list[dict] = []
+    guide_items: list[dict] = []
+    control_payload: dict = {"mode": "none"}
     original_prompt = prompt
 
     try:
+        if generation_mode == "multiframe":
+            active_guides = [item for item in (guide_images or []) if item.filename]
+            if not active_guides:
+                raise HTTPException(400, "Для Timeline Guides добавьте хотя бы один guide image.")
+            if len(active_guides) > 16:
+                raise HTTPException(400, "В одной задаче поддерживается до 16 timeline guide images.")
+            try:
+                raw_guide_manifest = json.loads(guide_manifest or "{}")
+            except json.JSONDecodeError as exc:
+                raise HTTPException(400, "Некорректный guide manifest.") from exc
+            specs = (
+                raw_guide_manifest.get("guides")
+                if isinstance(raw_guide_manifest, dict)
+                else None
+            )
+            if not isinstance(specs, list):
+                specs = []
+
+            for index, upload in enumerate(active_guides):
+                path = await save_upload(
+                    upload,
+                    kind="image",
+                    max_bytes=settings.max_image_upload_bytes,
+                )
+                temporary_paths.append(path)
+                fallback_time = (
+                    0.0
+                    if len(active_guides) == 1
+                    else float(seconds) * index / (len(active_guides) - 1)
+                )
+                spec = specs[index] if index < len(specs) and isinstance(specs[index], dict) else {}
+                try:
+                    time_seconds = float(spec.get("time", fallback_time))
+                except (TypeError, ValueError):
+                    time_seconds = fallback_time
+                if time_seconds < 0 or time_seconds > float(seconds):
+                    raise HTTPException(
+                        400,
+                        f"Guide {index + 1}: время должно быть от 0 до {seconds:g} сек.",
+                    )
+                guide_items.append(
+                    {
+                        "path": str(path),
+                        "temporary": True,
+                        "source_name": Path(upload.filename or path.name).name,
+                        "time_seconds": round(time_seconds, 4),
+                        "note": str(spec.get("note") or "").strip()[:240],
+                    }
+                )
+
+            reference_task = "keyframe_completion"
+
         if generation_mode == "frames":
             has_first = first_frame is not None and bool(first_frame.filename)
             has_last = last_frame is not None and bool(last_frame.filename)
@@ -501,6 +590,23 @@ async def api_generate(
                 settings.max_audio_upload_bytes,
             )
 
+            if generation_mode == "multiframe" and not any(
+                item.get("type") in {"image", "video"} for item in reference_items
+            ):
+                first_guide = guide_items[0]
+                reference_items.append(
+                    {
+                        "type": "image",
+                        "path": first_guide["path"],
+                        "temporary": True,
+                        "source_name": first_guide["source_name"],
+                        "role": "storyboard",
+                        "retention": "fully_preserved",
+                        "note": "Timeline guide also used as the semantic visual anchor.",
+                        "timeline_guide": True,
+                    }
+                )
+
             media_order = {"image": 0, "video": 1, "audio": 2}
             reference_items.sort(
                 key=lambda item: media_order.get(str(item.get("type") or ""), 99)
@@ -519,6 +625,46 @@ async def api_generate(
                 task=reference_task,
                 items=reference_items,
             )
+
+        if control_mode != "none":
+            async def save_control_upload(upload: UploadFile | None, label: str) -> str | None:
+                if upload is None or not upload.filename:
+                    return None
+                path = await save_upload(
+                    upload,
+                    kind="video",
+                    max_bytes=settings.max_video_upload_bytes,
+                )
+                temporary_paths.append(path)
+                return str(path)
+
+            staged_control_video = await save_control_upload(control_video, "control")
+            staged_source_video = await save_control_upload(control_source_video, "source")
+            staged_mask_video = await save_control_upload(control_mask_video, "mask")
+
+            if control_mode == "inpaint":
+                if not staged_source_video or not staged_mask_video:
+                    raise HTTPException(
+                        400,
+                        "Inpaint требует source video и чёрно-белое mask video.",
+                    )
+            elif not staged_control_video:
+                raise HTTPException(
+                    400,
+                    "Для выбранного ControlNet режима загрузите control video.",
+                )
+
+            control_payload = {
+                "mode": control_mode,
+                "control_video_path": staged_control_video,
+                "source_video_path": staged_source_video,
+                "mask_video_path": staged_mask_video,
+                "strength": float(control_strength),
+                "start_percent": float(control_start_percent),
+                "end_percent": float(control_end_percent),
+                "canny_low": float(control_canny_low),
+                "canny_high": float(control_canny_high),
+            }
 
         job_id = uuid.uuid4().hex
         db.enqueue_job(
@@ -541,6 +687,8 @@ async def api_generate(
                 "images": image_paths,
                 "references": reference_items,
                 "reference_map": reference_map,
+                "guides": guide_items,
+                "control": control_payload,
             },
             owner_id=user_id,
         )
@@ -592,6 +740,14 @@ async def api_retry_job(
     for item in payload.get("references") or []:
         if isinstance(item, dict) and item.get("path") and not Path(str(item["path"])).is_file():
             missing.append(str(item["path"]))
+    for item in payload.get("guides") or []:
+        if isinstance(item, dict) and item.get("path") and not Path(str(item["path"])).is_file():
+            missing.append(str(item["path"]))
+    control = payload.get("control") if isinstance(payload.get("control"), dict) else {}
+    for key in ("control_video_path", "source_video_path", "mask_video_path"):
+        value = control.get(key)
+        if value and not Path(str(value)).is_file():
+            missing.append(str(value))
     audio_path = payload.get("audio_path")
     if audio_path and not Path(audio_path).is_file():
         missing.append(str(audio_path))
@@ -897,6 +1053,13 @@ def _cleanup_job_uploads(job: dict) -> None:
     for item in payload.get("references") or []:
         if isinstance(item, dict) and item.get("temporary") and item.get("path"):
             paths.append(item["path"])
+    for item in payload.get("guides") or []:
+        if isinstance(item, dict) and item.get("temporary") and item.get("path"):
+            paths.append(item["path"])
+    control = payload.get("control") if isinstance(payload.get("control"), dict) else {}
+    for key in ("control_video_path", "source_video_path", "mask_video_path"):
+        if control.get(key):
+            paths.append(control[key])
     if payload.get("audio_path"):
         paths.append(payload["audio_path"])
 
