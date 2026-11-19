@@ -58,3 +58,26 @@ Measured H3 improvement:
 - RTX 2080 Ti was not unlocked in this test.
 
 This is the real application-level gain for the current H3 Fast / Turbo 8 workflow. Synthetic FP16/BF16 matrix benchmarks can show much larger gains, but they should not be treated as equivalent to end-to-end H3 generation speed.
+
+
+## RTX 2080 Ti unlock status — 2026-11-19
+
+Turing unlock succeeded after switching to the Turing fix branch.
+
+Kernel confirmation for PCI `0000:02:00.0`:
+
+```text
+gpu_unlock: stage=flr_skipped (Turing clean handoff)
+gpu_unlock: stage=handoff ret=0 state=4 retained=0 pages=0/7179 cleanup=0
+gpu_unlock: unlocked
+```
+
+The RTX 2080 Ti returned normally in `nvidia-smi` with 22528 MiB VRAM and its ComfyUI process active.
+
+Baseline before unlock remains:
+
+```text
+RTX 2080 Ti mod 22 GB: 00:06:15
+```
+
+Next measurement: rerun the exact same H3 benchmark prompt, seed and settings to measure the real application-level gain.
