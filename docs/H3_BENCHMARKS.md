@@ -38,3 +38,23 @@ Observed from the site Queue after both completed. The same prompt/settings were
 - This is the baseline before any planned GPU unlock / tensor-core unlock experiments.
 - Keep this exact prompt, seed and settings for before/after comparisons.
 - Runtime/visual tests are performed manually on the Ubuntu VM.
+
+
+## RTX 3090 GPU unlock — 2026-11-19
+
+Same exact benchmark prompt, seed and settings as the baseline.
+
+| GPU | State | Generation time | Change vs baseline |
+| --- | --- | ---: | ---: |
+| RTX 3090 24 GB | stock | 00:03:36 | baseline |
+| RTX 3090 24 GB | gpu-unlock enabled | 00:03:04 | 32 sec faster |
+
+Measured H3 improvement:
+
+- wall-clock reduction: 32 seconds;
+- time reduction: about 14.8%;
+- throughput speedup: about 1.17x, or ~17.4% faster;
+- kernel log confirmed `gpu_unlock: unlocked` for PCI `0000:01:00.0`;
+- RTX 2080 Ti was not unlocked in this test.
+
+This is the real application-level gain for the current H3 Fast / Turbo 8 workflow. Synthetic FP16/BF16 matrix benchmarks can show much larger gains, but they should not be treated as equivalent to end-to-end H3 generation speed.
