@@ -649,6 +649,24 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .segmented-three span {
   padding-inline: 8px;
 }
+.segmented-five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.segmented-five span {
+  min-height: 54px;
+  padding-inline: 6px;
+  text-align: center;
+}
+.resolution-field {
+  gap: 8px;
+}
+.resolution-shape span {
+  min-height: 48px;
+  text-align: center;
+}
+.resolution-shape strong {
+  font-size: 11px;
+}
 .job-icon {
   width: 34px;
   height: 34px;
@@ -727,6 +745,13 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
     min-height: 54px;
     padding: 7px 5px;
     text-align: center;
+  }
+  .segmented-five {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .segmented-five span {
+    min-height: 50px;
+    padding: 7px 5px;
   }
   .job-stats {
     display: grid;
