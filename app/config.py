@@ -194,7 +194,10 @@ settings = Settings(
         "H3_TURBO_LORA",
         "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
     ),
-    h3_ref_turbo_lora=os.getenv("H3_REF_TURBO_LORA", "none"),
+    h3_ref_turbo_lora=os.getenv(
+        "H3_REF_TURBO_LORA",
+        "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+    ),
     h3_attention_backend=os.getenv(
         "H3_ATTENTION_BACKEND",
         "comfy kitchen attention",
