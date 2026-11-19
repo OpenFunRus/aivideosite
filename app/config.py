@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import secrets
 from dataclasses import dataclass
@@ -17,6 +18,13 @@ def _path(name: str, default: str | Path) -> Path:
 
 
 @dataclass(frozen=True)
+class SiteUser:
+    id: str
+    label: str
+    password: str
+
+
+@dataclass(frozen=True)
 class Settings:
     root_dir: Path
     data_dir: Path
@@ -25,7 +33,7 @@ class Settings:
     temp_dir: Path
     db_path: Path
 
-    site_password: str
+    site_users: tuple[SiteUser, ...]
     session_secret: str
     host: str
     port: int
@@ -51,6 +59,71 @@ class Settings:
 
 _data_dir = _path("DATA_DIR", ROOT_DIR / "data")
 _data_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _site_users() -> tuple[SiteUser, ...]:
+    labels = (
+        os.getenv("SITE_USER1_NAME", "Пользователь 1").strip() or "Пользователь 1",
+        os.getenv("SITE_USER2_NAME", "Пользователь 2").strip() or "Пользователь 2",
+        os.getenv("SITE_USER3_NAME", "Пользователь 3").strip() or "Пользователь 3",
+    )
+    configured = tuple(
+        os.getenv(f"SITE_USER{index}_PASSWORD", "").strip()
+        for index in range(1, 4)
+    )
+
+    if all(configured) and len(set(configured)) == 3:
+        return tuple(
+            SiteUser(id=f"user{index}", label=labels[index - 1], password=password)
+            for index, password in enumerate(configured, start=1)
+        )
+
+    users_file = _data_dir / ".site_users.json"
+    try:
+        payload = json.loads(users_file.read_text(encoding="utf-8"))
+        passwords = tuple(str(payload[f"user{index}"]["password"]) for index in range(1, 4))
+        if all(passwords) and len(set(passwords)) == 3:
+            return tuple(
+                SiteUser(
+                    id=f"user{index}",
+                    label=str(payload[f"user{index}"].get("label") or labels[index - 1]),
+                    password=passwords[index - 1],
+                )
+                for index in range(1, 4)
+            )
+    except (FileNotFoundError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        pass
+
+    passwords: list[str] = []
+    while len(passwords) < 3:
+        password = str(100000 + secrets.randbelow(900000))
+        if password not in passwords:
+            passwords.append(password)
+
+    payload = {
+        f"user{index}": {
+            "label": labels[index - 1],
+            "password": passwords[index - 1],
+        }
+        for index in range(1, 4)
+    }
+    users_file.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    try:
+        users_file.chmod(0o600)
+    except OSError:
+        pass
+
+    return tuple(
+        SiteUser(
+            id=f"user{index}",
+            label=labels[index - 1],
+            password=passwords[index - 1],
+        )
+        for index in range(1, 4)
+    )
 
 
 def _session_secret() -> str:
@@ -82,7 +155,7 @@ settings = Settings(
     library_dir=_data_dir / "library",
     temp_dir=_data_dir / "tmp",
     db_path=_data_dir / "aivideosite.db",
-    site_password=os.getenv("SITE_PASSWORD", "11332244"),
+    site_users=_site_users(),
     session_secret=_session_secret(),
     host=os.getenv("HOST", "0.0.0.0"),
     port=int(os.getenv("PORT", "8000")),
