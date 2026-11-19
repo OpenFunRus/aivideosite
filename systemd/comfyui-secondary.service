@@ -1,0 +1,19 @@
+[Unit]
+Description=ComfyUI MiniMax H3 secondary on RTX 2080 Ti
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openfun
+Group=openfun
+WorkingDirectory=/opt/ai/ComfyUI
+Environment=PYTHONUNBUFFERED=1
+Environment=CUDA_VISIBLE_DEVICES=1
+ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8189
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
