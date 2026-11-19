@@ -101,7 +101,9 @@ def validate_reference_items(items: list[dict[str, Any]], *, digital_human: bool
         if counts["audio"] != 1:
             raise ValueError("Digital Human needs exactly one driving audio clip.")
     elif not items:
-        raise ValueError("Ref2VA needs at least one reference image, video or audio clip.")
+        raise ValueError("Ref2VA needs at least one reference resource.")
+    elif counts["image"] + counts["video"] < 1:
+        raise ValueError("Ref2VA needs at least one visual reference image or video.")
 
 
 def _structured_reference_prompt(prompt: str) -> bool:
