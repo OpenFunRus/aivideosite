@@ -137,6 +137,10 @@
                 <span><strong>Референсы</strong><small>Ref2VA · фото / видео / аудио</small></span>
               </label>
               <label>
+                <input type="radio" name="generation_mode" value="multiframe">
+                <span><strong>Таймлайн</strong><small>точные Guide frames по времени</small></span>
+              </label>
+              <label>
                 <input type="radio" name="generation_mode" value="digital_human">
                 <span><strong>Digital Human</strong><small>визуал + driving audio</small></span>
               </label>
@@ -246,7 +250,100 @@
               </div>
               <input type="hidden" name="reference_manifest" id="reference-manifest" value="{}">
               <div class="reference-budget" id="reference-budget">0 / 15 media · 0 / 9 images · 0 / 3 videos · 0 / 3 audio</div>
+
+              <div class="reference-section timeline-guide-section" id="timeline-guide-section" hidden>
+                <div class="reference-section-head">
+                  <div>
+                    <strong>Exact Timeline Guides</strong>
+                    <small>Native MiniMaxH3AddGuide · точные кадры на выбранных секундах</small>
+                  </div>
+                  <span class="badge badge-blue">ComfyUI 0.34+</span>
+                </div>
+                <label class="reference-upload timeline-guide-upload">
+                  <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg></span>
+                  <strong>Guide images</strong>
+                  <small>до 16 · каждый кадр получает точное время на выходном таймлайне</small>
+                  <input id="guide-images" type="file" name="guide_images" multiple accept="image/png,image/jpeg,image/webp">
+                </label>
+                <div class="timeline-guide-list" id="timeline-guide-list"></div>
+                <input type="hidden" name="guide_manifest" id="guide-manifest" value="{}">
+                <p class="mode-note">Это уже не «storyboard reference»: Add Guide реально привязывает still к frame_idx. Время задаётся в секундах и переводится в кадр по выбранному FPS.</p>
+              </div>
+
               <p class="mode-note" id="reference-mode-note">Ref2VA использует ссылки &lt;Picture N&gt;, &lt;Video N&gt; и &lt;Audio N&gt;. Storyboard images задают ориентиры, но не являются точными latent-keyframes на произвольной секунде.</p>
+            </div>
+
+            <div class="controlnet-section">
+              <div class="reference-section-head">
+                <div>
+                  <strong>Fun ControlNet Union</strong>
+                  <small>Pose / Depth / Canny / HED / MLSD · video inpainting</small>
+                </div>
+                <span class="badge badge-blue">ComfyUI 0.35+</span>
+              </div>
+
+              <div class="reference-options-grid control-options-grid">
+                <label class="field">
+                  <span class="field-label">Control mode</span>
+                  <select name="control_mode" id="control-mode">
+                    <option value="none" selected>Выключен</option>
+                    <option value="canny_auto">Canny · построить из raw video</option>
+                    <option value="canny">Canny · готовое control video</option>
+                    <option value="pose">Pose · готовое control video</option>
+                    <option value="depth">Depth · готовое control video</option>
+                    <option value="hed">HED · готовое control video</option>
+                    <option value="mlsd">MLSD · готовое control video</option>
+                    <option value="inpaint">Video inpainting · source + mask</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Strength</span>
+                  <input name="control_strength" id="control-strength" type="number" min="0" max="10" step="0.05" value="1">
+                </label>
+              </div>
+
+              <div id="controlnet-inputs" hidden>
+                <div class="reference-upload-grid control-upload-grid">
+                  <label class="reference-upload" id="control-video-field">
+                    <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
+                    <strong id="control-video-title">Control video</strong>
+                    <small id="control-video-help">Загрузите подготовленное control video.</small>
+                    <input id="control-video" type="file" name="control_video" accept="video/mp4,video/quicktime,video/webm,.mkv,.m4v">
+                  </label>
+                  <label class="reference-upload" id="control-source-field" hidden>
+                    <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
+                    <strong>Source video</strong>
+                    <small>Исходник, который останется за маской.</small>
+                    <input id="control-source-video" type="file" name="control_source_video" accept="video/mp4,video/quicktime,video/webm,.mkv,.m4v">
+                  </label>
+                  <label class="reference-upload" id="control-mask-field" hidden>
+                    <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
+                    <strong>Mask video</strong>
+                    <small>Чёрно-белое видео: белое = regenerate.</small>
+                    <input id="control-mask-video" type="file" name="control_mask_video" accept="video/mp4,video/quicktime,video/webm,.mkv,.m4v">
+                  </label>
+                </div>
+
+                <div class="control-range-grid">
+                  <label class="field">
+                    <span class="field-label">Start %</span>
+                    <input name="control_start_percent" id="control-start" type="number" min="0" max="1" step="0.01" value="0">
+                  </label>
+                  <label class="field">
+                    <span class="field-label">End %</span>
+                    <input name="control_end_percent" id="control-end" type="number" min="0" max="1" step="0.01" value="1">
+                  </label>
+                  <label class="field canny-threshold-field" hidden>
+                    <span class="field-label">Canny low</span>
+                    <input name="control_canny_low" id="control-canny-low" type="number" min="0.01" max="0.99" step="0.01" value="0.4">
+                  </label>
+                  <label class="field canny-threshold-field" hidden>
+                    <span class="field-label">Canny high</span>
+                    <input name="control_canny_high" id="control-canny-high" type="number" min="0.01" max="0.99" step="0.01" value="0.8">
+                  </label>
+                </div>
+                <p class="mode-note" id="control-mode-note"></p>
+              </div>
             </div>
           </section>
 
