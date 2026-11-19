@@ -377,6 +377,12 @@ async def api_generate(
 
     try:
         if generation_mode == "frames":
+            has_first = first_frame is not None and bool(first_frame.filename)
+            has_last = last_frame is not None and bool(last_frame.filename)
+            if has_last and not has_first:
+                keyframe_role = "last"
+            elif has_first:
+                keyframe_role = "first"
             for upload in (first_frame, last_frame):
                 if upload is not None and upload.filename:
                     path = await save_upload(
