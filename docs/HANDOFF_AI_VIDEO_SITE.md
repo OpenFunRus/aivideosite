@@ -1170,6 +1170,19 @@ journalctl -u comfyui -n 200 --no-pager
 
 ---
 
+### Подтверждённый runtime-result dual-GPU схемы
+
+19 ноября 2026 пользователь подтвердил первый реальный H3-тест после переноса backend на RTX 2080 Ti mod 22 GB:
+
+- `comfyui.service` -> physical GPU 1 -> RTX 2080 Ti mod 22 GB -> port 8188;
+- MiniMax H3 успешно сгенерировал видео;
+- ошибок совместимости/VRAM в этом тесте не было;
+- по субъективному времени генерация стала примерно в 2 раза медленнее, чем на RTX 3090;
+- dual-GPU схема признана рабочей и сохраняется;
+- RTX 3090 остаётся выделенной под Wan2.2 S2V на port 8189.
+
+Следующий runtime этап: первый Wan2.2 S2V smoke test на RTX 3090.
+
 ## 25. Current recommended next action
 
 Пока Wan models скачиваются:
