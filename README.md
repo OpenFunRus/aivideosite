@@ -21,7 +21,7 @@
 - отдельная вкладка «Монтаж»: drag-and-drop клипов из библиотеки на таймлайн, перестановка порядка, громкость/полное отключение звука каждого клипа;
 - отдельная пользовательская аудиодорожка с позицией на таймлайне, обрезкой начала/длины и громкостью;
 - экспорт таймлайна через FFmpeg в единый MP4 с автоматическим скачиванием и сохранением результата в библиотеке;
-- systemd units для ComfyUI и сайта;
+- отдельные systemd units для H3 ComfyUI (RTX 2080 Ti), Wan ComfyUI (RTX 3090) и сайта;
 - мобильная навигация и responsive layout.
 
 ## Ожидаемая структура на Ubuntu
@@ -29,7 +29,7 @@
 Проект рассчитан на уже настроенную машину:
 
 - ComfyUI: `/opt/ai/ComfyUI`
-- RTX 3090 / NVIDIA driver уже доступны
+- RTX 3090 24 GB + RTX 2080 Ti mod 22 GB / NVIDIA driver уже доступны
 - FFmpeg установлен
 
 Рекомендуемый путь проекта:
@@ -63,7 +63,7 @@ cp .env.example .env
 
 ### Первый ручной запуск
 
-ComfyUI должен быть доступен на `127.0.0.1:8188`.
+H3 ComfyUI должен быть доступен на `127.0.0.1:8188`; отдельный Wan backend — на `127.0.0.1:8189`.
 
 ```bash
 source /opt/ai/aivideosite/.venv/bin/activate
@@ -83,10 +83,12 @@ http://IP_ВМ:8000
 
 ```bash
 sudo cp systemd/comfyui.service /etc/systemd/system/comfyui.service
+sudo cp systemd/comfyui-wan.service /etc/systemd/system/comfyui-wan.service
 sudo cp systemd/aivideosite.service /etc/systemd/system/aivideosite.service
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now comfyui.service
+sudo systemctl enable --now comfyui-wan.service
 sudo systemctl enable --now aivideosite.service
 ```
 
@@ -94,6 +96,7 @@ sudo systemctl enable --now aivideosite.service
 
 ```bash
 systemctl status comfyui --no-pager
+systemctl status comfyui-wan --no-pager
 systemctl status aivideosite --no-pager
 ```
 
@@ -101,6 +104,7 @@ systemctl status aivideosite --no-pager
 
 ```bash
 journalctl -u comfyui -f
+journalctl -u comfyui-wan -f
 journalctl -u aivideosite -f
 ```
 
@@ -112,7 +116,7 @@ sudo ufw allow 8000/tcp
 
 ## Важные настройки .env
 
-Имена моделей по умолчанию соответствуют установленному ранее H3-профилю RTX 3090 24 GB:
+Имена моделей по умолчанию соответствуют текущему H3-профилю. H3 backend закреплён за RTX 2080 Ti mod 22 GB; ранее этот же профиль был runtime-проверен на RTX 3090:
 
 ```text
 H3_FL2VA_MODEL=minimax_h3_fl2va_pruned_int8_convrot.safetensors
