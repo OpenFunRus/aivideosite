@@ -759,8 +759,13 @@ Use identity/style/object/motion/audio references to generate a new scene.
 
 KEYFRAME COMPLETION
 summary: [keyframe completion] ...
-Use Pictures as storyboard targets.
+Use Pictures as semantic storyboard targets.
 Never say they are exact arbitrary-time latent anchors.
+
+TIMELINE GUIDE GENERATION
+summary: [timeline guide generation] ...
+Use the exact configured guide times as native frame_idx anchors.
+Describe the physically plausible motion between anchors and preserve semantic Character/reference continuity.
 
 VIDEO EDITING
 summary: [video editing] ...
