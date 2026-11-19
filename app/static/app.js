@@ -797,13 +797,7 @@
             <div class="job-top">
               <div class="job-name">
                 <span class="metric-icon job-icon">
-                  ${icon(
-                    job.kind === "generate"
-                      ? "wand"
-                      : job.kind === "lipsync"
-                        ? "microphone"
-                        : "settings"
-                  )}
+                  ${icon(job.kind === "generate" ? "wand" : "settings")}
                 </span>
                 <div>
                   <strong>${escapeHtml(jobLabel(job.kind))}</strong>
