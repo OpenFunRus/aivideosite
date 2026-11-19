@@ -423,6 +423,13 @@
       edited: "Монтаж",
     }[kind] || kind);
 
+  const gpuBadge = (gpuBackend) => {
+    if (!gpuBackend) return "";
+    const label = String(gpuBackend);
+    const badgeClass = label.includes("3090") ? "badge-green" : "badge-yellow";
+    return `<span class="badge ${badgeClass}" title="GPU генерации">${escapeHtml(label)}</span>`;
+  };
+
   const mediaSignature = (media) =>
     (media || [])
       .map((item) => `${item.id}:${item.size_bytes}:${item.created_at}`)
@@ -471,6 +478,7 @@
                 <span class="badge badge-blue">${escapeHtml(
                   kindLabel(item.kind)
                 )}</span>
+                ${gpuBadge(meta.gpu_backend)}
                 <h3 class="media-title" title="${escapeHtml(
                   item.title
                 )}">${escapeHtml(item.title)}</h3>
