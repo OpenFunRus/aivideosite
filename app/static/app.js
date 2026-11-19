@@ -695,6 +695,17 @@
     }
     const taskField = qs("#reference-task-field");
     if (taskField) taskField.hidden = mode === "digital_human";
+
+    qsa('[name="profile"]', generationForm).forEach((input) => {
+      const small = input.closest("label")?.querySelector("small");
+      if (!small) return;
+      if (mode === "frames") {
+        small.textContent = ["steps4", "steps8"].includes(input.value) ? "Turbo" : "Base";
+      } else {
+        small.textContent = input.value === "steps4" ? "Ref Turbo" : "Base";
+      }
+    });
+
     const note = qs("#reference-mode-note");
     if (note) {
       note.textContent =
@@ -723,6 +734,160 @@
     });
   });
   updateGenerationModeUI();
+
+  const renderGeneratorCharacters = () => {
+    const container = qs("#generator-character-list");
+    if (!container) return;
+    for (const id of [...selectedCharacterIds]) {
+      if (!characters.some((item) => item.id === id)) selectedCharacterIds.delete(id);
+    }
+    if (!characters.length) {
+      container.innerHTML = '<span class="field-help">Персонажи ещё не созданы.</span>';
+      syncCharacterSelection();
+      updateReferenceBudget();
+      return;
+    }
+    container.innerHTML = characters
+      .map((item) => `
+        <label class="generator-character-chip">
+          <input type="checkbox" value="${escapeHtml(item.id)}" ${selectedCharacterIds.has(item.id) ? "checked" : ""}>
+          ${item.preview_url ? `<img src="${escapeHtml(item.preview_url)}" alt="">` : ""}
+          <span>
+            <strong>${escapeHtml(item.name)}</strong>
+            <small>${Number(item.image_count || 0)} image${Number(item.image_count || 0) === 1 ? "" : "s"}${item.voice ? " · voice" : ""}</small>
+          </span>
+        </label>`)
+      .join("");
+    qsa('input[type="checkbox"]', container).forEach((input) => {
+      input.addEventListener("change", () => {
+        syncCharacterSelection();
+        updateReferenceBudget();
+      });
+    });
+    syncCharacterSelection();
+    updateReferenceBudget();
+  };
+
+  const renderCharacterManager = () => {
+    const grid = qs("#character-grid");
+    const empty = qs("#character-empty");
+    if (!grid || !empty) return;
+    empty.classList.toggle("show", !characters.length);
+    grid.innerHTML = characters
+      .map((item) => `
+        <article class="character-card" data-character-id="${escapeHtml(item.id)}">
+          <div class="character-card-preview">
+            ${item.preview_url
+              ? `<img src="${escapeHtml(item.preview_url)}" alt="${escapeHtml(item.name)}">`
+              : `<span class="upload-icon">${icon("photo")}</span>`}
+          </div>
+          <div class="character-card-body">
+            <div class="character-card-title">
+              <h3>${escapeHtml(item.name)}</h3>
+              <span class="badge badge-blue">${Number(item.image_count || 0)} refs</span>
+              ${item.voice ? '<span class="badge badge-green">voice</span>' : ""}
+            </div>
+            <p>${escapeHtml(item.description || "Без дополнительного описания.")}</p>
+            <div class="media-actions">
+              <button class="btn btn-secondary btn-compact" type="button" data-character-action="edit">Редактировать</button>
+              <button class="btn btn-danger btn-compact" type="button" data-character-action="delete">${icon("trash")} Удалить</button>
+            </div>
+          </div>
+        </article>`)
+      .join("");
+  };
+
+  refreshCharacters = async () => {
+    try {
+      const result = await api("/api/characters");
+      characters = Array.isArray(result.characters) ? result.characters : [];
+      renderCharacterManager();
+      renderGeneratorCharacters();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  };
+
+  qs("#open-characters-from-generator")?.addEventListener("click", () => {
+    switchView("characters", true);
+  });
+
+  qs("#character-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = qs("#character-create");
+    const imageInput = qs('[name="images"]', form);
+    if ((imageInput?.files?.length || 0) < 1 || imageInput.files.length > 4) {
+      showToast("Для персонажа выберите от 1 до 4 изображений.", "error");
+      return;
+    }
+    button.disabled = true;
+    try {
+      await api("/api/characters", {
+        method: "POST",
+        body: new FormData(form),
+      });
+      form.reset();
+      showToast("Персонаж сохранён.");
+      await refreshCharacters();
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  qs("#character-grid")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-character-action]");
+    const card = button?.closest("[data-character-id]");
+    if (!button || !card) return;
+    const character = characters.find((item) => item.id === card.dataset.characterId);
+    if (!character) return;
+
+    if (button.dataset.characterAction === "delete") {
+      if (!confirm(`Удалить персонажа «${character.name}» и его reference-файлы?`)) return;
+      button.disabled = true;
+      try {
+        await api(`/api/characters/${encodeURIComponent(character.id)}`, { method: "DELETE" });
+        selectedCharacterIds.delete(character.id);
+        showToast("Персонаж удалён.");
+        await refreshCharacters();
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+
+    if (button.dataset.characterAction === "edit") {
+      const name = prompt("Имя персонажа", character.name);
+      if (name === null) return;
+      const description = prompt(
+        "Неизменяемые особенности персонажа",
+        character.description || ""
+      );
+      if (description === null) return;
+      const data = new FormData();
+      data.set("name", name);
+      data.set("description", description);
+      button.disabled = true;
+      try {
+        await api(`/api/characters/${encodeURIComponent(character.id)}`, {
+          method: "POST",
+          body: data,
+        });
+        showToast("Персонаж обновлён.");
+        await refreshCharacters();
+      } catch (error) {
+        showToast(error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    }
+  });
+
+  refreshCharacters();
 
   generationForm.addEventListener("input", (event) => {
     if (event.target.matches('input[type="file"]')) return;
@@ -1786,6 +1951,39 @@
   generationForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = qs("#generate-button");
+    const mode = currentGenerationMode();
+
+    const firstInput = qs('[name="first_frame"]', generationForm);
+    const lastInput = qs('[name="last_frame"]', generationForm);
+    const hasFirst = Boolean(firstInput?.files?.length);
+    const hasLast = Boolean(lastInput?.files?.length);
+    const keyframeRole = qs("#keyframe-role");
+    if (keyframeRole) keyframeRole.value = !hasFirst && hasLast ? "last" : "first";
+
+    syncCharacterSelection();
+    buildReferenceManifest();
+    const budget = updateReferenceBudget();
+
+    if (mode !== "frames") {
+      if (
+        budget.total > 15 ||
+        budget.images > 9 ||
+        budget.videos > 3 ||
+        budget.audios > 3
+      ) {
+        showToast("Превышен лимит Ref2VA: 9 images, 3 videos, 3 audio, 15 media всего.", "error");
+        return;
+      }
+      if (budget.images + budget.videos < 1) {
+        showToast("Ref2VA нужен хотя бы один визуальный reference: изображение, видео или Character.", "error");
+        return;
+      }
+      if (mode === "digital_human" && budget.audios !== 1) {
+        showToast("Digital Human требует ровно один driving audio, включая голос выбранного Character.", "error");
+        return;
+      }
+    }
+
     const data = new FormData(generationForm);
     const [width, height] = qs("#resolution").value.split("x");
 
