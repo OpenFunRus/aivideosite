@@ -2,7 +2,7 @@
 {% block title %}AI Video Studio{% endblock %}
 {% block body_class %}app-page{% endblock %}
 {% block body %}
-<div class="app-shell">
+<div class="app-shell" data-user-id="{{ current_user.id }}">
   <aside class="sidebar">
     <a class="brand" href="/" aria-label="AI Video Studio">
       <span class="brand-mark">
@@ -36,6 +36,10 @@
     </nav>
 
     <div class="sidebar-footer">
+      <div class="user-mini">
+        <strong>{{ current_user.label }}</strong>
+        <small>личная библиотека и история</small>
+      </div>
       <div class="gpu-mini-stack">
         <div class="gpu-mini">
           <span class="status-dot" id="gpu-status-dot"></span>
@@ -308,7 +312,7 @@
           </article>
           <article class="metric-card">
             <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-stack"></use></svg></span>
-            <div><small>Очередь</small><strong id="metric-queue">0</strong><span>задач</span></div>
+            <div><small>Общая очередь</small><strong id="metric-queue">0</strong><span>задач</span></div>
           </article>
         </section>
       </section>
