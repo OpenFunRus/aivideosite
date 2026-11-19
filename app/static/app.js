@@ -343,9 +343,9 @@
 
   const renderSystem = (state) => {
     const gpu = state.system?.gpu;
-    const wanGpu = state.system?.wan_gpu;
+    const secondaryGpu = state.system?.secondary_gpu;
     const comfy = state.system?.comfyui;
-    const comfyWan = state.system?.comfyui_wan;
+    const comfySecondary = state.system?.comfyui_secondary;
     const running = Number(state.counts?.running || 0);
     const queued = Number(state.counts?.queued || 0);
 
@@ -354,13 +354,13 @@
     comfyDot.className = `status-dot ${comfy ? "ok" : "error"}`;
     comfyPill.title = comfy ? "ComfyUI доступен" : "ComfyUI недоступен";
 
-    const comfyWanPill = qs("#comfy-wan-status");
-    if (comfyWanPill) {
-      const comfyWanDot = qs(".status-dot", comfyWanPill);
-      comfyWanDot.className = `status-dot ${comfyWan ? "ok" : "error"}`;
-      comfyWanPill.title = comfyWan
-        ? "Wan ComfyUI доступен на RTX 3090"
-        : "Wan ComfyUI недоступен";
+    const comfySecondaryPill = qs("#comfy-secondary-status");
+    if (comfySecondaryPill) {
+      const comfySecondaryDot = qs(".status-dot", comfySecondaryPill);
+      comfySecondaryDot.className = `status-dot ${comfySecondary ? "ok" : "error"}`;
+      comfySecondaryPill.title = comfySecondary
+        ? "H3 secondary доступен на RTX 2080 Ti"
+        : "H3 secondary недоступен";
     }
 
     const active = qs("#active-status");
@@ -379,7 +379,7 @@
       qs("#gpu-mini-name").textContent = gpu.name || "NVIDIA GPU";
       qs("#gpu-mini-value").textContent =
         `${gpu.memory_used_mb} / ${gpu.memory_total_mb} MB`;
-      qs("#metric-gpu").textContent = (gpu.name || "RTX 2080 Ti").replace(
+      qs("#metric-gpu").textContent = (gpu.name || "RTX 3090").replace(
         "NVIDIA GeForce ",
         ""
       );
@@ -398,18 +398,18 @@
       qs("#metric-temp").textContent = "—";
     }
 
-    if (wanGpu) {
-      qs("#metric-wan-gpu").textContent = (wanGpu.name || "RTX 3090").replace(
+    if (secondaryGpu) {
+      qs("#metric-secondary-gpu").textContent = (secondaryGpu.name || "RTX 2080 Ti").replace(
         "NVIDIA GeForce ",
         ""
       );
-      qs("#metric-wan-vram").textContent =
-        `${(wanGpu.memory_used_mb / 1024).toFixed(1)} / ${(
-          wanGpu.memory_total_mb / 1024
+      qs("#metric-secondary-vram").textContent =
+        `${(secondaryGpu.memory_used_mb / 1024).toFixed(1)} / ${(
+          secondaryGpu.memory_total_mb / 1024
         ).toFixed(0)} GB VRAM`;
     } else {
-      qs("#metric-wan-gpu").textContent = "Нет данных";
-      qs("#metric-wan-vram").textContent = "—";
+      qs("#metric-secondary-gpu").textContent = "Нет данных";
+      qs("#metric-secondary-vram").textContent = "—";
     }
 
     qs("#metric-disk").textContent = humanBytes(state.system?.disk_free || 0);
