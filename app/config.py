@@ -33,9 +33,6 @@ class Settings:
     comfyui_url: str
     comfyui_output_dir: Path
 
-    latentsync_dir: Path
-    latentsync_python: Path
-
     ffmpeg_bin: Path
     ffprobe_bin: Path
 
@@ -90,11 +87,6 @@ settings = Settings(
     port=int(os.getenv("PORT", "8000")),
     comfyui_url=os.getenv("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/"),
     comfyui_output_dir=_path("COMFYUI_OUTPUT_DIR", "/opt/ai/ComfyUI/output"),
-    latentsync_dir=_path("LATENTSYNC_DIR", "/opt/ai/LatentSync"),
-    latentsync_python=_path(
-        "LATENTSYNC_PYTHON",
-        "/home/openfun/miniconda3/envs/latentsync/bin/python",
-    ),
     ffmpeg_bin=_path("FFMPEG_BIN", "/usr/bin/ffmpeg"),
     ffprobe_bin=_path("FFPROBE_BIN", "/usr/bin/ffprobe"),
     h3_fl2va_model=os.getenv(
