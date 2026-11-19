@@ -154,7 +154,7 @@ async def api_generate(
     height: Annotated[int, Form()] = 768,
     seconds: Annotated[float, Form()] = 5.0,
     fps: Annotated[float, Form()] = 24.0,
-    profile: Annotated[str, Form()] = "fast",
+    profile: Annotated[str, Form()] = "steps8",
     seed: Annotated[int, Form()] = -1,
     generate_audio: Annotated[bool, Form()] = False,
     first_frame: UploadFile | None = File(None),
@@ -178,8 +178,13 @@ async def api_generate(
     allowed_fps = {12.0, 16.0, 20.0, 24.0, 25.0, 30.0}
     if float(fps) not in allowed_fps:
         raise HTTPException(400, "Поддерживаются FPS: 12, 16, 20, 24, 25, 30.")
-    if profile not in {"fast", "quality", "max"}:
-        raise HTTPException(400, "Неизвестный профиль.")
+    profile = {
+        "fast": "steps8",
+        "quality": "steps20",
+        "max": "steps20",
+    }.get(profile, profile)
+    if profile not in {"steps4", "steps8", "steps12", "steps16", "steps20"}:
+        raise HTTPException(400, "Неизвестный профиль шагов.")
 
     image_paths: list[str] = []
     for upload in (first_frame, last_frame):
