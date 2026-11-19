@@ -213,6 +213,7 @@ async def api_generate(
 @app.post("/api/jobs/{job_id}/cancel")
 async def api_cancel_job(
     job_id: str,
+    request: Request,
     _: None = Depends(require_auth),
 ):
     job = db.request_cancel(job_id)
@@ -220,9 +221,10 @@ async def api_cancel_job(
         raise HTTPException(404, "Задача не найдена.")
 
     if job["status"] == "running" and job["kind"] == "generate":
-        prompt_id = job.get("external_id")
-        if prompt_id:
-            ComfyUIClient().cancel_prompt(str(prompt_id))
+        request.app.state.worker.cancel_job(
+            job_id,
+            str(job.get("external_id")) if job.get("external_id") else None,
+        )
 
     return {"ok": True, "status": job["status"]}
 
@@ -597,9 +599,9 @@ def get_system_status() -> dict:
         disk = shutil.disk_usage(settings.data_dir)
         status = {
             "comfyui": ComfyUIClient().health(),
-            "comfyui_wan": ComfyUIClient(settings.comfyui_wan_url).health(),
+            "comfyui_secondary": ComfyUIClient(settings.comfyui_secondary_url).health(),
             "gpu": None,
-            "wan_gpu": None,
+            "secondary_gpu": None,
             "gpus": [],
             "disk_free": disk.free,
             "disk_total": disk.total,
@@ -633,13 +635,13 @@ def get_system_status() -> dict:
                     }
                 )
             status["gpus"] = gpus
-            status["wan_gpu"] = next(
+            status["gpu"] = next(
                 (gpu for gpu in gpus if gpu["index"] == 0),
                 gpus[0] if gpus else None,
             )
-            status["gpu"] = next(
+            status["secondary_gpu"] = next(
                 (gpu for gpu in gpus if gpu["index"] == 1),
-                gpus[0] if gpus else None,
+                gpus[1] if len(gpus) > 1 else None,
             )
         except Exception:
             pass
