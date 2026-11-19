@@ -216,6 +216,82 @@
   const generationForm = qs("#generate-form");
   const secondsRange = qs("#seconds-range");
   const secondsValue = qs("#seconds-value");
+  const resolutionSelect = qs("#resolution");
+
+  const RESOLUTION_PRESETS = {
+    square: [
+      { value: "256x256", tier: "draft", label: "256 × 256 · быстрый тест" },
+      { value: "352x352", tier: "360", label: "360p · 352 × 352" },
+      { value: "480x480", tier: "480", label: "480p · 480 × 480" },
+      { value: "704x704", tier: "720", label: "720p · 704 × 704" },
+      { value: "1088x1088", tier: "1080", label: "1080p · 1088 × 1088" },
+    ],
+    landscape: [
+      { value: "640x352", tier: "360", label: "360p · 640 × 352" },
+      { value: "864x480", tier: "480", label: "480p · 864 × 480" },
+      { value: "1248x704", tier: "720", label: "720p · 1248 × 704" },
+      { value: "1920x1088", tier: "1080", label: "1080p · 1920 × 1088" },
+    ],
+    portrait: [
+      { value: "352x640", tier: "360", label: "360p · 352 × 640" },
+      { value: "480x864", tier: "480", label: "480p · 480 × 864" },
+      { value: "704x1248", tier: "720", label: "720p · 704 × 1248" },
+      { value: "1088x1920", tier: "1080", label: "1080p · 1088 × 1920" },
+    ],
+  };
+  const DEFAULT_RESOLUTION_SHAPE = "landscape";
+  const DEFAULT_RESOLUTION = "1248x704";
+  const LEGACY_PROFILE_MAP = {
+    fast: "steps8",
+    quality: "steps20",
+    max: "steps20",
+  };
+  const PROFILE_LABELS = {
+    steps4: "4 шага · Turbo",
+    steps8: "8 шагов · Turbo",
+    steps12: "12 шагов · Base",
+    steps16: "16 шагов · Base",
+    steps20: "20 шагов · Base",
+    fast: "8 шагов · Turbo",
+    quality: "20 шагов · Base",
+    max: "20 шагов · Base",
+  };
+
+  const inferResolutionShape = (value) => {
+    const [width, height] = String(value || "").split("x").map(Number);
+    if (!width || !height) return DEFAULT_RESOLUTION_SHAPE;
+    if (width === height) return "square";
+    return width > height ? "landscape" : "portrait";
+  };
+
+  const renderResolutionOptions = (
+    shape,
+    preferredValue = "",
+    preferredTier = ""
+  ) => {
+    const normalizedShape = RESOLUTION_PRESETS[shape]
+      ? shape
+      : DEFAULT_RESOLUTION_SHAPE;
+    const presets = RESOLUTION_PRESETS[normalizedShape];
+    const previousTier =
+      preferredTier || resolutionSelect?.selectedOptions?.[0]?.dataset?.tier || "";
+    if (!resolutionSelect) return;
+
+    resolutionSelect.innerHTML = presets
+      .map(
+        (preset) =>
+          `<option value="${preset.value}" data-tier="${preset.tier}">${preset.label}</option>`
+      )
+      .join("");
+
+    const preferred = presets.find((preset) => preset.value === preferredValue);
+    const sameTier = presets.find((preset) => preset.tier === previousTier);
+    const fallback =
+      normalizedShape === DEFAULT_RESOLUTION_SHAPE
+        ? presets.find((preset) => preset.value === DEFAULT_RESOLUTION)
+        : presets.find((preset) => preset.tier === "720");
+    resolutionSelect.value = (preferred || sameTier || fallback || presets[0]).value;
+  };
 
   const updateSeconds = () => {
     if (secondsRange && secondsValue) {
@@ -227,10 +303,13 @@
     const checkedProfile = qs('[name="profile"]:checked', generationForm);
     return {
       prompt: qs("#prompt")?.value || "",
-      resolution: qs("#resolution")?.value || "1344x768",
+      resolution: qs("#resolution")?.value || DEFAULT_RESOLUTION,
+      resolution_shape:
+        qs('[name="resolution_shape"]:checked', generationForm)?.value ||
+        DEFAULT_RESOLUTION_SHAPE,
       seconds: secondsRange?.value || "5",
       fps: qs('[name="fps"]', generationForm)?.value || "24",
-      profile: checkedProfile?.value || "fast",
+      profile: checkedProfile?.value || "steps8",
       seed: qs('[name="seed"]', generationForm)?.value || "-1",
       generate_audio: Boolean(qs("#generate-audio")?.checked),
     };
@@ -254,6 +333,23 @@
     } catch {
       saved = null;
     }
+
+    const savedResolution =
+      saved && typeof saved === "object" ? String(saved.resolution || "") : "";
+    const savedShape =
+      saved && typeof saved === "object" && RESOLUTION_PRESETS[saved.resolution_shape]
+        ? saved.resolution_shape
+        : inferResolutionShape(savedResolution);
+    const shape = RESOLUTION_PRESETS[savedShape]
+      ? savedShape
+      : DEFAULT_RESOLUTION_SHAPE;
+    const shapeInput = qs(
+      `[name="resolution_shape"][value="${CSS.escape(shape)}"]`,
+      generationForm
+    );
+    if (shapeInput) shapeInput.checked = true;
+    renderResolutionOptions(shape, savedResolution);
+
     if (!saved || typeof saved !== "object") {
       updateSeconds();
       return;
@@ -261,14 +357,6 @@
 
     if (typeof saved.prompt === "string") {
       qs("#prompt").value = saved.prompt;
-    }
-
-    const resolution = qs("#resolution");
-    if (
-      resolution &&
-      [...resolution.options].some((option) => option.value === saved.resolution)
-    ) {
-      resolution.value = saved.resolution;
     }
 
     if (secondsRange) {
@@ -284,8 +372,11 @@
       fps.value = String(saved.fps);
     }
 
+    const normalizedProfile =
+      LEGACY_PROFILE_MAP[String(saved.profile || "")] ||
+      String(saved.profile || "steps8");
     const profile = qs(
-      `[name="profile"][value="${CSS.escape(String(saved.profile || "fast"))}"]`,
+      `[name="profile"][value="${CSS.escape(normalizedProfile)}"]`,
       generationForm
     );
     if (profile) {
@@ -314,6 +405,7 @@
     }
 
     generationForm.reset();
+    renderResolutionOptions(DEFAULT_RESOLUTION_SHAPE, DEFAULT_RESOLUTION);
     qsa(".upload-card input[type=file]").forEach((input) => {
       clearUploadPreview(input);
     });
@@ -324,6 +416,15 @@
     switchView("generate", false, false);
     showToast("Промт и настройки сброшены по умолчанию.");
   };
+
+  qsa('[name="resolution_shape"]', generationForm).forEach((input) => {
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      const tier = resolutionSelect?.selectedOptions?.[0]?.dataset?.tier || "";
+      renderResolutionOptions(input.value, "", tier);
+      saveGeneratorSettings();
+    });
+  });
 
   restoreGeneratorSettings();
 
@@ -469,9 +570,7 @@
           details.push(`${meta.width}×${meta.height}`);
         }
         if (meta.profile) {
-          const profile =
-            { fast: "Fast", quality: "Quality", max: "Max" }[meta.profile] ||
-            meta.profile;
+          const profile = PROFILE_LABELS[meta.profile] || meta.profile;
           details.push(profile);
         }
         if (meta.fps) details.push(`${meta.fps} FPS`);
@@ -1393,6 +1492,7 @@
     const [width, height] = qs("#resolution").value.split("x");
 
     data.delete("resolution");
+    data.delete("resolution_shape");
     data.set("width", width);
     data.set("height", height);
 
@@ -1453,10 +1553,7 @@
 
   const infoDialog = qs("#media-info-dialog");
 
-  const profileLabel = (value) =>
-    ({ fast: "Fast · Turbo 8", quality: "Quality · Base 20", max: "Max · Base 30" }[
-      value
-    ] || value || "—");
+  const profileLabel = (value) => PROFILE_LABELS[value] || value || "—";
 
   const openMediaInfo = (mediaId) => {
     const item = (lastState?.media || []).find((media) => media.id === mediaId);
