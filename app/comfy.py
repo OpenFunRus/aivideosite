@@ -68,23 +68,27 @@ class ComfyUIClient:
             staging_dir = settings.comfyui_input_dir / "aivideosite" / job_id
             staging_dir.mkdir(parents=True, exist_ok=True)
             references = payload.get("references") or []
-            for index, item in enumerate(references, start=1):
-                if should_cancel and should_cancel():
-                    raise ComfyUICancelled("Generation cancelled.")
-                if not isinstance(item, dict):
-                    continue
-                media_type = str(item.get("type") or "").strip().lower()
-                if media_type not in {"image", "video", "audio"}:
-                    raise ComfyUIError(f"Unsupported reference media type: {media_type!r}")
-                source = Path(str(item.get("path") or ""))
-                if not source.is_file():
-                    raise ComfyUIError(f"Reference file not found: {source}")
-                suffix = source.suffix.lower()
-                destination = staging_dir / f"{index:02d}_{uuid.uuid4().hex}{suffix}"
-                shutil.copy2(source, destination)
-                relative = destination.relative_to(settings.comfyui_input_dir).as_posix()
-                staged_references.append({"type": media_type, "name": relative})
-                progress(3 + min(index, 10), f"Подготовка reference media {index}")
+            try:
+                for index, item in enumerate(references, start=1):
+                    if should_cancel and should_cancel():
+                        raise ComfyUICancelled("Generation cancelled.")
+                    if not isinstance(item, dict):
+                        continue
+                    media_type = str(item.get("type") or "").strip().lower()
+                    if media_type not in {"image", "video", "audio"}:
+                        raise ComfyUIError(f"Unsupported reference media type: {media_type!r}")
+                    source = Path(str(item.get("path") or ""))
+                    if not source.is_file():
+                        raise ComfyUIError(f"Reference file not found: {source}")
+                    suffix = source.suffix.lower()
+                    destination = staging_dir / f"{index:02d}_{uuid.uuid4().hex}{suffix}"
+                    shutil.copy2(source, destination)
+                    relative = destination.relative_to(settings.comfyui_input_dir).as_posix()
+                    staged_references.append({"type": media_type, "name": relative})
+                    progress(3 + min(index, 10), f"Подготовка reference media {index}")
+            except Exception:
+                shutil.rmtree(staging_dir, ignore_errors=True)
+                raise
 
         try:
             client_id = uuid.uuid4().hex
@@ -321,7 +325,11 @@ class ComfyUIClient:
                     "advanced": True,
                     "fps": fps,
                     "keyframe_role": str(payload.get("keyframe_role") or "first"),
-                    "ref_image_size": str(payload.get("ref_image_size") or ("original" if easy_mode == "image" else "match")),
+                    "ref_image_size": (
+                        "original"
+                        if easy_mode == "image"
+                        else str(payload.get("ref_image_size") or "match")
+                    ),
                     "reference_mention_mode": "index",
                     "prompt_optimizer_settings": False,
                     "prompt_optimizer_scene_guide": "none",
