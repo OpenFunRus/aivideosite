@@ -36,6 +36,7 @@ REFERENCE_ROLES = {
 REFERENCE_TASKS = {
     "reference_generation": "reference generation",
     "keyframe_completion": "keyframe completion",
+    "timeline_guides": "timeline guide generation",
     "video_editing": "video editing",
     "video_continuation": "video continuation",
     "audio_reuse": "audio reuse",
@@ -249,6 +250,7 @@ def build_reference_prompt(
         "audio_reuse": "The target video reuses the supplied audio according to its retention rule.",
         "audio_reference": "The target video uses the supplied audio as a voice, timbre or rhythm reference.",
         "keyframe_completion": "The supplied pictures are storyboard/keyframe references, not exact latent anchors.",
+        "timeline_guides": "Exact native timeline guides are applied separately at their configured frame indices; semantic references here define identity, style, motion, and continuity around those anchors.",
     }.get(task, "The target video is generated from the supplied multimodal references.")
 
     wrapped = (
