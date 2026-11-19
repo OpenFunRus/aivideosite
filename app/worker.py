@@ -236,7 +236,16 @@ class JobWorker(threading.Thread):
                 "profile": payload.get("profile"),
                 "seed": result.get("seed"),
                 "generate_audio": bool(payload.get("generate_audio", False)),
-                "reference_count": len(payload.get("images") or []),
+                "generation_mode": payload.get("generation_mode", "frames"),
+                "keyframe_role": payload.get("keyframe_role", "first"),
+                "reference_task": payload.get("reference_task"),
+                "ref_image_size": payload.get("ref_image_size"),
+                "reference_count": (
+                    len(payload.get("images") or [])
+                    + len(payload.get("references") or [])
+                ),
+                "reference_map": payload.get("reference_map") or [],
+                "user_prompt": payload.get("user_prompt", payload.get("prompt", "")),
                 "comfy_prompt_id": result.get("prompt_id"),
                 "gpu_backend": gpu_label,
             }
@@ -252,7 +261,13 @@ class JobWorker(threading.Thread):
                 size_bytes=output_path.stat().st_size,
                 duration=duration,
             )
-            _remove_uploads(payload.get("images") or [])
+            cleanup_paths = list(payload.get("images") or [])
+            cleanup_paths.extend(
+                str(item["path"])
+                for item in (payload.get("references") or [])
+                if isinstance(item, dict) and item.get("temporary") and item.get("path")
+            )
+            _remove_uploads(cleanup_paths)
             return media_id
         except (JobCancelled, ComfyUICancelled):
             output_path.unlink(missing_ok=True)
