@@ -243,6 +243,7 @@ class JobWorker(threading.Thread):
 
             db.insert_media(
                 media_id=media_id,
+                owner_id=str(job.get("owner_id") or "user1"),
                 filename=output_path.name,
                 kind="generated",
                 title=title,
@@ -260,7 +261,10 @@ class JobWorker(threading.Thread):
     def _replace_audio(self, job: dict[str, Any]) -> str:
         payload = job["payload"]
         job_id = job["id"]
-        source = _require_media(payload["media_id"])
+        source = _require_media(
+            payload["media_id"],
+            owner_id=str(job.get("owner_id") or "user1"),
+        )
         source_path = settings.library_dir / source["filename"]
         audio_path = Path(payload["audio_path"])
         if not audio_path.is_file():
@@ -303,6 +307,7 @@ class JobWorker(threading.Thread):
 
             db.insert_media(
                 media_id=media_id,
+                owner_id=str(job.get("owner_id") or "user1"),
                 filename=output_path.name,
                 kind="audio",
                 title=f"{source['title']} · Audio",
@@ -324,7 +329,10 @@ class JobWorker(threading.Thread):
     def _remove_audio(self, job: dict[str, Any]) -> str:
         payload = job["payload"]
         job_id = job["id"]
-        source = _require_media(payload["media_id"])
+        source = _require_media(
+            payload["media_id"],
+            owner_id=str(job.get("owner_id") or "user1"),
+        )
         source_path = settings.library_dir / source["filename"]
 
         media_id = uuid.uuid4().hex
@@ -351,6 +359,7 @@ class JobWorker(threading.Thread):
 
             db.insert_media(
                 media_id=media_id,
+                owner_id=str(job.get("owner_id") or "user1"),
                 filename=output_path.name,
                 kind="silent",
                 title=f"{source['title']} · Без звука",
@@ -377,7 +386,10 @@ class JobWorker(threading.Thread):
         sources: list[dict[str, Any]] = []
         total_duration = 0.0
         for spec in clip_specs:
-            source = _require_media(str(spec["media_id"]))
+            source = _require_media(
+                str(spec["media_id"]),
+                owner_id=str(job.get("owner_id") or "user1"),
+            )
             source_path = settings.library_dir / source["filename"]
             duration = probe_duration(source_path)
             if not duration or duration <= 0:
@@ -535,6 +547,7 @@ class JobWorker(threading.Thread):
             title = str(payload.get("title") or "Монтаж").strip() or "Монтаж"
             db.insert_media(
                 media_id=media_id,
+                owner_id=str(job.get("owner_id") or "user1"),
                 filename=output_path.name,
                 kind="edited",
                 title=title,
@@ -582,8 +595,11 @@ class JobWorker(threading.Thread):
             raise
 
 
-def _require_media(media_id: str) -> dict[str, Any]:
-    media = db.get_media(media_id)
+def _require_media(
+    media_id: str,
+    owner_id: str | None = None,
+) -> dict[str, Any]:
+    media = db.get_media(media_id, owner_id)
     if media is None:
         raise RuntimeError("Video no longer exists in the library.")
     path = settings.library_dir / media["filename"]
