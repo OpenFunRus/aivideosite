@@ -42,6 +42,20 @@ def init_db() -> None:
                 FOREIGN KEY(parent_id) REFERENCES media(id) ON DELETE SET NULL
             );
 
+            CREATE TABLE IF NOT EXISTS characters (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                images_json TEXT NOT NULL DEFAULT '[]',
+                voice_file TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_characters_owner_created
+                ON characters(owner_id, created_at DESC);
+
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
                 owner_id TEXT NOT NULL DEFAULT 'user1',
@@ -653,6 +667,96 @@ def clear_media_except(
     return [_decode_media(row) for row in rows if row["id"] in delete_ids]
 
 
+def insert_character(
+    *,
+    character_id: str,
+    owner_id: str,
+    name: str,
+    description: str,
+    images: list[str],
+    voice_file: str | None,
+) -> None:
+    now = utcnow()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO characters(
+                id, owner_id, name, description, images_json, voice_file,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                character_id,
+                owner_id,
+                name,
+                description,
+                json.dumps(images, ensure_ascii=False),
+                voice_file,
+                now,
+                now,
+            ),
+        )
+
+
+def list_characters(owner_id: str) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+              FROM characters
+             WHERE owner_id=?
+             ORDER BY created_at DESC
+            """,
+            (owner_id,),
+        ).fetchall()
+    return [_decode_character(row) for row in rows]
+
+
+def get_character(character_id: str, owner_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM characters WHERE id=? AND owner_id=?",
+            (character_id, owner_id),
+        ).fetchone()
+    return _decode_character(row) if row else None
+
+
+def update_character(
+    character_id: str,
+    owner_id: str,
+    *,
+    name: str,
+    description: str,
+) -> dict[str, Any] | None:
+    with connect() as conn:
+        cur = conn.execute(
+            """
+            UPDATE characters
+               SET name=?, description=?, updated_at=?
+             WHERE id=? AND owner_id=?
+            """,
+            (name, description, utcnow(), character_id, owner_id),
+        )
+        if cur.rowcount == 0:
+            return None
+    return get_character(character_id, owner_id)
+
+
+def delete_character(character_id: str, owner_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM characters WHERE id=? AND owner_id=?",
+            (character_id, owner_id),
+        ).fetchone()
+        if row is None:
+            return None
+        conn.execute(
+            "DELETE FROM characters WHERE id=? AND owner_id=?",
+            (character_id, owner_id),
+        )
+    return _decode_character(row)
+
+
 def state_counts(owner_id: str | None = None) -> dict[str, int]:
     with connect() as conn:
         if owner_id is None:
@@ -713,4 +817,15 @@ def _decode_media(row: sqlite3.Row) -> dict[str, Any]:
     except Exception:
         item["meta"] = {}
         item.pop("meta_json", None)
+    return item
+
+
+def _decode_character(row: sqlite3.Row) -> dict[str, Any]:
+    item = dict(row)
+    try:
+        images = json.loads(item.pop("images_json"))
+        item["images"] = [str(value) for value in images if value]
+    except Exception:
+        item["images"] = []
+        item.pop("images_json", None)
     return item
