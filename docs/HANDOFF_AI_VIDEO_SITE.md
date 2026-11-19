@@ -234,7 +234,7 @@ ss -ltnp | grep 8188
 ComfyUI-MiniMaxH3-Easy
 ```
 
-Проверенная вручную H3-конфигурация на RTX 3090:
+Исторически проверенная вручную H3-конфигурация на RTX 3090 (после перехода на dual-GPU тот же H3 профиль нужно подтвердить на RTX 2080 Ti mod 22 GB):
 
 - 1344x768;
 - 24 FPS;
@@ -733,6 +733,7 @@ PORT=8000
 
 DATA_DIR=/opt/ai/aivideosite/data
 COMFYUI_URL=http://127.0.0.1:8188
+COMFYUI_WAN_URL=http://127.0.0.1:8189
 COMFYUI_OUTPUT_DIR=/opt/ai/ComfyUI/output
 FFMPEG_BIN=/usr/bin/ffmpeg
 FFPROBE_BIN=/usr/bin/ffprobe
@@ -770,7 +771,7 @@ WorkingDirectory=/opt/ai/ComfyUI
 ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 127.0.0.1 --port 8188
 ```
 
-### ComfyUI Wan / GPU 1
+### ComfyUI Wan / GPU 0
 
 Repo file:
 
@@ -780,8 +781,8 @@ systemd/comfyui-wan.service
 
 Схема GPU isolation:
 
-- `comfyui.service` -> `CUDA_VISIBLE_DEVICES=0` -> физическая RTX 3090 -> port 8188;
-- `comfyui-wan.service` -> `CUDA_VISIBLE_DEVICES=1` -> физическая RTX 2080 Ti 22 GB mod -> port 8189.
+- `comfyui.service` -> `CUDA_VISIBLE_DEVICES=1` -> физическая RTX 2080 Ti mod 22 GB -> H3 -> port 8188;
+- `comfyui-wan.service` -> `CUDA_VISIBLE_DEVICES=0` -> физическая RTX 3090 24 GB -> Wan2.2 S2V -> port 8189.
 
 Оба процесса используют один и тот же installation tree:
 
@@ -798,17 +799,17 @@ User=openfun
 Group=openfun
 WorkingDirectory=/opt/ai/ComfyUI
 Environment=PYTHONUNBUFFERED=1
-Environment=CUDA_VISIBLE_DEVICES=1
+Environment=CUDA_VISIBLE_DEVICES=0
 ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 127.0.0.1 --port 8189
 Restart=always
 ```
 
 ВАЖНО:
 
-- внутри процесса `CUDA_VISIBLE_DEVICES=1` эта физическая GPU будет отображаться приложению как локальная CUDA device 0 — это нормально;
+- внутри каждого процесса выбранная через `CUDA_VISIBLE_DEVICES` физическая GPU отображается приложению как локальная CUDA device 0 — это нормально;
 - текущий сайт пока использует только `COMFYUI_URL=http://127.0.0.1:8188`;
 - интеграция WAN backend `http://127.0.0.1:8189` в сайт ещё не реализована;
-- S2V 14B FP8 на RTX 2080 Ti 22 GB ещё требует runtime smoke test; не считать, что оно гарантированно влезает/работает до реального запуска.
+- Wan2.2 S2V 14B FP8 целенаправленно запускается на RTX 3090 24 GB; runtime smoke test ещё требуется.
 
 ### Site
 
@@ -895,7 +896,7 @@ Wan2.2 S2V подходит для:
 
 ### Выбранный стартовый вариант для dual-GPU VM
 
-Использовать native ComfyUI Wan2.2 S2V. Первый целевой GPU для S2V — отдельная RTX 2080 Ti mod 22 GB через `comfyui-wan.service` на port 8189. RTX 3090 используется как основной целевой GPU для Wan2.2 S2V. Если S2V FP8 не заработает приемлемо на Turing/22 GB, fallback — тестировать Wan на RTX 3090.
+Использовать native ComfyUI Wan2.2 S2V на отдельном backend `http://127.0.0.1:8189`, закреплённом за RTX 3090 24 GB. MiniMax H3 работает через `http://127.0.0.1:8188`, закреплённый за RTX 2080 Ti mod 22 GB.
 
 Основная модель:
 
@@ -1065,7 +1066,7 @@ Demucs/UVR пока НЕ установлен и не интегрирован.
 
 1. Runtime visual/GPU tests выполняются на Ubuntu VM пользователем.
 2. Site-side Wan2.2 S2V ещё не реализован.
-3. Wan2.2 S2V ещё не протестирован на RTX 2080 Ti mod 22 GB в текущей VM; совместимость/VRAM/скорость должны быть подтверждены реальным smoke test.
+3. Wan2.2 S2V ещё не прошёл runtime smoke test на RTX 3090 в новой dual-GPU схеме; H3 также нужно отдельно подтвердить на RTX 2080 Ti mod 22 GB.
 4. Русский singing lip timing через English Wav2Vec2 audio encoder надо проверить empirically.
 5. Lightning LoRA для S2V не является специально обученной S2V LoRA и может портить результат.
 6. H3 quality/max profiles в текущем сайте нельзя считать полностью runtime-tested так же хорошо, как Fast.
