@@ -375,8 +375,12 @@
 
     const miniDot = qs("#gpu-status-dot");
     if (gpu) {
-      miniDot.className = `status-dot ${running ? "busy" : "ok"}`;
-      qs("#gpu-mini-name").textContent = gpu.name || "NVIDIA GPU";
+      const gpuBusy = Number(gpu.utilization || 0) > 5;
+      miniDot.className = `status-dot ${comfy ? (gpuBusy ? "busy" : "ok") : "error"}`;
+      qs("#gpu-mini-name").textContent = (gpu.name || "RTX 3090").replace(
+        "NVIDIA GeForce ",
+        ""
+      );
       qs("#gpu-mini-value").textContent =
         `${gpu.memory_used_mb} / ${gpu.memory_total_mb} MB`;
       qs("#metric-gpu").textContent = (gpu.name || "RTX 3090").replace(
@@ -398,18 +402,32 @@
       qs("#metric-temp").textContent = "—";
     }
 
+    const secondaryMiniDot = qs("#gpu-secondary-status-dot");
     if (secondaryGpu) {
-      qs("#metric-secondary-gpu").textContent = (secondaryGpu.name || "RTX 2080 Ti").replace(
-        "NVIDIA GeForce ",
-        ""
-      );
+      const secondaryBusy = Number(secondaryGpu.utilization || 0) > 5;
+      secondaryMiniDot.className =
+        `status-dot ${comfySecondary ? (secondaryBusy ? "busy" : "ok") : "error"}`;
+      qs("#gpu-secondary-mini-name").textContent = (
+        secondaryGpu.name || "RTX 2080 Ti"
+      ).replace("NVIDIA GeForce ", "");
+      qs("#gpu-secondary-mini-value").textContent =
+        `${secondaryGpu.memory_used_mb} / ${secondaryGpu.memory_total_mb} MB`;
+      qs("#metric-secondary-gpu").textContent = (
+        secondaryGpu.name || "RTX 2080 Ti"
+      ).replace("NVIDIA GeForce ", "");
       qs("#metric-secondary-vram").textContent =
         `${(secondaryGpu.memory_used_mb / 1024).toFixed(1)} / ${(
           secondaryGpu.memory_total_mb / 1024
         ).toFixed(0)} GB VRAM`;
+      qs("#metric-secondary-util").textContent = `${secondaryGpu.utilization}%`;
+      qs("#metric-secondary-temp").textContent = `${secondaryGpu.temperature} °C`;
     } else {
+      secondaryMiniDot.className = "status-dot error";
+      qs("#gpu-secondary-mini-value").textContent = "nvidia-smi недоступен";
       qs("#metric-secondary-gpu").textContent = "Нет данных";
       qs("#metric-secondary-vram").textContent = "—";
+      qs("#metric-secondary-util").textContent = "—";
+      qs("#metric-secondary-temp").textContent = "—";
     }
 
     qs("#metric-disk").textContent = humanBytes(state.system?.disk_free || 0);
