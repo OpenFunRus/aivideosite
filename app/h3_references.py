@@ -150,7 +150,11 @@ def build_reference_prompt(
 
     reference_map: list[dict[str, Any]] = []
     for ordinal, item in enumerate(image_items, start=1):
-        entry = dict(item)
+        entry = {
+            key: value
+            for key, value in item.items()
+            if key not in {"path", "temporary"}
+        }
         entry["label"] = f"<Picture {ordinal}>"
         reference_map.append(entry)
 
@@ -170,13 +174,21 @@ def build_reference_prompt(
                     "character_name": item.get("character_name"),
                 }
             )
-        entry = dict(item)
+        entry = {
+            key: value
+            for key, value in item.items()
+            if key not in {"path", "temporary"}
+        }
         entry["label"] = f"<Video {ordinal}>"
         reference_map.append(entry)
 
     for item in audio_items:
         audio_ordinal += 1
-        entry = dict(item)
+        entry = {
+            key: value
+            for key, value in item.items()
+            if key not in {"path", "temporary"}
+        }
         entry["label"] = f"<Audio {audio_ordinal}>"
         reference_map.append(entry)
 
