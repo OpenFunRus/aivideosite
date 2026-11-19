@@ -19,6 +19,10 @@
         <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
         <span>Генерация</span>
       </button>
+      <button class="nav-item" data-nav="characters" type="button">
+        <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+        <span>Персонажи</span>
+      </button>
       <button class="nav-item" data-nav="editor" type="button">
         <svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg>
         <span>Монтаж</span>
@@ -98,7 +102,7 @@
         <div class="section-heading">
           <div>
             <h2>Создать видео</h2>
-            <p>T2V без кадров, I2V с первым кадром или переход между первым и последним.</p>
+            <p>FL2VA для точных First/Last кадров, Ref2VA для изображений/видео/голосов и Digital Human для audio-driven персонажа.</p>
           </div>
         </div>
 
@@ -106,7 +110,7 @@
           <section class="panel generator-main">
             <div class="panel-header">
               <div>
-                <span class="panel-kicker">MiniMax H3 FL2VA</span>
+                <span class="panel-kicker" id="generator-mode-kicker">MiniMax H3 FL2VA</span>
                 <h3>Сцена</h3>
               </div>
               <span class="badge badge-blue">RTX 3090 · primary</span>
@@ -123,37 +127,126 @@
               <span class="field-help">Для сложного движения обычно стабильнее английский prompt.</span>
             </label>
 
-            <div class="reference-grid">
-              <label class="upload-card" data-upload-card="first">
-                <input type="file" name="first_frame" accept="image/png,image/jpeg,image/webp">
-                <img class="upload-preview" alt="Превью первого кадра" hidden>
-                <button class="upload-remove" type="button" aria-label="Убрать первый кадр" title="Убрать кадр">
-                  <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
-                </button>
-                <span class="upload-content">
-                  <span class="upload-icon">
-                    <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
-                  </span>
-                  <strong>Первый кадр</strong>
-                  <small>Необязательно · PNG/JPG/WebP</small>
-                  <span class="upload-name">Выбрать изображение</span>
-                </span>
+            <div class="generation-mode-switch" role="radiogroup" aria-label="Режим MiniMax H3">
+              <label>
+                <input type="radio" name="generation_mode" value="frames" checked>
+                <span><strong>Кадры</strong><small>FL2VA · T2V / First / Last</small></span>
               </label>
-              <label class="upload-card" data-upload-card="last">
-                <input type="file" name="last_frame" accept="image/png,image/jpeg,image/webp">
-                <img class="upload-preview" alt="Превью последнего кадра" hidden>
-                <button class="upload-remove" type="button" aria-label="Убрать последний кадр" title="Убрать кадр">
-                  <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
-                </button>
-                <span class="upload-content">
-                  <span class="upload-icon">
-                    <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
-                  </span>
-                  <strong>Последний кадр</strong>
-                  <small>Необязательно · нужен только для First/Last</small>
-                  <span class="upload-name">Выбрать изображение</span>
-                </span>
+              <label>
+                <input type="radio" name="generation_mode" value="reference">
+                <span><strong>Референсы</strong><small>Ref2VA · фото / видео / аудио</small></span>
               </label>
+              <label>
+                <input type="radio" name="generation_mode" value="digital_human">
+                <span><strong>Digital Human</strong><small>визуал + driving audio</small></span>
+              </label>
+            </div>
+
+            <div id="frames-mode-panel">
+              <div class="reference-grid">
+                <label class="upload-card" data-upload-card="first">
+                  <input type="file" name="first_frame" accept="image/png,image/jpeg,image/webp">
+                  <img class="upload-preview" alt="Превью первого кадра" hidden>
+                  <button class="upload-remove" type="button" aria-label="Убрать первый кадр" title="Убрать кадр">
+                    <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+                  </button>
+                  <span class="upload-content">
+                    <span class="upload-icon">
+                      <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+                    </span>
+                    <strong>Первый кадр</strong>
+                    <small>Необязательно · точный старт FL2VA</small>
+                    <span class="upload-name">Выбрать изображение</span>
+                  </span>
+                </label>
+                <label class="upload-card" data-upload-card="last">
+                  <input type="file" name="last_frame" accept="image/png,image/jpeg,image/webp">
+                  <img class="upload-preview" alt="Превью последнего кадра" hidden>
+                  <button class="upload-remove" type="button" aria-label="Убрать последний кадр" title="Убрать кадр">
+                    <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+                  </button>
+                  <span class="upload-content">
+                    <span class="upload-icon">
+                      <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+                    </span>
+                    <strong>Последний кадр</strong>
+                    <small>Необязательно · точный финал FL2VA</small>
+                    <span class="upload-name">Выбрать изображение</span>
+                  </span>
+                </label>
+              </div>
+              <input type="hidden" name="keyframe_role" id="keyframe-role" value="first">
+              <p class="mode-note">Один первый кадр = I2V. Один последний кадр автоматически становится Last-frame режимом. Два кадра = точная интерполяция First → Last.</p>
+            </div>
+
+            <div id="reference-mode-panel" hidden>
+              <div class="reference-options-grid">
+                <label class="field" id="reference-task-field">
+                  <span class="field-label">Задача референсов</span>
+                  <select name="reference_task" id="reference-task">
+                    <option value="reference_generation">Reference generation</option>
+                    <option value="keyframe_completion">Storyboard / keyframe completion</option>
+                    <option value="video_editing">Video editing</option>
+                    <option value="video_continuation">Video continuation</option>
+                    <option value="audio_reuse">Audio reuse</option>
+                    <option value="audio_reference">Audio / voice reference</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Размер image reference</span>
+                  <select name="ref_image_size" id="ref-image-size">
+                    <option value="match" selected>Match output</option>
+                    <option value="1k">1K</option>
+                    <option value="1.5k">1.5K</option>
+                    <option value="2k">2K</option>
+                    <option value="original">Original / grid crop</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="reference-section">
+                <div class="reference-section-head">
+                  <div>
+                    <strong>Персонажи</strong>
+                    <small>Сохранённые внешность и, при наличии, голос.</small>
+                  </div>
+                  <button class="btn btn-secondary btn-compact" id="open-characters-from-generator" type="button">Управление</button>
+                </div>
+                <div class="generator-character-list" id="generator-character-list">
+                  <span class="field-help">Персонажи ещё не созданы.</span>
+                </div>
+                <input type="hidden" name="character_ids" id="character-ids" value="[]">
+              </div>
+
+              <div class="reference-upload-grid">
+                <label class="reference-upload">
+                  <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg></span>
+                  <strong>Изображения</strong>
+                  <small>до 9 вместе с Character images</small>
+                  <input id="reference-images" type="file" name="reference_images" multiple accept="image/png,image/jpeg,image/webp">
+                </label>
+                <label class="reference-upload">
+                  <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
+                  <strong>Видео</strong>
+                  <small>до 3 · soundtrack учитывается автоматически</small>
+                  <input id="reference-videos" type="file" name="reference_videos" multiple accept="video/mp4,video/quicktime,video/webm,.mkv,.m4v">
+                </label>
+                <label class="reference-upload">
+                  <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-microphone"></use></svg></span>
+                  <strong id="reference-audio-title">Аудио / голос</strong>
+                  <small id="reference-audio-help">до 3 standalone audio</small>
+                  <input id="reference-audios" type="file" name="reference_audios" multiple accept="audio/*,.flac,.m4a,.aac,.ogg,.opus">
+                </label>
+              </div>
+
+              <div class="reference-file-lists">
+                <div id="reference-images-list"></div>
+                <div id="reference-videos-list"></div>
+                <div id="reference-audios-list"></div>
+              </div>
+              <input type="hidden" name="reference_manifest" id="reference-manifest" value="{}">
+              <div class="reference-budget" id="reference-budget">0 / 15 media · 0 / 9 images · 0 / 3 videos · 0 / 3 audio</div>
+              <p class="mode-note" id="reference-mode-note">Ref2VA использует ссылки &lt;Picture N&gt;, &lt;Video N&gt; и &lt;Audio N&gt;. Storyboard images задают ориентиры, но не являются точными latent-keyframes на произвольной секунде.</p>
             </div>
           </section>
 
@@ -171,31 +264,18 @@
 
             <label class="field resolution-field">
               <span class="field-label">Формат и размер</span>
-              <div class="segmented segmented-three resolution-shape">
-                <label>
-                  <input type="radio" name="resolution_shape" value="square">
-                  <span>
-                    <strong>Квадрат</strong>
-                    <small>1:1</small>
-                  </span>
-                </label>
-                <label>
-                  <input type="radio" name="resolution_shape" value="landscape" checked>
-                  <span>
-                    <strong>Горизонталь</strong>
-                    <small>16:9</small>
-                  </span>
-                </label>
-                <label>
-                  <input type="radio" name="resolution_shape" value="portrait">
-                  <span>
-                    <strong>Вертикаль</strong>
-                    <small>9:16</small>
-                  </span>
-                </label>
-              </div>
+              <select name="resolution_shape" id="resolution-shape" aria-label="Соотношение сторон">
+                <option value="1:1">1:1 · квадрат</option>
+                <option value="2:3">2:3 · фото portrait</option>
+                <option value="3:2">3:2 · фото landscape</option>
+                <option value="3:4">3:4 · portrait standard</option>
+                <option value="4:3">4:3 · standard</option>
+                <option value="9:16">9:16 · vertical</option>
+                <option value="16:9" selected>16:9 · widescreen</option>
+                <option value="21:9">21:9 · ultrawide</option>
+              </select>
               <select name="resolution" id="resolution" aria-label="Размер видео"></select>
-              <span class="field-help">360p / 480p / 720p / 1080p. Размер никогда не ниже выбранного класса: при необходимости округляется вверх до сетки H3 ×32. У квадрата есть 256×256 для быстрых тестов.</span>
+              <span class="field-help">Все локально поддерживаемые H3 ratio. 360p / 480p / 720p / 1080p округляются вверх до сетки ×32; 1:1 дополнительно имеет 256×256 test.</span>
             </label>
 
             <label class="field duration-field">
@@ -321,6 +401,52 @@
             <div><small>Общая очередь</small><strong id="metric-queue">0</strong><span>задач</span></div>
           </article>
         </section>
+      </section>
+
+      <section class="view" data-view="characters">
+        <div class="section-heading">
+          <div>
+            <h2>Персонажи</h2>
+            <p>Личная библиотека постоянных H3-референсов. Каждый пользователь видит только своих персонажей.</p>
+          </div>
+        </div>
+
+        <section class="panel character-create-panel">
+          <div class="panel-header">
+            <div>
+              <span class="panel-kicker">REUSABLE SUBJECT</span>
+              <h3>Новый персонаж</h3>
+            </div>
+          </div>
+          <form id="character-form" class="character-form">
+            <label class="field">
+              <span class="field-label">Имя</span>
+              <input name="name" maxlength="80" required placeholder="Например: Лиса">
+            </label>
+            <label class="field character-description-field">
+              <span class="field-label">Неизменяемые особенности</span>
+              <textarea name="description" rows="3" maxlength="2000" placeholder="Лицо, шерсть/волосы, одежда, пропорции, постоянные аксессуары..."></textarea>
+            </label>
+            <label class="field">
+              <span class="field-label">Reference images</span>
+              <input name="images" type="file" multiple required accept="image/png,image/jpeg,image/webp">
+              <span class="field-help">1–4 картинки. Они считаются в общем лимите Ref2VA 9 images.</span>
+            </label>
+            <label class="field">
+              <span class="field-label">Voice reference · необязательно</span>
+              <input name="voice" type="file" accept="audio/*,.flac,.m4a,.aac,.ogg,.opus">
+              <span class="field-help">Голос хранится вместе с персонажем и при выборе добавляется как Audio reference.</span>
+            </label>
+            <button class="btn btn-primary" id="character-create" type="submit">Сохранить персонажа</button>
+          </form>
+        </section>
+
+        <div class="character-grid" id="character-grid"></div>
+        <div class="empty-state" id="character-empty">
+          <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+          <h3>Персонажей пока нет</h3>
+          <p>Создайте постоянный набор внешности и голоса для повторных генераций.</p>
+        </div>
       </section>
 
       <section class="view" data-view="editor">
@@ -505,6 +631,10 @@
     <button class="active" data-nav="generate" type="button">
       <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
       <span>Создать</span>
+    </button>
+    <button data-nav="characters" type="button">
+      <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+      <span>Персонажи</span>
     </button>
     <button data-nav="editor" type="button">
       <svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg>
