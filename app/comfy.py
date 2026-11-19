@@ -54,17 +54,44 @@ class ComfyUIClient:
             raise ComfyUICancelled("Generation cancelled.")
 
         uploaded_images: list[str] = []
-        for index, local_path in enumerate(payload.get("images") or [], start=1):
-            if should_cancel and should_cancel():
-                raise ComfyUICancelled("Generation cancelled.")
-            progress(3 + index * 2, f"Загрузка кадра {index} в ComfyUI")
-            uploaded_images.append(self.upload_image(Path(local_path)))
+        staged_references: list[dict[str, str]] = []
+        staging_dir: Path | None = None
+        generation_mode = str(payload.get("generation_mode") or "frames")
+
+        if generation_mode == "frames":
+            for index, local_path in enumerate(payload.get("images") or [], start=1):
+                if should_cancel and should_cancel():
+                    raise ComfyUICancelled("Generation cancelled.")
+                progress(3 + index * 2, f"Загрузка кадра {index} в ComfyUI")
+                uploaded_images.append(self.upload_image(Path(local_path)))
+        else:
+            staging_dir = settings.comfyui_input_dir / "aivideosite" / job_id
+            staging_dir.mkdir(parents=True, exist_ok=True)
+            references = payload.get("references") or []
+            for index, item in enumerate(references, start=1):
+                if should_cancel and should_cancel():
+                    raise ComfyUICancelled("Generation cancelled.")
+                if not isinstance(item, dict):
+                    continue
+                media_type = str(item.get("type") or "").strip().lower()
+                if media_type not in {"image", "video", "audio"}:
+                    raise ComfyUIError(f"Unsupported reference media type: {media_type!r}")
+                source = Path(str(item.get("path") or ""))
+                if not source.is_file():
+                    raise ComfyUIError(f"Reference file not found: {source}")
+                suffix = source.suffix.lower()
+                destination = staging_dir / f"{index:02d}_{uuid.uuid4().hex}{suffix}"
+                shutil.copy2(source, destination)
+                relative = destination.relative_to(settings.comfyui_input_dir).as_posix()
+                staged_references.append({"type": media_type, "name": relative})
+                progress(3 + min(index, 10), f"Подготовка reference media {index}")
 
         client_id = uuid.uuid4().hex
         workflow = self._build_h3_workflow(
             job_id=job_id,
             payload=payload,
             uploaded_images=uploaded_images,
+            staged_references=staged_references,
         )
 
         progress(8, "Передача H3-задачи в ComfyUI")
@@ -85,6 +112,8 @@ class ComfyUIClient:
             timeout=30,
         )
         if not response.ok:
+            if staging_dir is not None:
+                shutil.rmtree(staging_dir, ignore_errors=True)
             raise ComfyUIError(
                 f"ComfyUI rejected workflow ({response.status_code}): "
                 f"{response.text[-3000:]}"
@@ -119,6 +148,8 @@ class ComfyUIClient:
         history = self._wait_history(prompt_id, progress, should_cancel=should_cancel)
         output = self._find_video_output(history)
         if output is None:
+            if staging_dir is not None:
+                shutil.rmtree(staging_dir, ignore_errors=True)
             raise ComfyUIError(
                 "ComfyUI finished the task but no saved video was found in history."
             )
@@ -127,11 +158,14 @@ class ComfyUIClient:
         self._download_output(output, destination)
         progress(97, "Видео сохранено")
 
-        return {
+        result = {
             "prompt_id": prompt_id,
             "comfy_output": output,
             "seed": int(payload.get("seed", 0)),
         }
+        if staging_dir is not None:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+        return result
 
     def free_memory(self) -> bool:
         """Ask ComfyUI to unload all models and release cached GPU memory."""
@@ -199,6 +233,7 @@ class ComfyUIClient:
         job_id: str,
         payload: dict[str, Any],
         uploaded_images: list[str],
+        staged_references: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         profile = str(payload.get("profile") or "steps8").lower()
         profiles = {
@@ -215,7 +250,22 @@ class ComfyUIClient:
         }
         profile_config = profiles.get(profile, profiles["steps8"])
         steps = int(profile_config["steps"])
-        use_turbo = bool(profile_config["turbo"])
+        generation_mode = str(payload.get("generation_mode") or "frames")
+        easy_mode = {
+            "frames": "image",
+            "reference": "reference",
+            "digital_human": "digital_human",
+        }.get(generation_mode, "image")
+        turbo_lora = (
+            settings.h3_turbo_lora
+            if easy_mode == "image"
+            else settings.h3_ref_turbo_lora
+        )
+        use_turbo = bool(profile_config["turbo"]) and str(turbo_lora).strip().lower() not in {"", "none"}
+        if easy_mode != "image" and str(settings.h3_ref2va_model).strip().lower() in {"", "none"}:
+            raise ComfyUIError(
+                "Ref2VA mode is not configured. Set H3_REF2VA_MODEL to a Ref2VA checkpoint."
+            )
         seed = int(payload.get("seed", -1))
         if seed < 0:
             seed = secrets.randbelow(2**32)
@@ -230,8 +280,11 @@ class ComfyUIClient:
         if not prompt:
             raise ComfyUIError("Prompt is empty.")
 
-        if len(uploaded_images) > 2:
+        staged_references = staged_references or []
+        if easy_mode == "image" and len(uploaded_images) > 2:
             raise ComfyUIError("FL2VA image mode supports at most two keyframes.")
+        if easy_mode != "image" and len(staged_references) > 15:
+            raise ComfyUIError("Ref2VA supports at most 15 media resources.")
 
         aspect = _aspect_ratio(width, height)
 
@@ -250,7 +303,7 @@ class ComfyUIClient:
                 "class_type": "MiniMaxH3Easy",
                 "inputs": {
                     "h3_bundle": ["1", 0],
-                    "mode": "image",
+                    "mode": easy_mode,
                     "prompt": prompt,
                     "resolution": "custom",
                     "aspect_ratio": aspect,
@@ -259,8 +312,8 @@ class ComfyUIClient:
                     "seconds": seconds,
                     "advanced": True,
                     "fps": fps,
-                    "keyframe_role": "first",
-                    "ref_image_size": "original",
+                    "keyframe_role": str(payload.get("keyframe_role") or "first"),
+                    "ref_image_size": str(payload.get("ref_image_size") or ("original" if easy_mode == "image" else "match")),
                     "reference_mention_mode": "index",
                     "prompt_optimizer_settings": False,
                     "prompt_optimizer_scene_guide": "none",
@@ -340,19 +393,38 @@ class ComfyUIClient:
                 "class_type": "LoraLoaderModelOnly",
                 "inputs": {
                     "model": ["2", 0],
-                    "lora_name": settings.h3_turbo_lora,
+                    "lora_name": turbo_lora,
                     "strength_model": 1.0,
                 },
             }
 
-        for index, image_name in enumerate(uploaded_images, start=1):
-            node_id = str(100 + index)
-            workflow[node_id] = {
-                "class_type": "LoadImage",
-                "inputs": {"image": image_name},
+        if easy_mode == "image":
+            for index, image_name in enumerate(uploaded_images, start=1):
+                node_id = str(100 + index)
+                workflow[node_id] = {
+                    "class_type": "LoadImage",
+                    "inputs": {"image": image_name},
+                }
+                workflow["2"]["inputs"][f"media_{index}"] = [node_id, 0]
+                workflow["2"]["inputs"][f"media_type_{index}"] = "image"
+        else:
+            loader_types = {
+                "image": ("LoadImage", "image"),
+                "video": ("LoadVideo", "file"),
+                "audio": ("LoadAudio", "audio"),
             }
-            workflow["2"]["inputs"][f"media_{index}"] = [node_id, 0]
-            workflow["2"]["inputs"][f"media_type_{index}"] = "image"
+            for index, item in enumerate(staged_references, start=1):
+                media_type = str(item.get("type") or "")
+                if media_type not in loader_types:
+                    raise ComfyUIError(f"Unsupported reference media type: {media_type!r}")
+                class_type, input_name = loader_types[media_type]
+                node_id = str(100 + index)
+                workflow[node_id] = {
+                    "class_type": class_type,
+                    "inputs": {input_name: item["name"]},
+                }
+                workflow["2"]["inputs"][f"media_{index}"] = [node_id, 0]
+                workflow["2"]["inputs"][f"media_type_{index}"] = media_type
 
         return workflow
 
