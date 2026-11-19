@@ -174,8 +174,8 @@ async def api_state(
 async def api_generate(
     request: Request,
     prompt: Annotated[str, Form()],
-    width: Annotated[int, Form()] = 1344,
-    height: Annotated[int, Form()] = 768,
+    width: Annotated[int, Form()] = 1312,
+    height: Annotated[int, Form()] = 736,
     seconds: Annotated[float, Form()] = 5.0,
     fps: Annotated[float, Form()] = 24.0,
     profile: Annotated[str, Form()] = "steps8",
