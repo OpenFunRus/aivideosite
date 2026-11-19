@@ -125,17 +125,27 @@ def clone_failed_job(source_job_id: str, new_job_id: str) -> dict[str, Any]:
     return source
 
 
-def claim_next_job() -> dict[str, Any] | None:
+def claim_next_job(kinds: set[str] | None = None) -> dict[str, Any] | None:
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        params: list[Any] = []
+        kind_clause = ""
+        if kinds:
+            ordered_kinds = sorted(kinds)
+            placeholders = ",".join("?" for _ in ordered_kinds)
+            kind_clause = f" AND kind IN ({placeholders})"
+            params.extend(ordered_kinds)
+
         row = conn.execute(
-            """
+            f"""
             SELECT *
               FROM jobs
              WHERE status='queued' AND cancel_requested=0
+                   {kind_clause}
              ORDER BY created_at ASC
              LIMIT 1
-            """
+            """,
+            params,
         ).fetchone()
         if row is None:
             conn.execute("COMMIT")
