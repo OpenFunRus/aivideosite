@@ -597,7 +597,10 @@ def get_system_status() -> dict:
         disk = shutil.disk_usage(settings.data_dir)
         status = {
             "comfyui": ComfyUIClient().health(),
+            "comfyui_wan": ComfyUIClient(settings.comfyui_wan_url).health(),
             "gpu": None,
+            "wan_gpu": None,
+            "gpus": [],
             "disk_free": disk.free,
             "disk_total": disk.total,
         }
@@ -606,7 +609,7 @@ def get_system_status() -> dict:
             result = subprocess.run(
                 [
                     "nvidia-smi",
-                    "--query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu",
+                    "--query-gpu=index,name,memory.used,memory.total,utilization.gpu,temperature.gpu",
                     "--format=csv,noheader,nounits",
                 ],
                 check=True,
@@ -614,16 +617,30 @@ def get_system_status() -> dict:
                 text=True,
                 timeout=3,
             )
-            first = result.stdout.strip().splitlines()[0]
-            parts = [part.strip() for part in first.split(",")]
-            if len(parts) >= 5:
-                status["gpu"] = {
-                    "name": parts[0],
-                    "memory_used_mb": int(parts[1]),
-                    "memory_total_mb": int(parts[2]),
-                    "utilization": int(parts[3]),
-                    "temperature": int(parts[4]),
-                }
+            gpus = []
+            for line in result.stdout.strip().splitlines():
+                parts = [part.strip() for part in line.split(",")]
+                if len(parts) < 6:
+                    continue
+                gpus.append(
+                    {
+                        "index": int(parts[0]),
+                        "name": parts[1],
+                        "memory_used_mb": int(parts[2]),
+                        "memory_total_mb": int(parts[3]),
+                        "utilization": int(parts[4]),
+                        "temperature": int(parts[5]),
+                    }
+                )
+            status["gpus"] = gpus
+            status["wan_gpu"] = next(
+                (gpu for gpu in gpus if gpu["index"] == 0),
+                gpus[0] if gpus else None,
+            )
+            status["gpu"] = next(
+                (gpu for gpu in gpus if gpu["index"] == 1),
+                gpus[0] if gpus else None,
+            )
         except Exception:
             pass
 
