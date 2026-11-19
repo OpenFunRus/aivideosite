@@ -242,26 +242,26 @@
   const RESOLUTION_PRESETS = {
     square: [
       { value: "256x256", tier: "draft", label: "256 × 256 · быстрый тест" },
-      { value: "352x352", tier: "360", label: "360p · 352 × 352" },
+      { value: "384x384", tier: "360", label: "360p · 384 × 384" },
       { value: "480x480", tier: "480", label: "480p · 480 × 480" },
-      { value: "704x704", tier: "720", label: "720p · 704 × 704" },
+      { value: "736x736", tier: "720", label: "720p · 736 × 736" },
       { value: "1088x1088", tier: "1080", label: "1080p · 1088 × 1088" },
     ],
     landscape: [
-      { value: "640x352", tier: "360", label: "360p · 640 × 352" },
+      { value: "672x384", tier: "360", label: "360p · 672 × 384" },
       { value: "864x480", tier: "480", label: "480p · 864 × 480" },
-      { value: "1248x704", tier: "720", label: "720p · 1248 × 704" },
+      { value: "1312x736", tier: "720", label: "720p · 1312 × 736" },
       { value: "1920x1088", tier: "1080", label: "1080p · 1920 × 1088" },
     ],
     portrait: [
-      { value: "352x640", tier: "360", label: "360p · 352 × 640" },
+      { value: "384x672", tier: "360", label: "360p · 384 × 672" },
       { value: "480x864", tier: "480", label: "480p · 480 × 864" },
-      { value: "704x1248", tier: "720", label: "720p · 704 × 1248" },
+      { value: "736x1312", tier: "720", label: "720p · 736 × 1312" },
       { value: "1088x1920", tier: "1080", label: "1080p · 1088 × 1920" },
     ],
   };
   const DEFAULT_RESOLUTION_SHAPE = "landscape";
-  const DEFAULT_RESOLUTION = "1248x704";
+  const DEFAULT_RESOLUTION = "1312x736";
   const LEGACY_PROFILE_MAP = {
     fast: "steps8",
     quality: "steps20",
@@ -283,6 +283,17 @@
     if (!width || !height) return DEFAULT_RESOLUTION_SHAPE;
     if (width === height) return "square";
     return width > height ? "landscape" : "portrait";
+  };
+
+  const inferResolutionTier = (value) => {
+    const [width, height] = String(value || "").split("x").map(Number);
+    if (!width || !height) return "";
+    const shortSide = Math.min(width, height);
+    if (width === height && shortSide <= 256) return "draft";
+    if (shortSide <= 400) return "360";
+    if (shortSide <= 600) return "480";
+    if (shortSide <= 900) return "720";
+    return "1080";
   };
 
   const renderResolutionOptions = (
@@ -369,7 +380,11 @@
       generationForm
     );
     if (shapeInput) shapeInput.checked = true;
-    renderResolutionOptions(shape, savedResolution);
+    renderResolutionOptions(
+      shape,
+      savedResolution,
+      inferResolutionTier(savedResolution)
+    );
 
     if (!saved || typeof saved !== "object") {
       updateSeconds();
