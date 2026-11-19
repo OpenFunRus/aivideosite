@@ -610,6 +610,28 @@ def clear_nonrunning_jobs(
     return [_decode_job(row) for row in rows]
 
 
+def active_character_ids(owner_id: str) -> set[str]:
+    protected: set[str] = set()
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT payload_json
+              FROM jobs
+             WHERE owner_id=? AND status IN ('queued', 'running')
+            """,
+            (owner_id,),
+        ).fetchall()
+    for row in rows:
+        try:
+            payload = json.loads(row["payload_json"])
+        except Exception:
+            continue
+        for item in payload.get("references") or []:
+            if isinstance(item, dict) and item.get("character_id"):
+                protected.add(str(item["character_id"]))
+    return protected
+
+
 def active_media_ids(owner_id: str | None = None) -> set[str]:
     protected: set[str] = set()
     with connect() as conn:
