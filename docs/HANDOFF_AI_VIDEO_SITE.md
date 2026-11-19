@@ -14,7 +14,7 @@
 
 ## 1. Цель проекта
 
-`aivideosite` — локальная веб-панель для AI-видео на одной Ubuntu VM с RTX 3090 24 GB.
+`aivideosite` — локальная веб-панель для AI-видео на одной Ubuntu VM с двумя GPU: RTX 3090 24 GB и RTX 2080 Ti mod 22 GB.
 
 Основные задачи:
 
@@ -1026,9 +1026,9 @@ Wan2.2 S2V подходит для:
 - facial motion;
 - head/body motion.
 
-### Выбранный стартовый вариант для RTX 3090 24 GB
+### Выбранный стартовый вариант для dual-GPU VM
 
-Использовать native ComfyUI Wan2.2 S2V.
+Использовать native ComfyUI Wan2.2 S2V. Первый целевой GPU для S2V — отдельная RTX 2080 Ti mod 22 GB через `comfyui-wan.service` на port 8189. RTX 3090 остаётся основным GPU для H3/LatentSync. Если S2V FP8 не заработает приемлемо на Turing/22 GB, fallback — тестировать Wan на RTX 3090.
 
 Основная модель:
 
@@ -1200,7 +1200,7 @@ Demucs/UVR пока НЕ установлен и не интегрирован.
 
 1. Runtime visual/GPU tests выполняются на Ubuntu VM пользователем.
 2. Site-side Wan2.2 S2V ещё не реализован.
-3. Wan2.2 S2V на RTX 3090 ещё не протестирован в текущей VM.
+3. Wan2.2 S2V ещё не протестирован на RTX 2080 Ti mod 22 GB в текущей VM; совместимость/VRAM/скорость должны быть подтверждены реальным smoke test.
 4. Русский singing lip timing через English Wav2Vec2 audio encoder надо проверить empirically.
 5. Lightning LoRA для S2V не является специально обученной S2V LoRA и может портить результат.
 6. H3 quality/max profiles в текущем сайте нельзя считать полностью runtime-tested так же хорошо, как Fast.
