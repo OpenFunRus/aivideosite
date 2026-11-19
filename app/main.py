@@ -280,6 +280,11 @@ async def api_delete_character(
     character_id: str,
     user_id: str = Depends(require_user),
 ):
+    if character_id in db.active_character_ids(user_id):
+        raise HTTPException(
+            409,
+            "Персонаж используется активной задачей. Дождитесь завершения или отмените задачу.",
+        )
     character = db.delete_character(character_id, user_id)
     if character is None:
         raise HTTPException(404, "Персонаж не найден.")
