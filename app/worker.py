@@ -605,6 +605,7 @@ def _generation_context(source: dict[str, Any]) -> dict[str, Any]:
         "generate_audio",
         "reference_count",
         "comfy_prompt_id",
+        "gpu_backend",
     )
     return {key: meta.get(key) for key in keys if key in meta}
 
