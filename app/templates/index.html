@@ -67,9 +67,15 @@
 
   <div class="workspace">
     <header class="topbar">
-      <div>
-        <span class="eyebrow">LOCAL GPU WORKSPACE</span>
-        <h1 id="page-title">Генерация</h1>
+      <div class="topbar-left">
+        <button class="guide-trigger" id="prompt-guide-open" type="button" title="Открыть гайд по промптам MiniMax H3">
+          <svg class="icon"><use href="/static/icons.svg#icon-info"></use></svg>
+          <span>Гайд</span>
+        </button>
+        <div>
+          <span class="eyebrow">LOCAL GPU WORKSPACE</span>
+          <h1 id="page-title">Генерация</h1>
+        </div>
       </div>
       <div class="topbar-status">
         <span class="status-pill" id="comfy-status">
@@ -515,6 +521,326 @@
     </button>
   </nav>
 </div>
+
+<dialog class="guide-dialog" id="prompt-guide-dialog">
+  <div class="guide-shell">
+    <header class="guide-header">
+      <div>
+        <span class="panel-kicker">MINIMAX H3 PROMPTING</span>
+        <h2>Как писать сильные промпты для MiniMax H3</h2>
+        <p>Практическая версия для нашего сайта: T2V, первый кадр и переход между первым и последним кадром.</p>
+      </div>
+      <button class="icon-btn guide-close" type="button" data-close-guide aria-label="Закрыть гайд">
+        <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+      </button>
+    </header>
+
+    <div class="guide-layout">
+      <nav class="guide-nav" aria-label="Разделы гайда">
+        <a href="#guide-quick">За минуту</a>
+        <a href="#guide-structure">Структура</a>
+        <a href="#guide-shots">Кадры и тайминг</a>
+        <a href="#guide-camera">Камера</a>
+        <a href="#guide-frames">Первый / последний кадр</a>
+        <a href="#guide-dialogue">Диалоги и звук</a>
+        <a href="#guide-negative">Ограничения</a>
+        <a href="#guide-examples">Примеры</a>
+        <a href="#guide-ai">Для нейронки</a>
+      </nav>
+
+      <article class="guide-content">
+        <section class="guide-hero" id="guide-quick">
+          <div class="guide-badge">Главное правило</div>
+          <h3>H3 лучше понимает не «красивый абзац», а режиссёрский план по времени</h3>
+          <p>Пишите, что камера видит, что персонаж делает по порядку и что слышно. Для нашего FL2VA-пайплайна prompt optimizer выключен, поэтому ваш текст уходит в H3 практически как есть.</p>
+          <div class="guide-rule-grid">
+            <div><strong>1</strong><span>Три поля в одном и том же порядке</span></div>
+            <div><strong>2</strong><span>Каждый Shot — конкретная картинка + действие</span></div>
+            <div><strong>3</strong><span>Склейки имеют точное время</span></div>
+            <div><strong>4</strong><span>Звук разложен по слоям</span></div>
+            <div><strong>5</strong><span>Диалог остаётся на языке героя</span></div>
+            <div><strong>6</strong><span>Ограничения пишутся прямо в prompt</span></div>
+          </div>
+          <div class="guide-callout">
+            <strong>Для нашего сайта:</strong> поддержаны text-to-video, один <em>первый</em> кадр и пара <em>первый + последний</em>. Characters, Video References и полноценный Ref2VA сейчас в интерфейс не подключены, поэтому этот гайд их намеренно не использует.
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-structure">
+          <span class="guide-section-index">01</span>
+          <h3>Базовая структура промпта</h3>
+          <p>Для обычного текста используйте три поля. Названия полей оставляйте на английском. Визуальные инструкции и камера тоже обычно стабильнее на английском; реплики и надписи оставляйте в нужном языке.</p>
+
+          <div class="guide-code-card">
+            <div class="guide-code-head">
+              <strong>Универсальный шаблон</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-basic-template">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+                Копировать
+              </button>
+            </div>
+            <pre id="guide-basic-template">integrated_multimodal_description: [Shot 1] Live-action, cinematic, a [shot size] frames [subject] in [place], [starting state]. The camera [one clear camera behavior]. [Actions in exact chronological order]. [Synchronized action sounds and dialogue if needed].
+
+overall_soundscape: [Continuous ambience and physical sounds across the clip].
+
+non_diegetic_music: [Instruments, tempo, rhythm and dynamics, or N/A].</pre>
+          </div>
+
+          <div class="guide-three-columns">
+            <div>
+              <code>integrated_multimodal_description</code>
+              <p>Картинка, действия, камера, склейки, реплики, смех, удары, музыка из радио в самой сцене.</p>
+            </div>
+            <div>
+              <code>overall_soundscape</code>
+              <p>Фоновая среда всего ролика: ветер, дождь, комната, толпа, шаги, дыхание, далёкий транспорт.</p>
+            </div>
+            <div>
+              <code>non_diegetic_music</code>
+              <p>Только музыка для зрителя. Если её не надо — пишите <code>N/A</code>.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-shots">
+          <span class="guide-section-index">02</span>
+          <h3>Кадры, склейки и тайминг</h3>
+          <ul class="guide-list">
+            <li><strong>[Shot 1]</strong> начинается без времени: стиль, размер плана, кто в кадре, где он и в каком состоянии.</li>
+            <li>Каждый следующий план получает точный момент склейки: <code>[Shot 2] At 00:04.000, the camera cuts to...</code></li>
+            <li>Время склеек всегда растёт и не выходит за длительность ролика.</li>
+            <li>Последний Shot продолжается до самого конца клипа.</li>
+            <li>Склейка должна добавлять новое: другой ракурс, состояние, место, героя или момент. Если нужен просто более крупный план — чаще лучше подвинуть камеру.</li>
+            <li>Для одного дубля используйте только <strong>[Shot 1]</strong> и прямо напишите <code>in one continuous shot with no cuts</code>.</li>
+          </ul>
+
+          <div class="guide-tip-row">
+            <div class="guide-tip good">
+              <strong>Хорошо</strong>
+              <p>“He turns 180 degrees, pauses, raises his right hand, then walks toward the door.”</p>
+            </div>
+            <div class="guide-tip bad">
+              <strong>Слабо</strong>
+              <p>“He acts dramatically and goes away.”</p>
+            </div>
+          </div>
+
+          <div class="guide-callout">
+            <strong>Практически:</strong> для 5 секунд чаще всего стабильнее один насыщенный Shot. Для 10 секунд — один длинный или 2–3 понятных плана. Чем больше событий вы пытаетесь впихнуть в секунду, тем сильнее H3 начинает пропускать действия.
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-camera">
+          <span class="guide-section-index">03</span>
+          <h3>Движения камеры</h3>
+          <p>Пишите движение камеры обычным предложением внутри Shot. Не складывайте пять операторских команд в конец одной строки.</p>
+          <div class="guide-camera-grid">
+            <div><code>static shot</code><span>камера стоит</span></div>
+            <div><code>push in</code><span>камера физически приближается</span></div>
+            <div><code>pull out</code><span>камера отъезжает</span></div>
+            <div><code>zoom in / out</code><span>меняется объектив, камера стоит</span></div>
+            <div><code>pan left / right</code><span>поворот камеры на месте</span></div>
+            <div><code>tilt up / down</code><span>наклон вверх / вниз</span></div>
+            <div><code>truck left / right</code><span>боковое движение камеры</span></div>
+            <div><code>pedestal up / down</code><span>подъём / опускание камеры</span></div>
+            <div><code>tracking shot</code><span>следует за героем</span></div>
+            <div><code>arc shot</code><span>движется по дуге вокруг героя</span></div>
+            <div><code>POV</code><span>вид глазами персонажа</span></div>
+            <div><code>shake slightly</code><span>лёгкая ручная дрожь</span></div>
+          </div>
+          <p class="guide-muted">Точность можно добавить фразами <code>with small amplitude</code>, <code>with large amplitude</code>, <code>at slow speed</code>, <code>at fast speed</code>.</p>
+        </section>
+
+        <section class="guide-section" id="guide-frames">
+          <span class="guide-section-index">04</span>
+          <h3>Первый кадр и первый + последний</h3>
+
+          <h4>Только первый кадр</h4>
+          <p>Считайте загруженную картинку точным стартом ролика. Не выдумывайте заново лицо, одежду, предметы и ракурс — начните с первого движения, которое должно произойти из этого состояния.</p>
+          <div class="guide-code-card">
+            <div class="guide-code-head">
+              <strong>I2V / первый кадр</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-first-frame-template">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+                Копировать
+              </button>
+            </div>
+            <pre id="guide-first-frame-template">For the target video, at 0.00 seconds into the target video, &lt;Picture 1&gt; (from [Shot 1]) is fully referenced.
+
+integrated_multimodal_description: [Shot 1] Live-action, cinematic, the composition, identity, clothing, props and lighting established by Picture 1 remain consistent. The camera [movement]. Starting from the exact first-frame state, [chronological action] and ends with [clear final state].
+
+overall_soundscape: [Ambience and physical sounds].
+
+non_diegetic_music: N/A</pre>
+          </div>
+
+          <h4>Первый + последний кадр</h4>
+          <p>Здесь важнее всего не описать две картинки, а объяснить <strong>видимый путь между ними</strong>: как меняется поза, положение рук, предмет, камера и композиция. Для интерполяции чаще стабильнее один непрерывный Shot.</p>
+          <div class="guide-code-card">
+            <div class="guide-code-head">
+              <strong>FL2V / первый + последний</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-first-last-template">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+                Копировать
+              </button>
+            </div>
+            <pre id="guide-first-last-template">How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 1) aligns with the 10.00-second mark of the target video.
+
+integrated_multimodal_description: [Shot 1] In one continuous shot with no cuts, the video begins exactly from Picture 1. The camera [behavior]. [Describe every visible intermediate change in chronological order]. During the final seconds, the subject, objects and camera progressively settle into the pose, spacing and composition established by Picture 2.
+
+overall_soundscape: [Ambience and physical sounds].
+
+non_diegetic_music: N/A</pre>
+          </div>
+          <p class="guide-muted">В строке выравнивания замените 10.00 на выбранную длительность. Если финальный кадр относится к Shot 2 или Shot 3 — укажите соответствующий номер.</p>
+        </section>
+
+        <section class="guide-section" id="guide-dialogue">
+          <span class="guide-section-index">05</span>
+          <h3>Диалоги, голос и звук</h3>
+          <p>Говорящим персонажам давайте стабильные ID: <code>(S1)</code>, <code>(S2)</code>. Саму реплику заключайте в <code>&lt;d&gt;</code> и оставляйте на языке, который должен реально прозвучать.</p>
+          <div class="guide-code-card">
+            <div class="guide-code-head">
+              <strong>Русская реплика</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-dialogue-example">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+                Копировать
+              </button>
+            </div>
+            <pre id="guide-dialogue-example">A woman (S1), speaking on-screen in a calm medium-pitched voice at a natural pace, looks directly at the camera and says: &lt;d&gt;[Russian] Я люблю Котика.&lt;/d&gt;</pre>
+          </div>
+
+          <ul class="guide-list">
+            <li>Описание голоса задавайте один раз: тембр, высота, темп, акцент — только если это важно.</li>
+            <li>Не дублируйте слова героя в <code>overall_soundscape</code>.</li>
+            <li>Длинная реплика в коротком Shot ухудшает синхронизацию губ — сокращайте текст или выделяйте больше времени.</li>
+            <li>Закадровый голос обозначайте явно как <code>off-screen voiceover</code>; если человек виден, можно отдельно указать, что его губы остаются закрыты.</li>
+            <li>Музыка из радио/телефона/колонки в сцене — это часть <code>integrated_multimodal_description</code>. Фоновый саундтрек для зрителя — <code>non_diegetic_music</code>.</li>
+          </ul>
+
+          <div class="guide-callout warning">
+            <strong>Важно:</strong> чтобы H3-звук попал в готовый MP4 на нашем сайте, включите «Генерировать со звуком». Если чекбокс выключен, видео экспортируется без нативной аудиодорожки H3.
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-negative">
+          <span class="guide-section-index">06</span>
+          <h3>Как задавать запреты и удерживать действие</h3>
+          <p>Отдельного Negative Prompt у нас нет. Ограничения пишите простыми конкретными предложениями в основном описании.</p>
+          <div class="guide-rule-grid compact">
+            <div><strong>✓</strong><span>No subtitles, captions, logos, watermarks, or on-screen text.</span></div>
+            <div><strong>✓</strong><span>His feet stay planted; only his torso and right arm move.</span></div>
+            <div><strong>✓</strong><span>No extra people enter the frame.</span></div>
+            <div><strong>✓</strong><span>The cassette player remains in his left jacket pocket.</span></div>
+          </div>
+          <p class="guide-muted">Лучше четыре точных ограничения, связанных со сценой, чем двадцать общих “no bad anatomy, no artifacts…” — длинный negative-список конкурирует с самим действием.</p>
+        </section>
+
+        <section class="guide-section" id="guide-examples">
+          <span class="guide-section-index">07</span>
+          <h3>Готовые примеры</h3>
+
+          <div class="guide-example">
+            <div class="guide-code-head">
+              <strong>5 секунд · один Shot · без музыки</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-example-one">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+                Копировать
+              </button>
+            </div>
+            <pre id="guide-example-one">integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium shot frames a tired mechanic standing beside an old car inside a dim garage. The camera pushes in with small amplitude at slow speed. He wipes both hands on a rag, exhales, looks toward the open hood, then closes it with one firm motion and rests both palms on the metal. The hood closes with a heavy metallic thud. No subtitles, logos, or watermarks.
+
+overall_soundscape: A fluorescent light hums above the garage, distant traffic passes outside, and tools lightly rattle on a metal bench.
+
+non_diegetic_music: N/A</pre>
+          </div>
+
+          <div class="guide-example">
+            <div class="guide-code-head">
+              <strong>10 секунд · два Shot · русский диалог</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-example-dialogue">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+                Копировать
+              </button>
+            </div>
+            <pre id="guide-example-dialogue">integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-wide shot frames two men beside an industrial control panel in a dim workshop. The camera holds a static shot. The older man (S1), speaking on-screen in a low stern voice, points sharply at the controls and says: &lt;d&gt;[Russian] Харис, жми кнопки.&lt;/d&gt; The younger man (S2) hesitates with his hand above the panel and replies in a quiet uncertain voice: &lt;d&gt;[Russian] А точно сработает?&lt;/d&gt; [Shot 2] At 00:06.000, the camera cuts to a close-up of S1. He gives a confident dismissive wave and says: &lt;d&gt;[Russian] Да я так тыщу раз делал!&lt;/d&gt; No subtitles or on-screen text.
+
+overall_soundscape: Ventilation fans drone steadily, relays click inside the control cabinet, and a distant machine vibrates through the room.
+
+non_diegetic_music: N/A</pre>
+          </div>
+        </section>
+
+        <section class="guide-section guide-ai-section" id="guide-ai">
+          <span class="guide-section-index">08</span>
+          <h3>Для нейронки и ChatGPT</h3>
+          <p>Если вы используете другую нейронку для написания H3-промпта, ей лучше дать отдельную инструкцию, где описаны именно возможности нашего сайта.</p>
+
+          <div class="guide-ai-actions">
+            <a class="btn btn-primary" href="/static/h3-prompting-guide-ai.txt" target="_blank" rel="noopener">
+              <svg class="icon"><use href="/static/icons.svg#icon-info"></use></svg>
+              Ссылка для нейронки
+            </a>
+            <button class="btn btn-secondary" id="copy-ai-guide-link" type="button">
+              <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+              Копировать ссылку
+            </button>
+          </div>
+          <p class="guide-muted">Ссылка открывает чистый текст без интерфейса. Она удобна для локальной нейронки или агента, который умеет читать URL в вашей сети. Внешний ChatGPT обычно не сможет открыть LAN-адрес — для него используйте copy-paste ниже.</p>
+
+          <div class="guide-code-card guide-chatgpt-card">
+            <div class="guide-code-head">
+              <div>
+                <strong>Copy-paste для ChatGPT</strong>
+                <small>Вставьте это один раз перед задачей на создание видео-промпта.</small>
+              </div>
+              <button class="copy-link" type="button" data-copy-target="guide-chatgpt-prompt">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+                Скопировать для ChatGPT
+              </button>
+            </div>
+            <pre id="guide-chatgpt-prompt">Ты пишешь production-ready промпты для MiniMax H3 в моём локальном AI Video Studio.
+
+Поддерживаемые режимы сайта:
+1) text-to-video без изображений;
+2) image-to-video с ПЕРВЫМ кадром;
+3) first+last frame — переход от первого кадра к последнему.
+Не используй Characters, Ref2VA, Video References и другие режимы, если я прямо не скажу, что сайт обновлён.
+
+Правила:
+- Финальный H3 prompt пиши структурированно и преимущественно на английском.
+- Всегда используй поля в порядке: integrated_multimodal_description, overall_soundscape, non_diegetic_music.
+- [Shot 1] идёт без timestamp. Следующие планы начинай с точного времени вида: [Shot 2] At 00:04.000, the camera cuts to...
+- В каждом Shot задавай стартовую композицию, героя/объекты, окружение, одно понятное движение камеры и действия строго по хронологии.
+- Не пересказывай сюжет абстрактно. Описывай наблюдаемые действия: поворот головы, шаги, жест рукой, положение предмета, паузы, реакцию.
+- Для одного непрерывного дубля используй один Shot и фразу “in one continuous shot with no cuts”.
+- Реплики оставляй на исходном языке пользователя. Говорящим присваивай (S1), (S2), а точный текст помещай в &lt;d&gt;: &lt;d&gt;[Russian] Точная реплика.&lt;/d&gt;
+- Действие-связанные звуки пиши рядом с действием; постоянную атмосферу — в overall_soundscape; музыку для зрителя — в non_diegetic_music. Если музыки не надо: N/A.
+- Если нужен H3-звук, напомни включить “Генерировать со звуком”.
+- Отдельного negative prompt нет: ограничения пиши прямыми предложениями внутри основного описания.
+- Не добавляй лишние сцены, реплики, людей, музыку или действия, которых я не просил.
+- Соблюдай заданную длительность: все события и склейки должны реально помещаться в неё.
+- Для первого кадра считай картинку точным стартом, сохраняй лицо, одежду, предметы, свет и композицию; описывай, что начинает двигаться после неё.
+- Для первого+последнего кадра описывай физический путь между картинками, а не две статичные картинки. Обычно предпочитай один непрерывный Shot и постепенно своди позу, предметы и композицию к последнему кадру.
+- Если я прислал изображение как стартовый кадр, не проси меня заново описывать то, что на нём видно: используй изображение и мою задачу.
+- Если данных достаточно, не задавай лишних уточняющих вопросов.
+
+Перед финальным ответом проверь: непротиворечивость камеры и действия, постоянство одежды/предметов, правильный тайминг, длину диалога, отсутствие случайной музыки/субтитров и чёткое финальное состояние.
+
+В ответе сначала дай только готовый H3 prompt, который можно сразу вставить в поле Prompt. После него одной короткой строкой можешь указать рекомендуемую длительность и нужен ли H3 Audio.</pre>
+          </div>
+
+          <div class="guide-source">
+            <span>Основа и сверка формата:</span>
+            <a href="https://www.mage.space/ru/models/minimax-h3/prompting-guide" target="_blank" rel="noopener">Mage MiniMax-H3 Prompting Guide</a>
+            <span>+</span>
+            <a href="https://github.com/MiniMax-AI/MiniMax-H3/blob/main/skills/h3-prompt-writing/references/base-en.txt" target="_blank" rel="noopener">официальный MiniMax H3 prompt guide</a>
+          </div>
+        </section>
+      </article>
+    </div>
+  </div>
+</dialog>
 
 <dialog class="action-dialog" id="action-dialog">
   <form id="action-form" method="dialog">
