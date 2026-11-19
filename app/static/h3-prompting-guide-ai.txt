@@ -1,12 +1,12 @@
 MiniMax H3 Prompting Guide for AI Agents
 AI Video Studio / OpenFunRus/aivideosite
-Version: 2026-11-19-ref2va
+Version: 2026-11-19-full-h3-controls
 
 PURPOSE
 
 Turn a user's idea into a production-ready MiniMax H3 prompt for this local site.
 
-This site uses ComfyUI-MiniMaxH3-Easy and has THREE distinct generation modes:
+This site uses ComfyUI-MiniMaxH3-Easy plus native ComfyUI H3 guide/control nodes and has FOUR distinct generation modes:
 
 1. FRAMES / FL2VA
    - no image: text-to-video
@@ -23,7 +23,15 @@ This site uses ComfyUI-MiniMaxH3-Easy and has THREE distinct generation modes:
    - selected reusable Characters consume the same limits
    - reference-video soundtrack is handled by H3 as associated audio when present
 
-3. DIGITAL HUMAN
+3. MULTIFRAME / TIMELINE GUIDES
+   - Ref2VA-based generation plus native MiniMaxH3AddGuide conditioning
+   - 1–16 exact guide images in this site
+   - each guide has a time in seconds
+   - the site converts time to frame_idx = round(time_seconds * selected_fps)
+   - these are exact timeline anchors, unlike ordinary Ref2VA storyboard-role Pictures
+   - semantic Characters/Pictures/Videos/Audio can be combined with timeline guides
+
+4. DIGITAL HUMAN
    - at least one visual image/video reference
    - exactly one standalone driving audio reference
    - selected Character voice counts as standalone audio
@@ -34,13 +42,22 @@ The local site also has:
 - Ref2VA task selection: reference generation, keyframe completion, video editing, video continuation, audio reuse, audio reference;
 - per-reference role and retention controls;
 - H3 native audio output checkbox;
-- full local aspect ratios: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9.
+- full local aspect ratios: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9;
+- optional H3 Fun ControlNet Union applied on top of generation:
+  - Canny Auto from raw control video using built-in ComfyUI Canny;
+  - prepared Canny / Pose / Depth / HED / MLSD control video;
+  - video inpainting using source video + mask video;
+  - strength and start/end sampling percentages.
 
 CRITICAL DISTINCTION
 
 FL2VA FIRST/LAST images are exact endpoint anchors.
 
-A Ref2VA Picture with role "storyboard" or "keyframe" is a REFERENCE, not an exact latent keyframe at an arbitrary timestamp. Never claim that Picture 3 will be reproduced exactly at 6.00 seconds unless it is actually an FL2VA First/Last endpoint supported by the selected mode.
+A Ref2VA Picture with role "storyboard" or "keyframe" is a SEMANTIC REFERENCE and is not automatically tied to a timestamp.
+
+MULTIFRAME / TIMELINE GUIDE is different: the local workflow uses native MiniMaxH3AddGuide. A guide image with time 6.00s is actually anchored to frame_idx round(6.00 * selected_fps), subject to the H3 latent frame range.
+
+Never claim an ordinary storyboard-role Picture is an exact timed keyframe. Exact arbitrary-time anchors require the Timeline mode.
 
 Do not mix FL2VA reference-line syntax and the six-field Ref2VA schema unless there is a concrete reason.
 
@@ -64,7 +81,10 @@ Use the selected site mode if it is explicitly provided.
 Otherwise infer:
 - no references / only first-last endpoint images -> FRAMES / FL2VA;
 - identity/style/object/motion/video/voice references -> REFERENCES / Ref2VA;
+- several stills explicitly assigned to exact interior times -> MULTIFRAME / TIMELINE GUIDES;
 - a visual subject + one driving speech/song audio -> DIGITAL HUMAN.
+
+ControlNet is orthogonal to these modes. If the user provides a structural control video or asks for pose/depth/edges/lines/inpainting, use the requested base mode plus ControlNet when possible.
 
 If the user's desired control is incompatible with the current mode, state the necessary mode in one short note AFTER the ready prompt.
 
@@ -309,6 +329,135 @@ When multiple references are present, explicitly separate what is preserved from
 
 Example:
 "Preserve Subject 1's face and outfit from Pictures 1–2. Use only the body rhythm from Video 1; do not copy the person, clothing or background visible in Video 1."
+
+======================================================================
+MULTIFRAME / TIMELINE GUIDES
+======================================================================
+
+This mode is for exact interior visual anchors.
+
+The site uses native:
+MiniMaxH3AddGuide
+
+For every guide:
+frame_idx = round(time_seconds * selected_fps)
+
+The site allows 1–16 guide images.
+
+Do NOT describe these as weak storyboard references. They are conditioning anchors at explicit frame indices.
+
+PROMPTING RULES FOR GUIDES
+
+- State the chronological physical path BETWEEN guide times.
+- Preserve identity and scene continuity while converging into each guided composition.
+- Avoid teleportation unless the user explicitly requests a cut.
+- If a guide is at 0.00 seconds, begin exactly in that state.
+- If a guide is in the middle, explain what motion reaches it and what motion leaves it.
+- If two guide images are visually incompatible, use a visible transformation/camera transition or warn briefly after the prompt.
+- Semantic Ref2VA references still define identity/style/voice/motion; timeline guides define exact visual states at exact times.
+
+Example:
+
+detailed_description: [Shot 1] In one continuous shot, begin in the state established by the 0.00s guide. From 0.00s to 3.50s, the subject slowly turns 90 degrees to the right while the camera pushes in. Around 3.50s, naturally converge into the exact guided composition. From 3.50s to 7.00s, the subject lowers the right hand, takes two steps toward the doorway and settles into the 7.00s guide without a jump cut.
+
+VERSION NOTE
+
+Timeline Guides require ComfyUI 0.34+ because MiniMaxH3AddGuide is a native node introduced there.
+
+======================================================================
+H3 FUN CONTROLNET UNION
+======================================================================
+
+ControlNet is a structural conditioning layer applied to the H3 model before sampling.
+
+The site uses native:
+- ModelPatchLoader
+- MiniMaxH3FunControlNetApply
+
+Default model patch:
+minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors
+
+Control modes in this site:
+
+1. canny_auto
+   Input: ordinary raw video.
+   The site runs built-in ComfyUI Canny on its frames, then sends that edge sequence to H3 Fun ControlNet.
+
+2. canny
+   Input: already-prepared Canny/edge control video.
+
+3. pose
+   Input: already-prepared pose control video.
+
+4. depth
+   Input: already-prepared depth control video.
+
+5. hed
+   Input: already-prepared HED/soft-edge control video.
+
+6. mlsd
+   Input: already-prepared MLSD/line-geometry control video.
+
+7. inpaint
+   Required:
+   - source video
+   - black/white mask video
+   White mask regions are regenerated.
+   The site converts the red channel of the mask video to ComfyUI MASK.
+   An optional additional control video may also be supplied.
+
+IMPORTANT PREPROCESSOR RULE
+
+The Union model understands Pose / Depth / Canny / HED / MLSD conditioning, but creating those representations is separate from applying ControlNet.
+
+This local site automatically creates only Canny because Canny is built into ComfyUI.
+
+For Pose / Depth / HED / MLSD, assume the uploaded control video is already preprocessed. Do NOT claim the site automatically extracts pose/depth/HED/MLSD from raw RGB video unless that functionality is explicitly added later.
+
+PROMPTING WITH CONTROLNET
+
+ControlNet determines structure/motion/geometry more strongly than prose alone.
+
+Use the prompt to specify:
+- identity;
+- clothing;
+- environment;
+- lighting;
+- desired expression;
+- allowed transformations;
+- what from the control structure must remain.
+
+Do not duplicate the control representation in vague prose.
+
+Examples:
+
+Pose:
+"Preserve Subject 1's identity and outfit from Pictures 1–2. Follow the body pose and timing supplied by the Pose ControlNet. Do not copy the person or background from any preprocessing source."
+
+Depth:
+"Use the supplied Depth ControlNet for spatial layout and camera-relative geometry. Preserve the character identity from Subject 1 and render the requested abandoned classroom environment."
+
+Canny:
+"Follow the edge/motion structure from ControlNet while replacing appearance with the referenced character and environment."
+
+Inpaint:
+"Preserve the source video outside the masked region. Inside the masked region, replace the jacket with the red leather jacket from Picture 2 while matching source lighting, motion and perspective."
+
+CONTROL PARAMETERS
+
+strength:
+- start around 1.0;
+- higher = stronger structural enforcement;
+- excessive values can suppress prompt/reference freedom.
+
+start_percent / end_percent:
+- range 0..1 of the diffusion sampling process;
+- control is active only in that interval.
+
+VERSION NOTE
+
+H3 Fun ControlNet Union v1 requires native H3 ControlNet support in ComfyUI 0.35+.
+Union 2.0 is a newer path and requires newer ComfyUI (0.38+). This site intentionally defaults to the v1-compatible model patch until the user's runtime is verified.
 
 ======================================================================
 CHARACTERS
@@ -638,7 +787,9 @@ Before returning a prompt, verify:
 
 - correct site mode;
 - no Ref2VA six-field syntax accidentally used for a simple FL2VA job;
-- no claim of arbitrary exact Ref2VA keyframes;
+- no claim of arbitrary exact keyframes from ordinary Ref2VA storyboard roles;
+- if Timeline mode is selected, exact guide times are respected;
+- if ControlNet is enabled, the prompt does not contradict its structural role unless a deliberate transformation is requested;
 - same Character identity throughout;
 - same clothing unless a change is requested;
 - same prop in the same hand unless deliberately moved;
@@ -755,6 +906,7 @@ When the user asks for an H3 prompt:
 8. After the prompt, optionally add ONE short line containing:
    - recommended duration;
    - site mode;
-   - whether H3 native audio should be ON.
+   - whether H3 native audio should be ON;
+   - ControlNet mode only when ControlNet is materially relevant.
 
 Do not append a long explanation unless the user asks for one.
