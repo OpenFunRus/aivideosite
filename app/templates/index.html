@@ -39,7 +39,7 @@
       <div class="gpu-mini">
         <span class="status-dot" id="gpu-status-dot"></span>
         <div>
-          <span id="gpu-mini-name">RTX 3090</span>
+          <span id="gpu-mini-name">RTX 2080 Ti · H3</span>
           <small id="gpu-mini-value">проверка...</small>
         </div>
       </div>
@@ -61,7 +61,11 @@
       <div class="topbar-status">
         <span class="status-pill" id="comfy-status">
           <span class="status-dot"></span>
-          ComfyUI
+          H3 · 8188
+        </span>
+        <span class="status-pill" id="comfy-wan-status">
+          <span class="status-dot"></span>
+          Wan · 8189
         </span>
         <span class="status-pill" id="active-status">
           <svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>
@@ -86,7 +90,7 @@
                 <span class="panel-kicker">MiniMax H3 FL2VA</span>
                 <h3>Сцена</h3>
               </div>
-              <span class="badge badge-blue">RTX 3090</span>
+              <span class="badge badge-blue">RTX 2080 Ti · 22 GB</span>
             </div>
 
             <label class="field">
@@ -247,11 +251,15 @@
         <section class="dashboard-strip">
           <article class="metric-card">
             <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span>
-            <div><small>GPU</small><strong id="metric-gpu">—</strong><span id="metric-vram">—</span></div>
+            <div><small>H3 GPU</small><strong id="metric-gpu">—</strong><span id="metric-vram">—</span></div>
           </article>
           <article class="metric-card">
             <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-activity"></use></svg></span>
             <div><small>Загрузка</small><strong id="metric-util">—</strong><span id="metric-temp">—</span></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span>
+            <div><small>WAN GPU</small><strong id="metric-wan-gpu">—</strong><span id="metric-wan-vram">—</span></div>
           </article>
           <article class="metric-card">
             <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-database"></use></svg></span>
