@@ -497,6 +497,11 @@ class ComfyUIClient:
 
         model_source: list[Any] = ["24", 0] if use_turbo else ["2", 0]
 
+        if staged_guides or control_mode != "none":
+            # Official native MiniMax H3 multiframe/control workflows use
+            # res_multistep. Keep the legacy Easy path on euler.
+            workflow["7"]["inputs"]["sampler_name"] = "res_multistep"
+
         if control_mode != "none":
             if str(settings.h3_controlnet_model_patch).strip().lower() in {"", "none"}:
                 raise ComfyUIError(
