@@ -467,8 +467,8 @@
   <form id="action-form" method="dialog">
     <div class="dialog-header">
       <div>
-        <span class="panel-kicker" id="dialog-kicker">POST PROCESS</span>
-        <h3 id="dialog-title">LipSync</h3>
+        <span class="panel-kicker">FFMPEG AUDIO</span>
+        <h3>Наложить аудио</h3>
       </div>
       <button class="icon-btn" type="button" data-close-dialog aria-label="Закрыть">
         <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
@@ -476,10 +476,8 @@
     </div>
 
     <input type="hidden" name="media_id" id="action-media-id">
-    <input type="hidden" name="action" id="action-type">
-
     <label class="field">
-      <span class="field-label" id="audio-label">Вокал / аудиодорожка</span>
+      <span class="field-label">Аудиодорожка</span>
       <input type="file" name="audio" accept="audio/*" required>
     </label>
 
@@ -487,17 +485,6 @@
       <span class="field-label">Начало дорожки, сек</span>
       <input type="number" name="audio_start" min="0" step="0.1" value="0">
     </label>
-
-    <div class="field-row" id="lipsync-options">
-      <label class="field">
-        <span class="field-label">Steps</span>
-        <input type="number" name="steps" min="10" max="60" value="20">
-      </label>
-      <label class="field">
-        <span class="field-label">Guidance</span>
-        <input type="number" name="guidance" min="1" max="3" step="0.1" value="1.5">
-      </label>
-    </div>
 
     <div class="dialog-actions">
       <button class="btn btn-secondary" type="button" data-close-dialog>Отмена</button>
