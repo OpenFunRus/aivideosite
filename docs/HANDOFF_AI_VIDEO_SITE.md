@@ -801,6 +801,12 @@ systemd/comfyui-secondary.service
 
 и общие модели на диске, но CUDA context и VRAM полностью раздельные.
 
+### Current H3 performance experiment: DynamicVRAM headroom
+
+Both H3 services currently use `--vram-headroom 2` for an A/B test. It reserves 2 GB of additional VRAM headroom for DynamicVRAM and does not alter H3 model/sampler/steps/seed/quality settings. Keep only if real uncached H3 runtime improves or becomes more stable.
+
+Important benchmark rule: an identical workflow with the same seed can be served from ComfyUI execution cache in a few seconds. Use a restarted ComfyUI process for an identical-seed A/B comparison, or use a fresh recorded seed for uncached warm tests.
+
 ### H3 performance experiment: Comfy compiler
 
 `--disable-comfy-compiler` was A/B tested on RTX 3090 with the saved H3 benchmark. Result: `03:33` versus stock `03:36` (~1.4%), which is not a meaningful gain. The flag was reverted and should not be kept for performance on the current stack.
