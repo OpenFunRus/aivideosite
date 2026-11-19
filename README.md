@@ -21,7 +21,7 @@
 - отдельная вкладка «Монтаж»: drag-and-drop клипов из библиотеки на таймлайн, перестановка порядка, громкость/полное отключение звука каждого клипа;
 - отдельная пользовательская аудиодорожка с позицией на таймлайне, обрезкой начала/длины и громкостью;
 - экспорт таймлайна через FFmpeg в единый MP4 с автоматическим скачиванием и сохранением результата в библиотеке;
-- отдельные systemd units для H3 ComfyUI (RTX 2080 Ti), Wan ComfyUI (RTX 3090) и сайта;
+- два независимых H3 ComfyUI backend: primary RTX 3090 и secondary RTX 2080 Ti, плюс сайт;
 - мобильная навигация и responsive layout.
 
 ## Ожидаемая структура на Ubuntu
@@ -63,7 +63,7 @@ cp .env.example .env
 
 ### Первый ручной запуск
 
-H3 ComfyUI слушает `0.0.0.0:8188`, отдельный Wan backend — `0.0.0.0:8189`; внутри сайта используются localhost URL `127.0.0.1:8188/8189`, а из LAN UI доступен по IP VM.
+Primary H3 ComfyUI слушает `0.0.0.0:8188` на RTX 3090, secondary H3 ComfyUI — `0.0.0.0:8189` на RTX 2080 Ti; внутри сайта используются localhost URL `127.0.0.1:8188/8189`, а из LAN оба UI доступны по IP VM.
 
 ```bash
 source /opt/ai/aivideosite/.venv/bin/activate
@@ -83,12 +83,12 @@ http://IP_ВМ:8000
 
 ```bash
 sudo cp systemd/comfyui.service /etc/systemd/system/comfyui.service
-sudo cp systemd/comfyui-wan.service /etc/systemd/system/comfyui-wan.service
+sudo cp systemd/comfyui-secondary.service /etc/systemd/system/comfyui-secondary.service
 sudo cp systemd/aivideosite.service /etc/systemd/system/aivideosite.service
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now comfyui.service
-sudo systemctl enable --now comfyui-wan.service
+sudo systemctl enable --now comfyui-secondary.service
 sudo systemctl enable --now aivideosite.service
 ```
 
@@ -116,7 +116,7 @@ sudo ufw allow 8000/tcp
 
 ## Важные настройки .env
 
-Имена моделей по умолчанию соответствуют текущему H3-профилю. H3 backend закреплён за RTX 2080 Ti mod 22 GB; ранее этот же профиль был runtime-проверен на RTX 3090:
+Оба backend используют один и тот же H3-профиль и общие файлы моделей на диске. Primary закреплён за RTX 3090, secondary — за RTX 2080 Ti mod 22 GB:
 
 ```text
 H3_FL2VA_MODEL=minimax_h3_fl2va_pruned_int8_convrot.safetensors
@@ -130,7 +130,7 @@ H3_TURBO_LORA=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
 
 ## Очередь
 
-Сайт запускается строго с одним Uvicorn worker. Внутри приложения есть один GPU worker, поэтому две тяжёлые задачи одновременно на RTX 3090 не стартуют.
+Сайт запускается строго с одним Uvicorn worker. Внутри приложения работает один диспетчер с двумя независимыми H3 GPU-линиями: новая генерация сначала идёт на RTX 3090; если primary уже занят задачей сайта, следующая генерация запускается параллельно на RTX 2080 Ti. FFmpeg/монтаж имеют отдельную CPU-линию.
 
 Задачи сохраняются в SQLite. Если сервис перезапустить, незавершённая задача снова попадает в очередь.
 
