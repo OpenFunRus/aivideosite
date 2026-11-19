@@ -463,7 +463,7 @@ async def api_generate(
                     }
                 )
 
-            reference_task = "keyframe_completion"
+            reference_task = "timeline_guides"
 
         if generation_mode == "frames":
             has_first = first_frame is not None and bool(first_frame.filename)
