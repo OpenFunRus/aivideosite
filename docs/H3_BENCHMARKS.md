@@ -37,3 +37,18 @@ Observed from the site Queue after both completed. The same prompt/settings were
 
 - Keep this exact prompt, seed and settings for future performance comparisons.
 - Runtime/visual tests are performed manually on the Ubuntu VM.
+
+## Experiment — disable Comfy compiler
+
+Both H3 ComfyUI services are launched with:
+
+```text
+--disable-comfy-compiler
+```
+
+This is an A/B performance test only. Keep the exact baseline prompt/seed/settings above and compare against:
+
+- RTX 3090 stock baseline: `00:03:36`;
+- RTX 2080 Ti stock baseline: `00:06:15`.
+
+Do not conclude that it is faster until the user records real runtime results on the VM.
