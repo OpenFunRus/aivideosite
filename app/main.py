@@ -338,8 +338,8 @@ async def api_generate(
     if len(prompt) > 16000:
         raise HTTPException(400, "Prompt слишком длинный.")
 
-    if width < 256 or width > 2048 or height < 256 or height > 2048:
-        raise HTTPException(400, "Размер должен быть от 256 до 2048.")
+    if width < 256 or width > 3072 or height < 256 or height > 3072:
+        raise HTTPException(400, "Размер должен быть от 256 до 3072.")
     if width % 32 or height % 32:
         raise HTTPException(400, "Ширина и высота должны делиться на 32.")
     if seconds < 1 or seconds > 30:
