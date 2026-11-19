@@ -41,6 +41,7 @@ class Settings:
     comfyui_url: str
     comfyui_secondary_url: str
     comfyui_output_dir: Path
+    comfyui_input_dir: Path
 
     ffmpeg_bin: Path
     ffprobe_bin: Path
@@ -51,6 +52,7 @@ class Settings:
     h3_video_vae: str
     h3_audio_vae: str
     h3_turbo_lora: str
+    h3_ref_turbo_lora: str
     h3_attention_backend: str
 
     max_image_upload_bytes: int
@@ -162,13 +164,17 @@ settings = Settings(
     comfyui_url=os.getenv("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/"),
     comfyui_secondary_url=os.getenv("COMFYUI_SECONDARY_URL", "http://127.0.0.1:8189").rstrip("/"),
     comfyui_output_dir=_path("COMFYUI_OUTPUT_DIR", "/opt/ai/ComfyUI/output"),
+    comfyui_input_dir=_path("COMFYUI_INPUT_DIR", "/opt/ai/ComfyUI/input"),
     ffmpeg_bin=_path("FFMPEG_BIN", "/usr/bin/ffmpeg"),
     ffprobe_bin=_path("FFPROBE_BIN", "/usr/bin/ffprobe"),
     h3_fl2va_model=os.getenv(
         "H3_FL2VA_MODEL",
         "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
     ),
-    h3_ref2va_model=os.getenv("H3_REF2VA_MODEL", "none"),
+    h3_ref2va_model=os.getenv(
+        "H3_REF2VA_MODEL",
+        "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    ),
     h3_text_encoder=os.getenv(
         "H3_TEXT_ENCODER",
         "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
@@ -185,6 +191,7 @@ settings = Settings(
         "H3_TURBO_LORA",
         "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
     ),
+    h3_ref_turbo_lora=os.getenv("H3_REF_TURBO_LORA", "none"),
     h3_attention_backend=os.getenv(
         "H3_ATTENTION_BACKEND",
         "comfy kitchen attention",
@@ -198,5 +205,6 @@ for directory in (
     settings.upload_dir,
     settings.library_dir,
     settings.temp_dir,
+    settings.comfyui_input_dir,
 ):
     directory.mkdir(parents=True, exist_ok=True)
