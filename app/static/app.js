@@ -742,7 +742,13 @@
     }
 
     const actions = [];
-    if (job.status === "failed") {
+    const retryableKinds = new Set([
+      "generate",
+      "audio_replace",
+      "audio_remove",
+      "editor_export",
+    ]);
+    if (job.status === "failed" && retryableKinds.has(job.kind)) {
       actions.push(`
         <button class="btn btn-secondary btn-compact" type="button" data-job-action="retry" data-job-id="${escapeHtml(
           job.id
