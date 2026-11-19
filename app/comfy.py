@@ -300,8 +300,8 @@ class ComfyUIClient:
             "1": {
                 "class_type": "MiniMaxH3EasyLoader",
                 "inputs": {
-                    "fl2va_model": settings.h3_fl2va_model,
-                    "ref2va_model": settings.h3_ref2va_model,
+                    "fl2va_model": settings.h3_fl2va_model if easy_mode == "image" else "none",
+                    "ref2va_model": settings.h3_ref2va_model if easy_mode != "image" else "none",
                     "text_encoder": settings.h3_text_encoder,
                     "video_vae": settings.h3_video_vae,
                     "audio_vae": settings.h3_audio_vae,
