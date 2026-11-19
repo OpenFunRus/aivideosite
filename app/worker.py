@@ -22,40 +22,155 @@ class JobCancelled(RuntimeError):
 
 
 class JobWorker(threading.Thread):
+    GENERATION_KINDS = {"generate"}
+    CPU_KINDS = {"audio_replace", "audio_remove", "editor_export"}
+
     def __init__(self) -> None:
-        super().__init__(name="aivideosite-gpu-worker", daemon=True)
+        super().__init__(name="aivideosite-dispatcher", daemon=True)
         self._stop_event = threading.Event()
-        self._comfy = ComfyUIClient()
+        self._lock = threading.Lock()
+        self._gpu_lanes: list[dict[str, Any]] = [
+            {
+                "key": "primary",
+                "label": "RTX 3090",
+                "client": ComfyUIClient(settings.comfyui_url),
+                "busy": False,
+                "job_id": None,
+            },
+            {
+                "key": "secondary",
+                "label": "RTX 2080 Ti",
+                "client": ComfyUIClient(settings.comfyui_secondary_url),
+                "busy": False,
+                "job_id": None,
+            },
+        ]
+        self._cpu_busy = False
+        self._job_clients: dict[str, ComfyUIClient] = {}
+        self._active_threads: set[threading.Thread] = set()
 
     def stop(self) -> None:
         self._stop_event.set()
 
     def run(self) -> None:
         while not self._stop_event.is_set():
-            job = db.claim_next_job()
-            if job is None:
-                self._stop_event.wait(1.0)
-                continue
+            dispatched = False
 
-            try:
-                media_id = self._process(job)
-                if db.is_cancel_requested(job["id"]):
-                    db.mark_cancelled(job["id"])
-                else:
-                    db.complete_job(job["id"], media_id)
-            except (JobCancelled, ComfyUICancelled):
+            lane = self._first_available_gpu_lane()
+            if lane is not None:
+                job = db.claim_next_job(self.GENERATION_KINDS)
+                if job is not None:
+                    self._start_gpu_job(lane, job)
+                    dispatched = True
+
+            if self._cpu_lane_available():
+                job = db.claim_next_job(self.CPU_KINDS)
+                if job is not None:
+                    self._start_cpu_job(job)
+                    dispatched = True
+
+            if not dispatched:
+                self._stop_event.wait(0.35)
+
+    def cancel_job(self, job_id: str, prompt_id: str | None) -> bool:
+        if not prompt_id:
+            return False
+        with self._lock:
+            client = self._job_clients.get(job_id)
+        return client.cancel_prompt(prompt_id) if client is not None else False
+
+    def _first_available_gpu_lane(self) -> dict[str, Any] | None:
+        with self._lock:
+            for lane in self._gpu_lanes:
+                if not lane["busy"]:
+                    return lane
+        return None
+
+    def _cpu_lane_available(self) -> bool:
+        with self._lock:
+            return not self._cpu_busy
+
+    def _start_gpu_job(self, lane: dict[str, Any], job: dict[str, Any]) -> None:
+        job_id = str(job["id"])
+        client = lane["client"]
+        with self._lock:
+            lane["busy"] = True
+            lane["job_id"] = job_id
+            self._job_clients[job_id] = client
+
+        thread = threading.Thread(
+            target=self._run_claimed_job,
+            args=(job, client, str(lane["label"]), lane),
+            name=f"aivideosite-{lane['key']}-{job_id[:8]}",
+            daemon=True,
+        )
+        with self._lock:
+            self._active_threads.add(thread)
+        thread.start()
+
+    def _start_cpu_job(self, job: dict[str, Any]) -> None:
+        with self._lock:
+            self._cpu_busy = True
+
+        thread = threading.Thread(
+            target=self._run_claimed_job,
+            args=(job, None, None, None),
+            name=f"aivideosite-cpu-{str(job['id'])[:8]}",
+            daemon=True,
+        )
+        with self._lock:
+            self._active_threads.add(thread)
+        thread.start()
+
+    def _run_claimed_job(
+        self,
+        job: dict[str, Any],
+        comfy: ComfyUIClient | None,
+        gpu_label: str | None,
+        lane: dict[str, Any] | None,
+    ) -> None:
+        try:
+            if gpu_label:
+                db.update_job(
+                    job["id"],
+                    stage=f"H3 · {gpu_label}: запуск",
+                )
+            media_id = self._process(job, comfy=comfy, gpu_label=gpu_label)
+            if db.is_cancel_requested(job["id"]):
                 db.mark_cancelled(job["id"])
-            except Exception as exc:
-                if db.is_cancel_requested(job["id"]):
-                    db.mark_cancelled(job["id"])
+            else:
+                db.complete_job(job["id"], media_id)
+        except (JobCancelled, ComfyUICancelled):
+            db.mark_cancelled(job["id"])
+        except Exception as exc:
+            if db.is_cancel_requested(job["id"]):
+                db.mark_cancelled(job["id"])
+            else:
+                db.fail_job(job["id"], _format_error(exc))
+        finally:
+            current = threading.current_thread()
+            with self._lock:
+                self._active_threads.discard(current)
+                if lane is not None:
+                    lane["busy"] = False
+                    lane["job_id"] = None
+                    self._job_clients.pop(str(job["id"]), None)
                 else:
-                    db.fail_job(job["id"], _format_error(exc))
+                    self._cpu_busy = False
 
-    def _process(self, job: dict[str, Any]) -> str | None:
+    def _process(
+        self,
+        job: dict[str, Any],
+        *,
+        comfy: ComfyUIClient | None = None,
+        gpu_label: str | None = None,
+    ) -> str | None:
         self._check_cancel(job["id"])
         kind = job["kind"]
         if kind == "generate":
-            return self._generate(job)
+            if comfy is None or not gpu_label:
+                raise RuntimeError("H3 generation was dispatched without a GPU backend.")
+            return self._generate(job, comfy, gpu_label)
         if kind == "audio_replace":
             return self._replace_audio(job)
         if kind == "audio_remove":
@@ -69,16 +184,20 @@ class JobWorker(threading.Thread):
         if db.is_cancel_requested(job_id):
             raise JobCancelled("Task cancelled by user.")
 
-    def _generate(self, job: dict[str, Any]) -> str:
+    def _generate(
+        self,
+        job: dict[str, Any],
+        comfy: ComfyUIClient,
+        gpu_label: str,
+    ) -> str:
         payload = job["payload"]
         job_id = job["id"]
         media_id = uuid.uuid4().hex
         output_path = settings.library_dir / f"{media_id}.mp4"
 
-        if not self._comfy.health():
+        if not comfy.health():
             raise RuntimeError(
-                "ComfyUI is not reachable at "
-                f"{settings.comfyui_url}. Check comfyui.service."
+                f"H3 backend for {gpu_label} is not reachable at {comfy.base_url}."
             )
 
         def should_cancel() -> bool:
@@ -86,10 +205,14 @@ class JobWorker(threading.Thread):
 
         def progress(value: float, stage: str) -> None:
             self._check_cancel(job_id)
-            db.update_job(job_id, progress=value, stage=stage)
+            db.update_job(
+                job_id,
+                progress=value,
+                stage=f"H3 · {gpu_label}: {stage}",
+            )
 
         try:
-            result = self._comfy.generate_h3(
+            result = comfy.generate_h3(
                 job_id=job_id,
                 payload=payload,
                 destination=output_path,
@@ -115,6 +238,7 @@ class JobWorker(threading.Thread):
                 "generate_audio": bool(payload.get("generate_audio", False)),
                 "reference_count": len(payload.get("images") or []),
                 "comfy_prompt_id": result.get("prompt_id"),
+                "gpu_backend": gpu_label,
             }
 
             db.insert_media(
