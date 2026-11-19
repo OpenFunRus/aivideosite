@@ -296,41 +296,6 @@ async def api_clear_jobs(
     }
 
 
-@app.post("/api/media/{media_id}/lipsync")
-async def api_lipsync(
-    media_id: str,
-    audio: UploadFile = File(...),
-    audio_start: Annotated[float, Form()] = 0.0,
-    steps: Annotated[int, Form()] = 20,
-    guidance: Annotated[float, Form()] = 1.5,
-    _: None = Depends(require_auth),
-):
-    _ensure_media(media_id)
-    if steps < 10 or steps > 60:
-        raise HTTPException(400, "Steps должны быть от 10 до 60.")
-    if guidance < 1.0 or guidance > 3.0:
-        raise HTTPException(400, "Guidance должен быть от 1.0 до 3.0.")
-
-    audio_path = await save_upload(
-        audio,
-        kind="audio",
-        max_bytes=settings.max_audio_upload_bytes,
-    )
-    job_id = uuid.uuid4().hex
-    db.enqueue_job(
-        job_id,
-        "lipsync",
-        {
-            "media_id": media_id,
-            "audio_path": str(audio_path),
-            "audio_start": max(0.0, audio_start),
-            "steps": steps,
-            "guidance": guidance,
-        },
-    )
-    return {"ok": True, "job_id": job_id}
-
-
 @app.post("/api/media/{media_id}/audio")
 async def api_replace_audio(
     media_id: str,
