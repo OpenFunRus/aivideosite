@@ -10,7 +10,7 @@ Group=openfun
 WorkingDirectory=/opt/ai/ComfyUI
 Environment=PYTHONUNBUFFERED=1
 Environment=CUDA_VISIBLE_DEVICES=0
-ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8188 --disable-comfy-compiler
+ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8188
 Restart=always
 RestartSec=5
 TimeoutStopSec=30
