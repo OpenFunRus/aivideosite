@@ -509,10 +509,15 @@
     }
 
     generationForm.reset();
+    selectedCharacterIds.clear();
     renderResolutionOptions(DEFAULT_RESOLUTION_SHAPE, DEFAULT_RESOLUTION);
     qsa(".upload-card input[type=file]").forEach((input) => {
       clearUploadPreview(input);
     });
+    ["images", "videos", "audios"].forEach((kind) => renderReferenceList(kind));
+    renderGeneratorCharacters();
+    buildReferenceManifest();
+    updateGenerationModeUI();
 
     mediaPage = 1;
     jobsPage = 1;
@@ -565,15 +570,15 @@
       ["weak_reference", "Слабый ориентир"],
     ],
     videos: [
-      ["fully_preserved", "Полностью сохранить"],
       ["partially_preserved", "Частично сохранить"],
+      ["fully_preserved", "Полностью сохранить"],
       ["attribute_transfer", "Перенести атрибут"],
       ["weak_reference", "Слабый ориентир"],
     ],
     audios: [
+      ["reference", "Референс"],
       ["fully_copy", "Полностью копировать"],
       ["partially_copy", "Частично копировать"],
-      ["reference", "Референс"],
       ["weak_reference", "Слабый ориентир"],
     ],
   };
@@ -2083,6 +2088,9 @@
       ["Длительность задания", meta.seconds ? `${meta.seconds} сек` : "—"],
       ["FPS", meta.fps ?? "—"],
       ["Профиль", profileLabel(meta.profile)],
+      ["Режим H3", meta.generation_mode || "frames"],
+      ["Reference task", meta.reference_task || "—"],
+      ["Ref image size", meta.ref_image_size || "—"],
       ["GPU", meta.gpu_backend || "—"],
       ["Нативный звук H3", meta.generate_audio ? "Да" : "Нет"],
       ["Референсов", meta.reference_count ?? "—"],
