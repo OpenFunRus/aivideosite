@@ -1,7 +1,7 @@
 [Unit]
 Description=AI Video Site
-After=network-online.target comfyui.service comfyui-wan.service
-Wants=network-online.target comfyui.service comfyui-wan.service
+After=network-online.target comfyui.service comfyui-secondary.service
+Wants=network-online.target comfyui.service comfyui-secondary.service
 
 [Service]
 Type=simple
