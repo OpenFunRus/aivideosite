@@ -1,4 +1,4 @@
-# H3 References / Characters expansion plan
+# MiniMax H3 full controls expansion plan
 
 Date: 2026-11-19  
 Repository: `OpenFunRus/aivideosite`  
@@ -6,107 +6,137 @@ Branch: `main`
 
 ## Goal
 
-Expand the current MiniMax H3 FL2VA-only site into a safe dual-path workflow:
+Expand the existing MiniMax H3 site without breaking the proven FL2VA path.
 
-- keep the existing FL2VA path intact for T2V / first frame / last frame / first+last frame;
-- add Ref2VA for multimodal references;
-- add per-user reusable Characters with appearance references and optional voice;
-- expose reference roles, retention strength, reference task type, and local H3 reference sizing;
-- update the human guide and the machine-readable AI guide so prompts match the real local workflow.
+The finished architecture has four generation modes plus an optional structural-control layer:
 
-The implementation must remain compatible with the existing two-GPU dispatcher, queue, SQLite history, per-user isolation, library and editor.
+1. **Frames / FL2VA**
+   - T2V;
+   - exact First frame;
+   - exact Last frame;
+   - exact First + Last interpolation.
 
-## Verified local capabilities
+2. **References / Ref2VA**
+   - reusable Characters;
+   - up to 9 Pictures;
+   - up to 3 reference Videos;
+   - up to 3 standalone Audio refs;
+   - up to 15 semantic reference media total;
+   - roles + retention;
+   - reference generation / semantic storyboard completion / video editing / video continuation / audio reuse / audio reference.
 
-The installed `ComfyUI-MiniMaxH3-Easy` API supports:
+3. **Timeline / native multiframe guides**
+   - 1–16 guide images;
+   - each guide has an exact time;
+   - site converts time to `frame_idx = round(time_seconds * FPS)`;
+   - native `MiniMaxH3AddGuide` conditioning;
+   - semantic Ref2VA references can be combined with exact timeline guides.
 
-- `mode=image`: zero images = T2V, one image = first or last frame, two images = first+last;
-- `mode=reference`: up to 9 images, 3 videos and 3 standalone audio clips, 15 media resources total;
-- reference video soundtrack is paired automatically;
-- `mode=digital_human`: visual references plus exactly one driving audio track;
-- image reference sizing: `match`, `1k`, `1.5k`, `2k`, `original`;
-- local aspect ratios: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9;
-- direct API/headless media inputs through hidden `media_N` + `media_type_N` inputs.
+4. **Digital Human**
+   - visual reference(s);
+   - exactly one standalone driving Audio.
 
-## Important boundary
+Optional layer on top of the H3 generation:
+- **H3 Fun ControlNet Union**
+  - Canny Auto from raw video;
+  - prepared Canny;
+  - prepared Pose;
+  - prepared Depth;
+  - prepared HED;
+  - prepared MLSD;
+  - video inpainting with source + mask.
 
-FL2VA first/last frames are exact keyframe anchors.
+The implementation must remain compatible with the existing dual-GPU dispatcher, SQLite queue/history, per-user isolation, library and FFmpeg editor.
 
-Ref2VA images can be assigned prompt roles such as character, object, setting, style, storyboard/keyframe, composition or motion reference, but they are not exact latent keyframes at arbitrary timestamps. The UI and guides must not claim otherwise.
+## Important distinction
 
-## Stage 1 — backend model/config support
+There are three different concepts which must not be mixed:
 
-1. Add `H3_REF2VA_MODEL` with a real default filename:
-   `minimax_h3_ref2va_pruned_int8_convrot.safetensors`.
-2. Add optional `H3_REF_TURBO_LORA`; default `none`.
-3. Add `COMFYUI_INPUT_DIR` for staging image/video/audio inputs on the same VM.
-4. Keep FL2VA Turbo LoRA separate from Ref2VA acceleration so an FL-only LoRA is never applied to Ref2VA by mistake.
-5. Generalize the Comfy workflow builder:
-   - image mode: `LoadImage`;
-   - reference mode: `LoadImage`, `LoadVideo`, `LoadAudio`;
-   - digital human mode: same multimodal transport;
-   - pass the matching `media_type_N`.
-6. Preserve the old payload shape for queued legacy jobs.
+- FL2VA First/Last: exact endpoint anchors.
+- Ordinary Ref2VA Picture with role `storyboard`: semantic visual reference only.
+- Timeline mode: exact arbitrary-time native guide via `MiniMaxH3AddGuide`.
 
-## Stage 2 — reference generation API
+The human guide and AI guide must preserve this distinction.
 
-Add generator fields:
+## Stage 1 — model/config support
 
-- `generation_mode`: frames / reference / digital_human;
-- `keyframe_role`: first / last for one-frame FL2VA;
-- `reference_task`: reference generation, keyframe/storyboard completion, video editing, video continuation, audio reuse, audio reference;
+Status: **implemented; runtime verification pending**.
+
+- `H3_FL2VA_MODEL` remains isolated to FL2VA jobs.
+- `H3_REF2VA_MODEL=minimax_h3_ref2va_pruned_int8_convrot.safetensors`.
+- `H3_TURBO_LORA` remains FL2VA-only.
+- `H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`.
+- `H3_CONTROLNET_MODEL_PATCH=minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors`.
+- `COMFYUI_INPUT_DIR=/opt/ai/ComfyUI/input` is used only when a job actually needs staged media.
+- Ref2VA model names are never passed to FL2VA workflows, so missing new model files do not make old FL2VA jobs invalid.
+
+Turbo rules:
+- FL2VA: 4/8 steps use FL Turbo; 12/16/20 use Base.
+- Ref2VA / Timeline / Digital Human: 4 steps use Ref Turbo; 8/12/16/20 use Base.
+
+## Stage 2 — Ref2VA API
+
+Status: **implemented; runtime verification pending**.
+
+Fields:
+- `generation_mode`;
+- `reference_task`;
 - `ref_image_size`;
-- repeated reference images/videos/audio;
-- selected Character IDs;
-- JSON reference manifest containing role + retention information.
+- Character IDs;
+- direct reference images/videos/audio;
+- reference role/retention manifest.
 
 Validation:
-
-- FL2VA accepts max 2 images and no video/audio refs;
-- Ref2VA accepts max 9 images, 3 videos, 3 standalone audio and 15 total;
-- Digital Human accepts visual refs and exactly one driving audio;
-- selected Character assets count toward the same limits;
-- no cross-user Character access;
-- upload size and extension validation remains enforced.
+- max 9 Pictures;
+- max 3 Videos;
+- max 3 standalone Audio;
+- max 15 semantic reference resources;
+- Ref2VA needs at least one visual reference;
+- Digital Human needs at least one visual reference and exactly one standalone driving Audio;
+- Character files count toward the same limits;
+- owner isolation enforced server-side.
 
 ## Stage 3 — reusable Characters
 
-Add a per-user SQLite `characters` table and private runtime assets under `data/characters/`.
+Status: **implemented; runtime verification pending**.
 
-Character fields:
+Per-user SQLite `characters` table.
 
-- id;
-- owner_id;
+Persistent files:
+```text
+data/characters/<owner_id>/<character_id>/
+```
+
+Each Character supports:
 - name;
-- description / immutable visual notes;
-- one or more reference images;
-- optional voice reference;
-- created/updated timestamps.
+- immutable visual description;
+- 1–4 appearance images;
+- optional saved voice.
 
-UI:
+Safety:
+- every list/get/update/delete/preview operation checks owner;
+- active queued/running jobs protect their selected Character from deletion.
 
-- dedicated `Персонажи` view;
-- create Character;
-- show image/voice counts;
-- delete Character;
-- select Characters from the generation view.
+## Stage 4 — deterministic reference mapping
 
-When selected for Ref2VA, Character appearance references are inserted before direct image references in deterministic order. Character voices are inserted as standalone audio references after video soundtracks.
+Status: **implemented**.
 
-## Stage 4 — prompt/reference mapping
+The server orders semantic media as:
+1. Pictures;
+2. Videos;
+3. standalone Audio.
 
-For Ref2VA, the site builds a deterministic mapping:
+Character appearance images are inserted before direct Pictures.
 
-- images -> `<Picture N>`;
-- reference videos -> `<Video N>`;
-- reference-video soundtrack -> corresponding `<Audio N>`;
-- Character/direct standalone audio -> subsequent `<Audio N>`;
-- reusable logical subjects -> `<Subject N>`.
+Reference-video soundtrack receives an Audio ordinal when H3 processes that Video.
 
-If the user already supplies the six-field Ref2VA format, preserve it.
+The server builds:
+- `<Picture N>`;
+- `<Video N>`;
+- `<Audio N>`;
+- logical `<Subject N>`.
 
-If the user enters a simple prompt, wrap it into:
-
+Simple prompts are wrapped into:
 - `subject_definitions`;
 - `summary`;
 - `retention_analysis`;
@@ -114,54 +144,105 @@ If the user enters a simple prompt, wrap it into:
 - `overall_soundscape`;
 - `non_diegetic_music`.
 
-Do not overwrite an explicitly structured prompt.
+Already-structured six-field prompts are preserved.
 
-Retention choices:
+## Stage 5 — roles and retention
 
-- visual: `fully_preserved`, `partially_preserved`, `attribute_transfer`, `weak_reference`;
-- audio: `fully_copy`, `partially_copy`, `reference`, `weak_reference`.
+Status: **implemented**.
 
-Reference roles:
-
+Visual roles:
 - character;
 - object;
 - setting;
 - style;
 - composition;
-- storyboard/keyframe;
+- storyboard;
 - motion;
-- camera motion;
-- voice/audio.
+- camera_motion.
 
-## Stage 5 — generation UI
+Audio roles:
+- voice;
+- audio.
 
-Add a mode switch:
+Visual retention:
+- `fully_preserved`;
+- `partially_preserved`;
+- `attribute_transfer`;
+- `weak_reference`.
 
-1. **Кадры / FL2VA**
-   - no frame = T2V;
-   - first frame;
-   - last frame;
-   - first+last.
+Audio retention:
+- `fully_copy`;
+- `partially_copy`;
+- `reference`;
+- `weak_reference`.
 
-2. **Референсы / Ref2VA**
-   - multi-image;
-   - multi-video;
-   - multi-audio;
-   - Character selection;
-   - task type;
-   - role + retention editor;
-   - ref image size.
+## Stage 6 — exact Timeline Guides
 
-3. **Digital Human**
-   - visual references;
-   - exactly one driving audio.
+Status: **implemented in code; runtime verification pending**.
 
-Add reference counters and clear validation messages before submit.
+Dedicated `multiframe` mode:
+- 1–16 guide images;
+- each guide gets a time in seconds;
+- exact frame index calculated from selected output FPS;
+- native `MiniMaxH3AddGuide` nodes chained into positive conditioning;
+- sampler switches to the native H3 multiframe recipe using `RandomNoise`, `BasicGuider`, `SamplerCustomAdvanced` and `res_multistep`;
+- semantic Ref2VA media can be used together with exact guides.
 
-## Stage 6 — aspect ratios
+Compatibility target:
+- ComfyUI 0.34+ for native H3 Add Guide.
 
-Expand the resolution selector to the ratios supported by the local Easy node:
+## Stage 7 — H3 Fun ControlNet Union
 
+Status: **implemented in code; runtime verification pending**.
+
+Native nodes:
+- `ModelPatchLoader`;
+- `MiniMaxH3FunControlNetApply`.
+
+Modes:
+- `canny_auto`: site converts raw video through built-in ComfyUI `Canny`;
+- `canny`: prepared control video;
+- `pose`: prepared Pose control video;
+- `depth`: prepared Depth control video;
+- `hed`: prepared HED/soft-edge control video;
+- `mlsd`: prepared MLSD/line control video;
+- `inpaint`: source video + mask video, optional extra control video.
+
+Inpaint:
+- source and mask required;
+- red channel of the mask video is converted with `ImageToMask`;
+- white area means regenerate.
+
+Important boundary:
+- this site automatically preprocesses only Canny;
+- Pose/Depth/HED/MLSD require an already-preprocessed control video;
+- no fake RGB-to-Pose/Depth conversion is claimed.
+
+Control parameters:
+- strength;
+- start_percent;
+- end_percent;
+- Canny low/high thresholds.
+
+Native H3 guide/control workflows use `res_multistep`; legacy FL2VA/Ref2VA Easy jobs keep their existing `euler` sampler.
+
+Compatibility target:
+- ComfyUI 0.35+ for Fun ControlNet Union v1;
+- Union 2.0 is intentionally not made the default until the runtime is upgraded/verified for the newer path.
+
+## Stage 8 — generator UI and aspect ratios
+
+Status: **implemented; visual test pending**.
+
+Generation modes:
+- Кадры;
+- Референсы;
+- Таймлайн;
+- Digital Human.
+
+ControlNet can be enabled independently.
+
+Aspect ratios:
 - 1:1;
 - 2:3;
 - 3:2;
@@ -171,92 +252,152 @@ Expand the resolution selector to the ratios supported by the local Easy node:
 - 16:9;
 - 21:9.
 
-Keep dimensions on the H3-valid ×32 grid and never make a selected resolution class smaller than its advertised class.
+Resolution classes:
+- 360p;
+- 480p;
+- 720p;
+- 1080p;
+- 256×256 extra test for 1:1.
 
-## Stage 7 — metadata / retry / cleanup
+All dimensions are rounded upward to the H3 ×32 grid. Backend accepts sides up to 3072 so 21:9 1080-class is not rejected.
 
-Generation media metadata must store:
+## Stage 9 — metadata / retry / cleanup
 
+Status: **implemented**.
+
+Media metadata stores:
+- actual prompt;
+- user prompt;
 - generation mode;
 - reference task;
-- reference mapping;
-- Character IDs/names;
-- image/video/audio counts;
-- keyframe role;
 - ref image size;
-- GPU backend;
-- actual prompt sent to H3.
+- reference map;
+- sanitized timeline-guide metadata;
+- sanitized ControlNet settings;
+- GPU backend.
 
-Retry must validate all temporary reference files and persistent Character files.
+Retry validates:
+- frame uploads;
+- semantic references;
+- timeline guides;
+- ControlNet source/control/mask media.
 
-Only temporary uploads are deleted after a successful generation. Character assets remain.
+Success cleanup removes:
+- temporary direct references;
+- timeline-guide uploads;
+- ControlNet uploads;
+- staged ComfyUI input copies.
 
-## Stage 8 — guides
+Persistent Character files remain.
 
-Rewrite both guides.
+## Stage 10 — guides
 
-### Human full-screen guide
+Status: **implemented**.
 
-Cover:
-
-- FL2VA vs Ref2VA vs Digital Human;
-- first / last / first+last;
-- six-field Ref2VA prompt format;
-- `<Subject N>`, `<Picture N>`, `<Video N>`, `<Audio N>`;
-- Characters and saved voices;
-- deterministic numbering in this site;
-- roles and retention;
-- reference generation;
-- video editing;
-- video continuation;
-- audio reuse / audio reference;
-- storyboard/keyframe references and the exact-keyframe limitation;
-- dialogue and native H3 audio;
+Human full-screen guide covers:
+- FL2VA;
+- Ref2VA;
+- Characters;
+- roles/retention;
+- exact Timeline Guides;
+- ControlNet Union;
+- video editing/continuation;
+- Digital Human;
+- shots/camera;
+- dialogue/audio;
+- concrete exclusions;
 - examples.
 
-### Machine-readable AI guide
+Machine-readable guide:
+```text
+/static/h3-prompting-guide-ai.txt
+```
 
-Teach an AI assistant to:
+It teaches an AI assistant the same mode distinctions and explicitly differentiates semantic storyboard references from exact native timeline guides.
 
-- infer the selected local mode;
-- never use Ref2VA syntax in FL2VA;
-- never claim arbitrary exact keyframes in Ref2VA;
-- generate the three-field FL2VA format;
-- generate the six-field Ref2VA format;
-- use the visible reference map from the site;
-- preserve exact user dialogue;
-- respect selected retention and roles;
-- produce editing/continuation prompts when a reference video is present;
-- account for native-audio checkbox behavior.
+## Stage 11 — documentation/deployment
 
-## Stage 9 — documentation / deployment
+Status: **in repository; runtime deployment pending**.
 
-Update:
-
+Update and keep synchronized:
 - `.env.example`;
 - `README.md`;
-- `docs/HANDOFF_AI_VIDEO_SITE.md`.
+- `docs/HANDOFF_AI_VIDEO_SITE.md`;
+- this plan.
 
-Document the required Ref2VA checkpoint and optional Ref2VA acceleration model. Do not auto-download multi-GB models from the web.
+Do not auto-download multi-GB H3 model files from application code.
 
-## Stage 10 — checks
+## Stage 12 — checks
 
-Checks that can be performed without the user's Ubuntu runtime:
+Checks available in the assistant environment:
+- inspect actual current GitHub source;
+- JavaScript syntax parse;
+- HTML ID/copy-target/nav/view integrity checks;
+- static API/owner-isolation/workflow inspection.
 
-- Python syntax/compile checks;
-- static inspection of API payload limits and owner isolation;
-- JavaScript syntax check if a JS runtime is available;
-- ensure old FL2VA payloads still build;
-- inspect final Git diff/commit.
+Unavailable here:
+- Python `compileall` from a local checkout because this tool environment cannot materialize/clone the repo through its external network path;
+- ComfyUI object-info/runtime execution on the user's Ubuntu VM;
+- GPU/VRAM/visual quality tests.
 
-User runtime checks:
+## Required user runtime test matrix
 
-- download/configure Ref2VA model;
-- restart both ComfyUI services and site;
-- FL2VA regression: T2V, first, last, first+last;
-- Ref2VA: image, video, video soundtrack, standalone audio;
-- Characters: isolation between all 3 users;
-- Digital Human;
-- dual-GPU dispatch;
-- 1080p / long reference VRAM behavior;
-- visual quality and identity/voice retention.
+After installing the new model files and updating ComfyUI:
+
+1. FL2VA regression:
+   - T2V;
+   - First;
+   - Last-only;
+   - First+Last.
+
+2. Ref2VA:
+   - Character Picture identity;
+   - multiple Pictures;
+   - reference Video;
+   - Video with soundtrack;
+   - standalone Audio;
+   - video editing;
+   - video continuation;
+   - Ref Turbo 4-step;
+   - Base 8/12/16/20.
+
+3. Characters:
+   - create/edit/delete;
+   - preview;
+   - voice;
+   - isolation between all 3 site users;
+   - deletion protection while a job is active.
+
+4. Timeline:
+   - two guides at 0s/end;
+   - 3+ guides including a midpoint;
+   - semantic Character + exact guide combination;
+   - verify the visible image lands on the requested internal time.
+
+5. Digital Human:
+   - one Character/reference + exactly one driving Audio;
+   - reject two standalone Audio sources.
+
+6. ControlNet:
+   - Canny Auto from raw video;
+   - prepared Canny;
+   - prepared Pose;
+   - prepared Depth;
+   - prepared HED;
+   - prepared MLSD;
+   - inpaint source + mask;
+   - ControlNet together with Ref2VA;
+   - ControlNet together with Timeline Guides.
+
+7. Dispatcher:
+   - first job on RTX 3090;
+   - second concurrent job on RTX 2080 Ti;
+   - Cancel on each backend;
+   - correct GPU metadata.
+
+8. Stress:
+   - 1080p;
+   - 21:9 1080-class;
+   - long reference video;
+   - long 30-second H3 generation;
+   - VRAM and performance on both GPUs.
