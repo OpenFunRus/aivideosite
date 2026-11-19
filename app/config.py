@@ -218,6 +218,5 @@ for directory in (
     settings.library_dir,
     settings.character_dir,
     settings.temp_dir,
-    settings.comfyui_input_dir,
 ):
     directory.mkdir(parents=True, exist_ok=True)
