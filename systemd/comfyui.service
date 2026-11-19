@@ -1,5 +1,5 @@
 [Unit]
-Description=ComfyUI MiniMax H3 on RTX 2080 Ti
+Description=ComfyUI MiniMax H3 primary on RTX 3090
 After=network-online.target
 Wants=network-online.target
 
@@ -9,7 +9,7 @@ User=openfun
 Group=openfun
 WorkingDirectory=/opt/ai/ComfyUI
 Environment=PYTHONUNBUFFERED=1
-Environment=CUDA_VISIBLE_DEVICES=1
+Environment=CUDA_VISIBLE_DEVICES=0
 ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8188
 Restart=always
 RestartSec=5
