@@ -159,20 +159,33 @@
               </button>
             </div>
 
-            <label class="field">
+            <label class="field resolution-field">
               <span class="field-label">Формат и размер</span>
-              <select name="resolution" id="resolution">
-                <option value="1344x768" selected>1344 × 768 · 16:9</option>
-                <option value="768x1344">768 × 1344 · 9:16</option>
-                <option value="1024x1024">1024 × 1024 · 1:1</option>
-                <option value="1152x768">1152 × 768 · 3:2</option>
-                <option value="768x1152">768 × 1152 · 2:3</option>
-                <option value="1024x768">1024 × 768 · 4:3</option>
-                <option value="768x1024">768 × 1024 · 3:4</option>
-                <option value="1344x576">1344 × 576 · 21:9</option>
-                <option value="1536x864">1536 × 864 · 16:9 HQ</option>
-                <option value="864x1536">864 × 1536 · 9:16 HQ</option>
-              </select>
+              <div class="segmented segmented-three resolution-shape">
+                <label>
+                  <input type="radio" name="resolution_shape" value="square">
+                  <span>
+                    <strong>Квадрат</strong>
+                    <small>1:1</small>
+                  </span>
+                </label>
+                <label>
+                  <input type="radio" name="resolution_shape" value="landscape" checked>
+                  <span>
+                    <strong>Горизонталь</strong>
+                    <small>16:9</small>
+                  </span>
+                </label>
+                <label>
+                  <input type="radio" name="resolution_shape" value="portrait">
+                  <span>
+                    <strong>Вертикаль</strong>
+                    <small>9:16</small>
+                  </span>
+                </label>
+              </div>
+              <select name="resolution" id="resolution" aria-label="Размер видео"></select>
+              <span class="field-help">360p / 480p / 720p / 1080p. Размеры слегка выровнены под сетку H3 ×32; у квадрата есть 256×256 для быстрых тестов.</span>
             </label>
 
             <label class="field duration-field">
@@ -198,30 +211,45 @@
             </label>
 
             <label class="field">
-              <span class="field-label">Профиль</span>
-              <div class="segmented segmented-three">
+              <span class="field-label">Шаги</span>
+              <div class="segmented segmented-five">
                 <label>
-                  <input type="radio" name="profile" value="fast" checked>
+                  <input type="radio" name="profile" value="steps4">
                   <span>
-                    <strong>Fast</strong>
-                    <small>Turbo · 8</small>
+                    <strong>4</strong>
+                    <small>Turbo</small>
                   </span>
                 </label>
                 <label>
-                  <input type="radio" name="profile" value="quality">
+                  <input type="radio" name="profile" value="steps8" checked>
                   <span>
-                    <strong>Quality</strong>
-                    <small>Base · 20</small>
+                    <strong>8</strong>
+                    <small>Turbo</small>
                   </span>
                 </label>
                 <label>
-                  <input type="radio" name="profile" value="max">
+                  <input type="radio" name="profile" value="steps12">
                   <span>
-                    <strong>Max</strong>
-                    <small>Base · 30</small>
+                    <strong>12</strong>
+                    <small>Base</small>
+                  </span>
+                </label>
+                <label>
+                  <input type="radio" name="profile" value="steps16">
+                  <span>
+                    <strong>16</strong>
+                    <small>Base</small>
+                  </span>
+                </label>
+                <label>
+                  <input type="radio" name="profile" value="steps20">
+                  <span>
+                    <strong>20</strong>
+                    <small>Base</small>
                   </span>
                 </label>
               </div>
+              <span class="field-help">4/8 — Turbo LoRA для быстрых прогонов; 12/16/20 — базовая модель. Профиль 30 шагов удалён.</span>
             </label>
 
             <label class="field">
