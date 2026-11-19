@@ -754,8 +754,8 @@
     <header class="guide-header">
       <div>
         <span class="panel-kicker">MINIMAX H3 · LOCAL WORKFLOW</span>
-        <h2>Гайд по FL2VA, Ref2VA и Digital Human</h2>
-        <p>Инструкция именно для нашего AI Video Studio: кадры, Characters, изображения, видео, голоса, editing/continuation и нативный H3 Audio.</p>
+        <h2>Гайд по MiniMax H3: FL2VA, Ref2VA, Guides и ControlNet</h2>
+        <p>Инструкция именно для нашего AI Video Studio: точные кадры, Characters, изображения, видео, голоса, timeline guides, ControlNet Union, editing/continuation и нативный H3 Audio.</p>
       </div>
       <button class="icon-btn guide-close" type="button" data-close-guide aria-label="Закрыть гайд">
         <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
@@ -767,6 +767,8 @@
         <a href="#guide-quick">Как выбрать режим</a>
         <a href="#guide-fl2va">FL2VA · кадры</a>
         <a href="#guide-ref2va">Ref2VA · референсы</a>
+        <a href="#guide-timeline">Timeline Guides</a>
+        <a href="#guide-controlnet">ControlNet Union</a>
         <a href="#guide-characters">Characters</a>
         <a href="#guide-retention">Роли и retention</a>
         <a href="#guide-video-ref">Видео / continuation</a>
@@ -780,18 +782,20 @@
       <article class="guide-content">
         <section class="guide-hero" id="guide-quick">
           <div class="guide-badge">Сначала выберите правильный режим</div>
-          <h3>FL2VA фиксирует кадры. Ref2VA использует мультимодальные ориентиры.</h3>
-          <p>Это два разных способа управлять H3. Не смешивайте их синтаксис без необходимости: точный First/Last задаётся через «Кадры», а лицо, одежда, стиль, движение, видео и голос — через «Референсы».</p>
+          <h3>У H3 теперь четыре способа управлять сценой — плюс ControlNet поверх них.</h3>
+          <p>FL2VA фиксирует точные endpoints. Ref2VA задаёт identity/style/motion/audio references. «Таймлайн» привязывает exact guide images к произвольным кадрам через native Add Guide. Fun ControlNet Union отдельно управляет структурой движения/геометрией или маской inpainting.</p>
           <div class="guide-rule-grid">
             <div><strong>FL</strong><span><b>Кадры:</b> T2V, First, Last, First → Last</span></div>
             <div><strong>R2V</strong><span><b>Референсы:</b> до 9 pictures, 3 videos, 3 audio</span></div>
+            <div><strong>T</strong><span><b>Таймлайн:</b> до 16 exact Add Guide images по секундам</span></div>
+            <div><strong>CN</strong><span><b>ControlNet:</b> Pose / Depth / Canny / HED / MLSD / inpaint</span></div>
             <div><strong>@</strong><span><b>Characters:</b> постоянные внешность + optional voice</span></div>
             <div><strong>DH</strong><span><b>Digital Human:</b> visual reference + ровно 1 driving audio</span></div>
-            <div><strong>15</strong><span>Общий бюджет Ref2VA: максимум 15 media resources</span></div>
+            <div><strong>15</strong><span>Общий бюджет semantic Ref2VA: максимум 15 media resources</span></div>
             <div><strong>×32</strong><span>Выходные размеры сайта всегда на H3-валидной сетке</span></div>
           </div>
           <div class="guide-callout warning">
-            <strong>Важно про «keyframes»:</strong> только FL2VA First/Last — точные latent anchors. Картинка с ролью Storyboard/Keyframe в Ref2VA — сильный визуальный ориентир, но не обещает точное совпадение с этой картинкой на заданной секунде.
+            <strong>Важно про «keyframes»:</strong> обычная роль Storyboard/Keyframe в Ref2VA остаётся semantic reference и не фиксирует секунду. Для точной привязки используйте «Таймлайн»: native <code>MiniMaxH3AddGuide</code> записывает guide в конкретный <code>frame_idx</code>. FL2VA First/Last остаются самым простым способом точно закрепить только начало/конец.
           </div>
         </section>
 
@@ -877,6 +881,50 @@ non_diegetic_music: N/A</pre>
 
           <div class="guide-callout">
             <strong>Нумерация сайта:</strong> Character images идут первыми среди Pictures, затем ваши загруженные images. Videos нумеруются отдельно. Soundtrack каждого reference-video получает Audio-номер перед standalone audio/Character voice. Для обычного prompt сайт собирает это автоматически — вручную считать номера не нужно.
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-timeline">
+          <span class="guide-section-index">03</span>
+          <h3>Timeline Guides · точные кадры внутри ролика</h3>
+          <p>Режим «Таймлайн» использует native ComfyUI <code>MiniMaxH3AddGuide</code>. Каждый загруженный still получает время в секундах; сайт переводит его в <code>frame_idx = round(seconds × FPS)</code> и цепочкой добавляет в conditioning перед sampler.</p>
+          <ul class="guide-list">
+            <li>Можно поставить до 16 guide images в одной задаче.</li>
+            <li>Guide на 0.00 сек фиксирует внутренний первый кадр так же явно по таймлайну, но workflow остаётся Ref2VA-based.</li>
+            <li>Guide в середине — настоящий временной anchor, а не просто Picture со словом “storyboard”.</li>
+            <li>Guide near end должен физически быть достижим из предыдущего состояния — H3 всё равно генерирует движение между anchors.</li>
+            <li>Можно одновременно выбрать Characters/Ref2VA media: semantic refs отвечают за identity/style/motion, timeline guides — за конкретные визуальные состояния в конкретное время.</li>
+          </ul>
+          <div class="guide-callout warning">
+            <strong>Версия:</strong> native Add Guide появился в ComfyUI 0.34+. Если backend старее, ComfyUI отвергнет workflow — обновите ComfyUI вместо добавления стороннего костыля.
+          </div>
+          <div class="guide-code-card">
+            <div class="guide-code-head"><strong>Как писать prompt под guides</strong></div>
+            <pre>[Shot 1] In one continuous shot, begin in the state established by the 0.00s guide. Between 0.00s and 3.50s, [physical transition]. Around 3.50s, converge naturally into the exact guided composition. Continue from that state toward the 7.00s guide without a jump cut or teleport.</pre>
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-controlnet">
+          <span class="guide-section-index">04</span>
+          <h3>H3 Fun ControlNet Union</h3>
+          <p>ControlNet работает поверх выбранного H3 mode и патчит transformer перед sampling. Наш сайт использует native <code>ModelPatchLoader</code> + <code>MiniMaxH3FunControlNetApply</code>.</p>
+          <div class="guide-rule-grid compact">
+            <div><strong>C</strong><span><b>Canny Auto:</b> raw video → built-in Canny → Union.</span></div>
+            <div><strong>P</strong><span><b>Pose:</b> загрузите заранее подготовленный pose control video.</span></div>
+            <div><strong>D</strong><span><b>Depth:</b> заранее подготовленный depth video.</span></div>
+            <div><strong>H</strong><span><b>HED:</b> заранее подготовленный HED/soft-edge video.</span></div>
+            <div><strong>M</strong><span><b>MLSD:</b> заранее подготовленный line/geometry video.</span></div>
+            <div><strong>I</strong><span><b>Inpaint:</b> source video + mask video; белое = regenerate.</span></div>
+          </div>
+          <p>Для Pose/Depth/HED/MLSD модель Union уже понимает соответствующий control representation, но сам preprocessor — отдельная задача. Поэтому сайт не притворяется, что RGB-video автоматически является Pose/Depth: для этих режимов нужен готовый control video. Canny — исключение, потому что Canny node встроен в ComfyUI и строится автоматически.</p>
+          <ul class="guide-list">
+            <li><strong>Strength:</strong> обычно начните с 1.0; слишком высокий может подавить prompt/references.</li>
+            <li><strong>Start / End:</strong> доля sampling процесса от 0 до 1, где ControlNet активен.</li>
+            <li><strong>Inpaint mask:</strong> mask video должно совпадать по времени/геометрии с source video; красный канал используется как MASK, белая область регенерируется.</li>
+            <li>ControlNet не заменяет Character/Ref2VA: он лучше удерживает структуру/движение, а refs — identity/style.</li>
+          </ul>
+          <div class="guide-callout warning">
+            <strong>Версия и модель:</strong> Fun ControlNet Union требует ComfyUI 0.35+ и отдельный model patch <code>minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors</code> в <code>models/model_patches</code>. Union 2.0 требует более новый ComfyUI (0.38+); текущий default сайта намеренно использует совместимый v1 patch.
           </div>
         </section>
 
@@ -1076,10 +1124,16 @@ non_diegetic_music: N/A</pre>
             </div>
             <pre id="guide-chatgpt-prompt">Ты пишешь production-ready prompts для MiniMax H3 в моём локальном AI Video Studio.
 
-Сайт имеет три режима:
+Сайт имеет четыре режима:
 1. Кадры / FL2VA: T2V, точный First frame, точный Last frame, First+Last.
 2. Референсы / Ref2VA: до 9 Picture, 3 Video, 3 standalone Audio, 15 media всего; Characters считаются в эти лимиты.
-3. Digital Human: минимум один visual reference и ровно один driving Audio.
+3. Таймлайн / Multiframe Guide: Ref2VA + native MiniMaxH3AddGuide; до 16 exact guide images с точным временем.
+4. Digital Human: минимум один visual reference и ровно один driving Audio.
+
+Дополнительно поверх генерации может быть включён H3 Fun ControlNet Union:
+- Canny Auto из raw video;
+- prepared Canny / Pose / Depth / HED / MLSD control video;
+- video inpainting через source video + mask video.
 
 FL2VA:
 - Используй поля integrated_multimodal_description, overall_soundscape, non_diegetic_music.
@@ -1091,10 +1145,21 @@ Ref2VA:
 - Visual retention: fully_preserved / partially_preserved / attribute_transfer / weak_reference.
 - Audio retention: fully_copy / partially_copy / reference / weak_reference.
 - Задачи: reference generation, keyframe completion, video editing, video continuation, audio reuse, audio reference.
-- Storyboard/keyframe Picture в Ref2VA — визуальный ориентир, НЕ точный latent keyframe на секунде.
+- Storyboard/keyframe Picture в обычном Ref2VA — только визуальный ориентир.
+- Если выбран «Таймлайн», guide image ЯВЛЯЕТСЯ точным frame_idx anchor; prompt должен описывать физический переход между guide-times.
 - Character — сохранённый reusable subject: внешность и иногда voice. Не придумывай другой дизайн, если Character выбран.
 - Video reference может задавать motion, camera motion, behavior или исходник для edit/continuation.
 - Soundtrack reference-video может стать Audio reference автоматически.
+
+Timeline Guides:
+- Учитывай точные времена каждого guide image.
+- Не переописывай guided still как случайный reference: это временной anchor.
+- Между anchors описывай непрерывный физически достижимый переход без teleport/jump, если пользователь не просил cut.
+
+ControlNet:
+- Canny/Pose/Depth/HED/MLSD задают структуру и motion, но не заменяют identity refs.
+- Для inpaint сохраняй область вне белой mask, а изменения описывай для маскированной области.
+- Если control слишком жёсткий, не обещай, что prompt полностью победит структуру source.
 
 Общее:
 - Пиши наблюдаемые действия в строгой хронологии.
