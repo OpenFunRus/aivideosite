@@ -656,9 +656,9 @@
   <div class="guide-shell">
     <header class="guide-header">
       <div>
-        <span class="panel-kicker">MINIMAX H3 PROMPTING</span>
-        <h2>Как писать сильные промпты для MiniMax H3</h2>
-        <p>Практическая версия для нашего сайта: T2V, первый кадр и переход между первым и последним кадром.</p>
+        <span class="panel-kicker">MINIMAX H3 · LOCAL WORKFLOW</span>
+        <h2>Гайд по FL2VA, Ref2VA и Digital Human</h2>
+        <p>Инструкция именно для нашего AI Video Studio: кадры, Characters, изображения, видео, голоса, editing/continuation и нативный H3 Audio.</p>
       </div>
       <button class="icon-btn guide-close" type="button" data-close-guide aria-label="Закрыть гайд">
         <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
@@ -667,304 +667,357 @@
 
     <div class="guide-layout">
       <nav class="guide-nav" aria-label="Разделы гайда">
-        <a href="#guide-quick">За минуту</a>
-        <a href="#guide-structure">Структура</a>
-        <a href="#guide-shots">Кадры и тайминг</a>
-        <a href="#guide-camera">Камера</a>
-        <a href="#guide-frames">Первый / последний кадр</a>
-        <a href="#guide-dialogue">Диалоги и звук</a>
-        <a href="#guide-negative">Ограничения</a>
+        <a href="#guide-quick">Как выбрать режим</a>
+        <a href="#guide-fl2va">FL2VA · кадры</a>
+        <a href="#guide-ref2va">Ref2VA · референсы</a>
+        <a href="#guide-characters">Characters</a>
+        <a href="#guide-retention">Роли и retention</a>
+        <a href="#guide-video-ref">Видео / continuation</a>
+        <a href="#guide-digital">Digital Human</a>
+        <a href="#guide-shots">Shots / камера</a>
+        <a href="#guide-audio">Диалог и звук</a>
         <a href="#guide-examples">Примеры</a>
         <a href="#guide-ai">Для нейронки</a>
       </nav>
 
       <article class="guide-content">
         <section class="guide-hero" id="guide-quick">
-          <div class="guide-badge">Главное правило</div>
-          <h3>H3 лучше понимает не «красивый абзац», а режиссёрский план по времени</h3>
-          <p>Пишите, что камера видит, что персонаж делает по порядку и что слышно. Для нашего FL2VA-пайплайна prompt optimizer выключен, поэтому ваш текст уходит в H3 практически как есть.</p>
+          <div class="guide-badge">Сначала выберите правильный режим</div>
+          <h3>FL2VA фиксирует кадры. Ref2VA использует мультимодальные ориентиры.</h3>
+          <p>Это два разных способа управлять H3. Не смешивайте их синтаксис без необходимости: точный First/Last задаётся через «Кадры», а лицо, одежда, стиль, движение, видео и голос — через «Референсы».</p>
           <div class="guide-rule-grid">
-            <div><strong>1</strong><span>Три поля в одном и том же порядке</span></div>
-            <div><strong>2</strong><span>Каждый Shot — конкретная картинка + действие</span></div>
-            <div><strong>3</strong><span>Склейки имеют точное время</span></div>
-            <div><strong>4</strong><span>Звук разложен по слоям</span></div>
-            <div><strong>5</strong><span>Диалог остаётся на языке героя</span></div>
-            <div><strong>6</strong><span>Ограничения пишутся прямо в prompt</span></div>
+            <div><strong>FL</strong><span><b>Кадры:</b> T2V, First, Last, First → Last</span></div>
+            <div><strong>R2V</strong><span><b>Референсы:</b> до 9 pictures, 3 videos, 3 audio</span></div>
+            <div><strong>@</strong><span><b>Characters:</b> постоянные внешность + optional voice</span></div>
+            <div><strong>DH</strong><span><b>Digital Human:</b> visual reference + ровно 1 driving audio</span></div>
+            <div><strong>15</strong><span>Общий бюджет Ref2VA: максимум 15 media resources</span></div>
+            <div><strong>×32</strong><span>Выходные размеры сайта всегда на H3-валидной сетке</span></div>
           </div>
-          <div class="guide-callout">
-            <strong>Для нашего сайта:</strong> поддержаны text-to-video, один <em>первый</em> кадр и пара <em>первый + последний</em>. Characters, Video References и полноценный Ref2VA сейчас в интерфейс не подключены, поэтому этот гайд их намеренно не использует.
+          <div class="guide-callout warning">
+            <strong>Важно про «keyframes»:</strong> только FL2VA First/Last — точные latent anchors. Картинка с ролью Storyboard/Keyframe в Ref2VA — сильный визуальный ориентир, но не обещает точное совпадение с этой картинкой на заданной секунде.
           </div>
         </section>
 
-        <section class="guide-section" id="guide-structure">
+        <section class="guide-section" id="guide-fl2va">
           <span class="guide-section-index">01</span>
-          <h3>Базовая структура промпта</h3>
-          <p>Для обычного текста используйте три поля. Названия полей оставляйте на английском. Визуальные инструкции и камера тоже обычно стабильнее на английском; реплики и надписи оставляйте в нужном языке.</p>
+          <h3>Режим «Кадры» · FL2VA</h3>
+          <p>Используйте его, когда важна точная стартовая или финальная композиция. Без картинок это обычный T2V. Один загруженный First — I2V. Один Last автоматически становится последним кадром. Два — интерполяция First → Last.</p>
 
           <div class="guide-code-card">
             <div class="guide-code-head">
-              <strong>Универсальный шаблон</strong>
-              <button class="copy-link" type="button" data-copy-target="guide-basic-template">
-                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
-                Копировать
+              <strong>FL2VA — базовая структура</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-fl-template">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Копировать
               </button>
             </div>
-            <pre id="guide-basic-template">integrated_multimodal_description: [Shot 1] Live-action, cinematic, a [shot size] frames [subject] in [place], [starting state]. The camera [one clear camera behavior]. [Actions in exact chronological order]. [Synchronized action sounds and dialogue if needed].
+            <pre id="guide-fl-template">integrated_multimodal_description: [Shot 1] Live-action, cinematic, [shot size], [subject + place + exact starting state]. The camera [one clear behavior]. [Actions in strict chronological order]. [Synchronized sounds/dialogue].
 
-overall_soundscape: [Continuous ambience and physical sounds across the clip].
+overall_soundscape: [Continuous ambience].
 
-non_diegetic_music: [Instruments, tempo, rhythm and dynamics, or N/A].</pre>
+non_diegetic_music: [Audience-only score, or N/A].</pre>
           </div>
 
-          <div class="guide-three-columns">
-            <div>
-              <code>integrated_multimodal_description</code>
-              <p>Картинка, действия, камера, склейки, реплики, смех, удары, музыка из радио в самой сцене.</p>
-            </div>
-            <div>
-              <code>overall_soundscape</code>
-              <p>Фоновая среда всего ролика: ветер, дождь, комната, толпа, шаги, дыхание, далёкий транспорт.</p>
-            </div>
-            <div>
-              <code>non_diegetic_music</code>
-              <p>Только музыка для зрителя. Если её не надо — пишите <code>N/A</code>.</p>
-            </div>
-          </div>
-        </section>
+          <h4>Первый кадр</h4>
+          <pre>For the target video, at 0.00 seconds into the target video, &lt;Picture 1&gt; (from [Shot 1]) is fully referenced.</pre>
+          <p>Не переописывайте лицо и композицию как будто картинки нет. Считайте её точным состоянием в 0.00 и опишите первое видимое движение.</p>
 
-        <section class="guide-section" id="guide-shots">
-          <span class="guide-section-index">02</span>
-          <h3>Кадры, склейки и тайминг</h3>
-          <ul class="guide-list">
-            <li><strong>[Shot 1]</strong> начинается без времени: стиль, размер плана, кто в кадре, где он и в каком состоянии.</li>
-            <li>Каждый следующий план получает точный момент склейки: <code>[Shot 2] At 00:04.000, the camera cuts to...</code></li>
-            <li>Время склеек всегда растёт и не выходит за длительность ролика.</li>
-            <li>Последний Shot продолжается до самого конца клипа.</li>
-            <li>Склейка должна добавлять новое: другой ракурс, состояние, место, героя или момент. Если нужен просто более крупный план — чаще лучше подвинуть камеру.</li>
-            <li>Для одного дубля используйте только <strong>[Shot 1]</strong> и прямо напишите <code>in one continuous shot with no cuts</code>.</li>
-          </ul>
+          <h4>Последний кадр</h4>
+          <p>Если загружен только Last, сайт сам отправляет его H3 как last keyframe. В prompt опишите, как действие естественно приходит к финальной позе и композиции.</p>
 
-          <div class="guide-tip-row">
-            <div class="guide-tip good">
-              <strong>Хорошо</strong>
-              <p>“He turns 180 degrees, pauses, raises his right hand, then walks toward the door.”</p>
-            </div>
-            <div class="guide-tip bad">
-              <strong>Слабо</strong>
-              <p>“He acts dramatically and goes away.”</p>
-            </div>
-          </div>
-
-          <div class="guide-callout">
-            <strong>Практически:</strong> для 5 секунд чаще всего стабильнее один насыщенный Shot. Для 10 секунд — один длинный или 2–3 понятных плана. Чем больше событий вы пытаетесь впихнуть в секунду, тем сильнее H3 начинает пропускать действия.
-          </div>
-        </section>
-
-        <section class="guide-section" id="guide-camera">
-          <span class="guide-section-index">03</span>
-          <h3>Движения камеры</h3>
-          <p>Пишите движение камеры обычным предложением внутри Shot. Не складывайте пять операторских команд в конец одной строки.</p>
-          <div class="guide-camera-grid">
-            <div><code>static shot</code><span>камера стоит</span></div>
-            <div><code>push in</code><span>камера физически приближается</span></div>
-            <div><code>pull out</code><span>камера отъезжает</span></div>
-            <div><code>zoom in / out</code><span>меняется объектив, камера стоит</span></div>
-            <div><code>pan left / right</code><span>поворот камеры на месте</span></div>
-            <div><code>tilt up / down</code><span>наклон вверх / вниз</span></div>
-            <div><code>truck left / right</code><span>боковое движение камеры</span></div>
-            <div><code>pedestal up / down</code><span>подъём / опускание камеры</span></div>
-            <div><code>tracking shot</code><span>следует за героем</span></div>
-            <div><code>arc shot</code><span>движется по дуге вокруг героя</span></div>
-            <div><code>POV</code><span>вид глазами персонажа</span></div>
-            <div><code>shake slightly</code><span>лёгкая ручная дрожь</span></div>
-          </div>
-          <p class="guide-muted">Точность можно добавить фразами <code>with small amplitude</code>, <code>with large amplitude</code>, <code>at slow speed</code>, <code>at fast speed</code>.</p>
-        </section>
-
-        <section class="guide-section" id="guide-frames">
-          <span class="guide-section-index">04</span>
-          <h3>Первый кадр и первый + последний</h3>
-
-          <h4>Только первый кадр</h4>
-          <p>Считайте загруженную картинку точным стартом ролика. Не выдумывайте заново лицо, одежду, предметы и ракурс — начните с первого движения, которое должно произойти из этого состояния.</p>
+          <h4>First + Last</h4>
           <div class="guide-code-card">
             <div class="guide-code-head">
-              <strong>I2V / первый кадр</strong>
-              <button class="copy-link" type="button" data-copy-target="guide-first-frame-template">
-                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
-                Копировать
-              </button>
-            </div>
-            <pre id="guide-first-frame-template">For the target video, at 0.00 seconds into the target video, &lt;Picture 1&gt; (from [Shot 1]) is fully referenced.
-
-integrated_multimodal_description: [Shot 1] Live-action, cinematic, the composition, identity, clothing, props and lighting established by Picture 1 remain consistent. The camera [movement]. Starting from the exact first-frame state, [chronological action] and ends with [clear final state].
-
-overall_soundscape: [Ambience and physical sounds].
-
-non_diegetic_music: N/A</pre>
-          </div>
-
-          <h4>Первый + последний кадр</h4>
-          <p>Здесь важнее всего не описать две картинки, а объяснить <strong>видимый путь между ними</strong>: как меняется поза, положение рук, предмет, камера и композиция. Для интерполяции чаще стабильнее один непрерывный Shot.</p>
-          <div class="guide-code-card">
-            <div class="guide-code-head">
-              <strong>FL2V / первый + последний</strong>
+              <strong>Интерполяция 10 секунд</strong>
               <button class="copy-link" type="button" data-copy-target="guide-first-last-template">
-                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
-                Копировать
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Копировать
               </button>
             </div>
             <pre id="guide-first-last-template">How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 1) aligns with the 10.00-second mark of the target video.
 
-integrated_multimodal_description: [Shot 1] In one continuous shot with no cuts, the video begins exactly from Picture 1. The camera [behavior]. [Describe every visible intermediate change in chronological order]. During the final seconds, the subject, objects and camera progressively settle into the pose, spacing and composition established by Picture 2.
+integrated_multimodal_description: [Shot 1] In one continuous shot with no cuts, the video begins exactly from Picture 1. [Describe the continuous physical path]. During the final seconds, the subject, props and camera progressively settle into the pose, spacing and composition established by Picture 2.
 
-overall_soundscape: [Ambience and physical sounds].
+overall_soundscape: [Ambience and synchronized physical sounds].
 
 non_diegetic_music: N/A</pre>
           </div>
-          <p class="guide-muted">В строке выравнивания замените 10.00 на выбранную длительность. Если финальный кадр относится к Shot 2 или Shot 3 — укажите соответствующий номер.</p>
         </section>
 
-        <section class="guide-section" id="guide-dialogue">
+        <section class="guide-section" id="guide-ref2va">
+          <span class="guide-section-index">02</span>
+          <h3>Режим «Референсы» · Ref2VA</h3>
+          <p>Ref2VA предназначен для сохранения личности/объекта/стиля, переноса движения, использования видео и голоса, редактирования или продолжения видео. В одной задаче сайт разрешает максимум <strong>9 изображений, 3 reference videos, 3 standalone audio и 15 media всего</strong>. Нужен хотя бы один visual reference.</p>
+
+          <div class="guide-three-columns">
+            <div><code>&lt;Picture N&gt;</code><p>Внешность, одежда, объект, локация, композиция, стиль, storyboard.</p></div>
+            <div><code>&lt;Video N&gt;</code><p>Действие, походка, танец, камера, исходное видео для edit/continue.</p></div>
+            <div><code>&lt;Audio N&gt;</code><p>Голос, тембр, ритм; soundtrack reference-video также получает Audio-номер.</p></div>
+          </div>
+
+          <p>Если вы вводите обычное описание сцены, сайт сам превращает его в расширенный шестипольный Ref2VA prompt. Если вы уже дали все шесть полей, сайт не переписывает ваш текст.</p>
+          <div class="guide-code-card">
+            <div class="guide-code-head">
+              <strong>Полный Ref2VA-формат</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-ref-template">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Копировать
+              </button>
+            </div>
+            <pre id="guide-ref-template">subject_definitions:
+- &lt;Subject 1&gt;: the main character defined by &lt;Picture 1&gt; and &lt;Picture 2&gt;.
+- &lt;Video 1&gt;: motion and camera reference.
+
+summary: [reference generation / keyframe completion / video editing / video continuation / audio reuse / audio reference] One concise target-video summary.
+
+retention_analysis:
+- &lt;Picture 1&gt;: fully_preserved; role=character.
+- &lt;Video 1&gt;: partially_preserved; role=motion.
+
+detailed_description: [Shot 1] [Precise visual action, camera, timing, dialogue and exclusions].
+
+overall_soundscape: [Ambience + requested scene audio].
+
+non_diegetic_music: N/A</pre>
+          </div>
+
+          <div class="guide-callout">
+            <strong>Нумерация сайта:</strong> Character images идут первыми среди Pictures, затем ваши загруженные images. Videos нумеруются отдельно. Soundtrack каждого reference-video получает Audio-номер перед standalone audio/Character voice. Для обычного prompt сайт собирает это автоматически — вручную считать номера не нужно.
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-characters">
+          <span class="guide-section-index">03</span>
+          <h3>Characters · постоянный персонаж</h3>
+          <p>Вкладка «Персонажи» — наш локальный аналог удобства Mage <code>@character</code>, но без зависимости от Mage. У каждого из трёх пользователей своя изолированная библиотека.</p>
+          <ul class="guide-list">
+            <li>Сохраните 1–4 reference images одного персонажа: лицо/голова, полный рост, одежда, характерные детали.</li>
+            <li>В поле «Неизменяемые особенности» фиксируйте то, что не должно случайно меняться между сценами: цвет/рисунок шерсти, причёска, одежда, обувь, аксессуары, телосложение.</li>
+            <li>При необходимости добавьте один voice reference. Он автоматически входит в Audio-бюджет Ref2VA.</li>
+            <li>В генераторе можно выбрать несколько Characters, пока суммарные media не превышают лимиты H3.</li>
+            <li>Удалить Character нельзя, пока активная задача использует его reference-файлы.</li>
+          </ul>
+          <div class="guide-tip-row">
+            <div class="guide-tip good"><strong>Лучше</strong><p>Несколько чистых ракурсов одного и того же дизайна + короткое описание постоянных признаков.</p></div>
+            <div class="guide-tip bad"><strong>Хуже</strong><p>Коллажи с разной одеждой, возрастом, стилем и взаимоисключающими деталями.</p></div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-retention">
+          <span class="guide-section-index">04</span>
+          <h3>Роль референса и retention</h3>
+          <p>Для каждого загруженного reference сайт позволяет указать, <em>что именно</em> брать и насколько жёстко это сохранять. Это уменьшает конфликт между несколькими источниками.</p>
+
+          <h4>Visual retention</h4>
+          <div class="guide-rule-grid compact">
+            <div><strong>100%</strong><span><code>fully_preserved</code> — максимально удерживать identity/вид.</span></div>
+            <div><strong>≈</strong><span><code>partially_preserved</code> — сохранить основу, разрешить адаптацию.</span></div>
+            <div><strong>→</strong><span><code>attribute_transfer</code> — взять конкретный признак, а не весь source.</span></div>
+            <div><strong>~</strong><span><code>weak_reference</code> — лишь мягкий ориентир.</span></div>
+          </div>
+
+          <h4>Audio retention</h4>
+          <div class="guide-rule-grid compact">
+            <div><strong>1:1</strong><span><code>fully_copy</code> — максимально копировать аудио-свойства.</span></div>
+            <div><strong>≈</strong><span><code>partially_copy</code> — близко, но с адаптацией.</span></div>
+            <div><strong>R</strong><span><code>reference</code> — голос/тембр/ритм как ориентир.</span></div>
+            <div><strong>~</strong><span><code>weak_reference</code> — слабое влияние.</span></div>
+          </div>
+
+          <h4>Роли</h4>
+          <p><code>character</code>, <code>object</code>, <code>setting</code>, <code>style</code>, <code>composition</code>, <code>storyboard</code>, <code>motion</code>, <code>camera_motion</code>, <code>voice</code>, <code>audio</code>.</p>
+          <p class="guide-muted">Если Picture нужен только как цвет/одежда, не помечайте его одновременно как максимально сохраняемый полный character — это создаёт лишний конфликт с главным reference.</p>
+        </section>
+
+        <section class="guide-section" id="guide-video-ref">
           <span class="guide-section-index">05</span>
-          <h3>Диалоги, голос и звук</h3>
-          <p>Говорящим персонажам давайте стабильные ID: <code>(S1)</code>, <code>(S2)</code>. Саму реплику заключайте в <code>&lt;d&gt;</code> и оставляйте на языке, который должен реально прозвучать.</p>
+          <h3>Reference video, editing и continuation</h3>
+          <p>Видео-референс позволяет передавать не только внешний вид кадра, но и динамику. В селекторе «Задача референсов» выбирайте намерение — сайт добавит его в summary.</p>
+          <ul class="guide-list">
+            <li><strong>Reference generation:</strong> использовать видео как motion/camera/behavior reference.</li>
+            <li><strong>Video editing:</strong> изменить исходное видео: одежду, объект, окружение, стиль или отдельное действие, сохраняя нужную структуру source.</li>
+            <li><strong>Video continuation:</strong> естественно продолжить действие и направление движения из reference video.</li>
+            <li><strong>Storyboard / keyframe completion:</strong> связать несколько Picture-ориентиров. Это reference guidance, а не точный FL2VA таймлайн.</li>
+            <li><strong>Audio reuse / reference:</strong> использовать soundtrack/voice как источник звукового поведения.</li>
+          </ul>
+          <div class="guide-callout">
+            <strong>Soundtrack reference-video:</strong> если в загруженном видео есть аудиодорожка, локальный H3 Easy передаёт её вместе с Video reference автоматически. Она занимает Audio-номер модели, но не отдельный слот standalone audio в UI.
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-digital">
+          <span class="guide-section-index">06</span>
+          <h3>Digital Human</h3>
+          <p>Используйте для персонажа, который должен следовать driving audio. В этом режиме нужны: минимум один visual reference (Picture/Video/Character) и <strong>ровно один</strong> standalone Audio driver.</p>
+          <ul class="guide-list">
+            <li>Не выбирайте Character с сохранённым voice одновременно с отдельным driving audio: это даст два standalone Audio и сайт остановит отправку.</li>
+            <li>Driving audio задаёт речевую/вокальную временную структуру. В prompt описывайте внешний вид, кадр, поведение, эмоцию, камеру и окружение.</li>
+            <li>Если нужен слышимый результат H3 — оставьте «Генерировать со звуком» включённым.</li>
+          </ul>
+        </section>
+
+        <section class="guide-section" id="guide-shots">
+          <span class="guide-section-index">07</span>
+          <h3>Shots, тайминг и камера</h3>
+          <ul class="guide-list">
+            <li><strong>[Shot 1]</strong> — без timestamp. Следующий: <code>[Shot 2] At 00:04.000, the camera cuts to...</code></li>
+            <li>Для одного непрерывного дубля используйте один Shot и <code>in one continuous shot with no cuts</code>.</li>
+            <li>Внутри Shot: композиция → стартовое состояние → окружение → одна основная камера → действия по времени → реакция → звук → финальное состояние.</li>
+            <li>5 секунд: обычно 1 Shot. 10 секунд: 1–3 Shot, если действия не перегружены.</li>
+          </ul>
+          <div class="guide-camera-grid">
+            <div><code>static shot</code><span>камера стоит</span></div>
+            <div><code>push in</code><span>физически приближается</span></div>
+            <div><code>pull out</code><span>отъезжает</span></div>
+            <div><code>zoom in/out</code><span>меняется focal length</span></div>
+            <div><code>pan left/right</code><span>поворот на месте</span></div>
+            <div><code>tilt up/down</code><span>наклон камеры</span></div>
+            <div><code>truck left/right</code><span>боковой сдвиг</span></div>
+            <div><code>tracking shot</code><span>следует за героем</span></div>
+            <div><code>arc shot</code><span>дуга вокруг героя</span></div>
+            <div><code>POV</code><span>вид персонажа</span></div>
+            <div><code>shake slightly</code><span>ручная дрожь</span></div>
+            <div><code>roll clockwise</code><span>roll по оси объектива</span></div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="guide-audio">
+          <span class="guide-section-index">08</span>
+          <h3>Диалог, звук и музыка</h3>
+          <p>Говорящим героям назначайте стабильные ID <code>(S1)</code>, <code>(S2)</code>. Точную фразу помещайте в <code>&lt;d&gt;</code> и не переводите, если пользователь не просил.</p>
           <div class="guide-code-card">
             <div class="guide-code-head">
               <strong>Русская реплика</strong>
               <button class="copy-link" type="button" data-copy-target="guide-dialogue-example">
-                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
-                Копировать
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Копировать
               </button>
             </div>
-            <pre id="guide-dialogue-example">A woman (S1), speaking on-screen in a calm medium-pitched voice at a natural pace, looks directly at the camera and says: &lt;d&gt;[Russian] Я люблю Котика.&lt;/d&gt;</pre>
+            <pre id="guide-dialogue-example">A woman (S1), speaking on-screen in a calm medium-pitched voice, looks at the camera and says: &lt;d&gt;[Russian] Я люблю Котика.&lt;/d&gt;</pre>
           </div>
-
           <ul class="guide-list">
-            <li>Описание голоса задавайте один раз: тембр, высота, темп, акцент — только если это важно.</li>
-            <li>Не дублируйте слова героя в <code>overall_soundscape</code>.</li>
-            <li>Длинная реплика в коротком Shot ухудшает синхронизацию губ — сокращайте текст или выделяйте больше времени.</li>
-            <li>Закадровый голос обозначайте явно как <code>off-screen voiceover</code>; если человек виден, можно отдельно указать, что его губы остаются закрыты.</li>
-            <li>Музыка из радио/телефона/колонки в сцене — это часть <code>integrated_multimodal_description</code>. Фоновый саундтрек для зрителя — <code>non_diegetic_music</code>.</li>
+            <li>Удар, дверь, смех в конкретный момент — рядом с действием в description.</li>
+            <li>Постоянная атмосфера — <code>overall_soundscape</code>.</li>
+            <li>Музыка, которую слышат персонажи (радио/телефон), — часть сцены.</li>
+            <li>Музыка только для зрителя — <code>non_diegetic_music</code>; если не нужна, <code>N/A</code>.</li>
+            <li>Отдельного negative prompt в нашем UI нет: пишите конкретные запреты прямо в description.</li>
           </ul>
-
-          <div class="guide-callout warning">
-            <strong>Важно:</strong> чтобы H3-звук попал в готовый MP4 на нашем сайте, включите «Генерировать со звуком». Если чекбокс выключен, видео экспортируется без нативной аудиодорожки H3.
-          </div>
-        </section>
-
-        <section class="guide-section" id="guide-negative">
-          <span class="guide-section-index">06</span>
-          <h3>Как задавать запреты и удерживать действие</h3>
-          <p>Отдельного Negative Prompt у нас нет. Ограничения пишите простыми конкретными предложениями в основном описании.</p>
-          <div class="guide-rule-grid compact">
-            <div><strong>✓</strong><span>No subtitles, captions, logos, watermarks, or on-screen text.</span></div>
-            <div><strong>✓</strong><span>His feet stay planted; only his torso and right arm move.</span></div>
-            <div><strong>✓</strong><span>No extra people enter the frame.</span></div>
-            <div><strong>✓</strong><span>The cassette player remains in his left jacket pocket.</span></div>
-          </div>
-          <p class="guide-muted">Лучше четыре точных ограничения, связанных со сценой, чем двадцать общих “no bad anatomy, no artifacts…” — длинный negative-список конкурирует с самим действием.</p>
+          <div class="guide-callout warning"><strong>H3 Audio:</strong> аудио-инструкции могут участвовать в conditioning, но чтобы аудиодорожка попала в итоговый MP4, включите «Генерировать со звуком».</div>
         </section>
 
         <section class="guide-section" id="guide-examples">
-          <span class="guide-section-index">07</span>
-          <h3>Готовые примеры</h3>
+          <span class="guide-section-index">09</span>
+          <h3>Примеры новых режимов</h3>
 
           <div class="guide-example">
             <div class="guide-code-head">
-              <strong>5 секунд · один Shot · без музыки</strong>
-              <button class="copy-link" type="button" data-copy-target="guide-example-one">
-                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
-                Копировать
+              <strong>Ref2VA · Character + motion video</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-ref-example">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Копировать
               </button>
             </div>
-            <pre id="guide-example-one">integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium shot frames a tired mechanic standing beside an old car inside a dim garage. The camera pushes in with small amplitude at slow speed. He wipes both hands on a rag, exhales, looks toward the open hood, then closes it with one firm motion and rests both palms on the metal. The hood closes with a heavy metallic thud. No subtitles, logos, or watermarks.
+            <pre id="guide-ref-example">subject_definitions:
+- &lt;Subject 1&gt;: the main character, fully defined by &lt;Picture 1&gt; and &lt;Picture 2&gt;.
+- &lt;Video 1&gt;: motion reference only.
 
-overall_soundscape: A fluorescent light hums above the garage, distant traffic passes outside, and tools lightly rattle on a metal bench.
+summary: [reference generation] The main character performs the body motion from Video 1 while preserving the exact identity and outfit from Pictures 1–2.
+
+retention_analysis:
+- &lt;Picture 1&gt;: fully_preserved; role=character.
+- &lt;Picture 2&gt;: fully_preserved; role=character.
+- &lt;Video 1&gt;: partially_preserved; role=motion.
+
+detailed_description: [Shot 1] In one continuous medium-full shot, Subject 1 keeps both feet planted and reproduces the torso and right-arm rhythm from Video 1. Preserve the face, body proportions, outfit and accessories from the Pictures. The camera remains at the same height and slowly pushes in. No extra people, subtitles, logos or watermarks.
+
+overall_soundscape: Quiet room tone, light clothing rustle and natural breathing.
 
 non_diegetic_music: N/A</pre>
           </div>
 
           <div class="guide-example">
             <div class="guide-code-head">
-              <strong>10 секунд · два Shot · русский диалог</strong>
-              <button class="copy-link" type="button" data-copy-target="guide-example-dialogue">
-                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
-                Копировать
+              <strong>Video continuation</strong>
+              <button class="copy-link" type="button" data-copy-target="guide-continuation-example">
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Копировать
               </button>
             </div>
-            <pre id="guide-example-dialogue">integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-wide shot frames two men beside an industrial control panel in a dim workshop. The camera holds a static shot. The older man (S1), speaking on-screen in a low stern voice, points sharply at the controls and says: &lt;d&gt;[Russian] Харис, жми кнопки.&lt;/d&gt; The younger man (S2) hesitates with his hand above the panel and replies in a quiet uncertain voice: &lt;d&gt;[Russian] А точно сработает?&lt;/d&gt; [Shot 2] At 00:06.000, the camera cuts to a close-up of S1. He gives a confident dismissive wave and says: &lt;d&gt;[Russian] Да я так тыщу раз делал!&lt;/d&gt; No subtitles or on-screen text.
+            <pre id="guide-continuation-example">subject_definitions:
+- &lt;Video 1&gt;: source video whose subjects, environment, movement direction and camera language define the continuation.
 
-overall_soundscape: Ventilation fans drone steadily, relays click inside the control cabinet, and a distant machine vibrates through the room.
+summary: [video continuation] Continue naturally from the end state of Video 1 without a visible reset.
+
+retention_analysis:
+- &lt;Video 1&gt;: fully_preserved; role=motion.
+
+detailed_description: [Shot 1] The target begins as a seamless continuation of the final visible state in Video 1. Preserve the same subject identity, clothing, environment, lighting direction and camera height. Continue the existing movement with matching speed and momentum, then let the subject slow down, glance over the right shoulder and stop near the doorway. No jump cut, no sudden camera teleport, no new people.
+
+overall_soundscape: Continue the environmental ambience and physical sound character naturally from the source.
 
 non_diegetic_music: N/A</pre>
           </div>
         </section>
 
         <section class="guide-section guide-ai-section" id="guide-ai">
-          <span class="guide-section-index">08</span>
-          <h3>Для нейронки и ChatGPT</h3>
-          <p>Если вы используете другую нейронку для написания H3-промпта, ей лучше дать отдельную инструкцию, где описаны именно возможности нашего сайта.</p>
+          <span class="guide-section-index">10</span>
+          <h3>Для нейронки / ChatGPT</h3>
+          <p>Machine-readable guide теперь описывает все режимы сайта. Для локального агента используйте ссылку; для внешнего ChatGPT — copy-paste ниже.</p>
 
           <div class="guide-ai-actions">
             <a class="btn btn-primary" href="/static/h3-prompting-guide-ai.txt" target="_blank" rel="noopener">
-              <svg class="icon"><use href="/static/icons.svg#icon-info"></use></svg>
-              Ссылка для нейронки
+              <svg class="icon"><use href="/static/icons.svg#icon-info"></use></svg>Ссылка для нейронки
             </a>
             <button class="btn btn-secondary" id="copy-ai-guide-link" type="button">
-              <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
-              Копировать ссылку
+              <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Копировать ссылку
             </button>
           </div>
-          <p class="guide-muted">Ссылка открывает чистый текст без интерфейса. Она удобна для локальной нейронки или агента, который умеет читать URL в вашей сети. Внешний ChatGPT обычно не сможет открыть LAN-адрес — для него используйте copy-paste ниже.</p>
 
           <div class="guide-code-card guide-chatgpt-card">
             <div class="guide-code-head">
               <div>
                 <strong>Copy-paste для ChatGPT</strong>
-                <small>Вставьте это один раз перед задачей на создание видео-промпта.</small>
+                <small>Короткая инструкция; полный справочник доступен кнопкой выше.</small>
               </div>
               <button class="copy-link" type="button" data-copy-target="guide-chatgpt-prompt">
-                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
-                Скопировать для ChatGPT
+                <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Скопировать
               </button>
             </div>
-            <pre id="guide-chatgpt-prompt">Ты пишешь production-ready промпты для MiniMax H3 в моём локальном AI Video Studio.
+            <pre id="guide-chatgpt-prompt">Ты пишешь production-ready prompts для MiniMax H3 в моём локальном AI Video Studio.
 
-Поддерживаемые режимы сайта:
-1) text-to-video без изображений;
-2) image-to-video с ПЕРВЫМ кадром;
-3) first+last frame — переход от первого кадра к последнему.
-Не используй Characters, Ref2VA, Video References и другие режимы, если я прямо не скажу, что сайт обновлён.
+Сайт имеет три режима:
+1. Кадры / FL2VA: T2V, точный First frame, точный Last frame, First+Last.
+2. Референсы / Ref2VA: до 9 Picture, 3 Video, 3 standalone Audio, 15 media всего; Characters считаются в эти лимиты.
+3. Digital Human: минимум один visual reference и ровно один driving Audio.
 
-Правила:
-- Финальный H3 prompt пиши структурированно и преимущественно на английском.
-- Всегда используй поля в порядке: integrated_multimodal_description, overall_soundscape, non_diegetic_music.
-- [Shot 1] идёт без timestamp. Следующие планы начинай с точного времени вида: [Shot 2] At 00:04.000, the camera cuts to...
-- В каждом Shot задавай стартовую композицию, героя/объекты, окружение, одно понятное движение камеры и действия строго по хронологии.
-- Не пересказывай сюжет абстрактно. Описывай наблюдаемые действия: поворот головы, шаги, жест рукой, положение предмета, паузы, реакцию.
-- Для одного непрерывного дубля используй один Shot и фразу “in one continuous shot with no cuts”.
-- Реплики оставляй на исходном языке пользователя. Говорящим присваивай (S1), (S2), а точный текст помещай в &lt;d&gt;: &lt;d&gt;[Russian] Точная реплика.&lt;/d&gt;
-- Действие-связанные звуки пиши рядом с действием; постоянную атмосферу — в overall_soundscape; музыку для зрителя — в non_diegetic_music. Если музыки не надо: N/A.
-- Если нужен H3-звук, напомни включить “Генерировать со звуком”.
-- Отдельного negative prompt нет: ограничения пиши прямыми предложениями внутри основного описания.
-- Не добавляй лишние сцены, реплики, людей, музыку или действия, которых я не просил.
-- Соблюдай заданную длительность: все события и склейки должны реально помещаться в неё.
-- Для первого кадра считай картинку точным стартом, сохраняй лицо, одежду, предметы, свет и композицию; описывай, что начинает двигаться после неё.
-- Для первого+последнего кадра описывай физический путь между картинками, а не две статичные картинки. Обычно предпочитай один непрерывный Shot и постепенно своди позу, предметы и композицию к последнему кадру.
-- Если я прислал изображение как стартовый кадр, не проси меня заново описывать то, что на нём видно: используй изображение и мою задачу.
-- Если данных достаточно, не задавай лишних уточняющих вопросов.
+FL2VA:
+- Используй поля integrated_multimodal_description, overall_soundscape, non_diegetic_music.
+- First/Last — точные anchors. При First+Last описывай физический путь между картинками.
 
-Перед финальным ответом проверь: непротиворечивость камеры и действия, постоянство одежды/предметов, правильный тайминг, длину диалога, отсутствие случайной музыки/субтитров и чёткое финальное состояние.
+Ref2VA:
+- Используй шесть полей: subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music.
+- Ссылки: &lt;Subject N&gt;, &lt;Picture N&gt;, &lt;Video N&gt;, &lt;Audio N&gt;.
+- Visual retention: fully_preserved / partially_preserved / attribute_transfer / weak_reference.
+- Audio retention: fully_copy / partially_copy / reference / weak_reference.
+- Задачи: reference generation, keyframe completion, video editing, video continuation, audio reuse, audio reference.
+- Storyboard/keyframe Picture в Ref2VA — визуальный ориентир, НЕ точный latent keyframe на секунде.
+- Character — сохранённый reusable subject: внешность и иногда voice. Не придумывай другой дизайн, если Character выбран.
+- Video reference может задавать motion, camera motion, behavior или исходник для edit/continuation.
+- Soundtrack reference-video может стать Audio reference автоматически.
 
-В ответе сначала дай только готовый H3 prompt, который можно сразу вставить в поле Prompt. После него одной короткой строкой можешь указать рекомендуемую длительность и нужен ли H3 Audio.</pre>
+Общее:
+- Пиши наблюдаемые действия в строгой хронологии.
+- [Shot 1] без timestamp; следующий Shot: [Shot 2] At 00:04.000, the camera cuts to...
+- Для одного дубля: one continuous shot with no cuts.
+- Не перегружай камеру несколькими сложными движениями.
+- Реплики сохраняй дословно на языке пользователя: &lt;d&gt;[Russian] ...&lt;/d&gt;.
+- Не добавляй незапрошенные реплики, людей, музыку, предметы или склейки.
+- Конкретные запреты пиши прямо в description: No subtitles, no extra people, feet stay planted и т.п.
+- Для слышимого H3 dialogue/sound напомни включить “Генерировать со звуком”.
+- Если данных достаточно, не задавай лишних вопросов.
+
+Сначала выдай готовый H3 prompt. После него максимум одной строкой укажи рекомендуемую длительность, выбранный режим и нужен ли H3 Audio.</pre>
           </div>
 
           <div class="guide-source">
-            <span>Основа и сверка формата:</span>
-            <a href="https://www.mage.space/ru/models/minimax-h3/prompting-guide" target="_blank" rel="noopener">Mage MiniMax-H3 Prompting Guide</a>
-            <span>+</span>
-            <a href="https://github.com/MiniMax-AI/MiniMax-H3/blob/main/skills/h3-prompt-writing/references/base-en.txt" target="_blank" rel="noopener">официальный MiniMax H3 prompt guide</a>
+            <span>Сверено с:</span>
+            <a href="https://www.mage.space/ru/models/minimax-h3/prompting-guide" target="_blank" rel="noopener">Mage H3 Prompting Guide</a>
+            <span>·</span>
+            <a href="https://github.com/nkxx188/ComfyUI-MiniMaxH3-Easy" target="_blank" rel="noopener">ComfyUI-MiniMaxH3-Easy</a>
           </div>
         </section>
       </article>
