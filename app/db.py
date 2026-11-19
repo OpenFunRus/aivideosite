@@ -30,6 +30,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS media (
                 id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL DEFAULT 'user1',
                 parent_id TEXT,
                 kind TEXT NOT NULL,
                 filename TEXT NOT NULL UNIQUE,
@@ -43,6 +44,7 @@ def init_db() -> None:
 
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL DEFAULT 'user1',
                 kind TEXT NOT NULL,
                 status TEXT NOT NULL,
                 progress REAL NOT NULL DEFAULT 0,
@@ -66,6 +68,15 @@ def init_db() -> None:
             """
         )
         _ensure_jobs_columns(conn)
+        _ensure_owner_columns(conn)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_jobs_owner_created "
+            "ON jobs(owner_id, created_at DESC)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_media_owner_created "
+            "ON media(owner_id, created_at DESC)"
+        )
 
 
 def _ensure_jobs_columns(conn: sqlite3.Connection) -> None:
@@ -75,6 +86,24 @@ def _ensure_jobs_columns(conn: sqlite3.Connection) -> None:
     if "cancel_requested" not in columns:
         conn.execute(
             "ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0"
+        )
+
+
+def _ensure_owner_columns(conn: sqlite3.Connection) -> None:
+    job_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+    }
+    if "owner_id" not in job_columns:
+        conn.execute(
+            "ALTER TABLE jobs ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'user1'"
+        )
+
+    media_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(media)").fetchall()
+    }
+    if "owner_id" not in media_columns:
+        conn.execute(
+            "ALTER TABLE media ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'user1'"
         )
 
 
@@ -96,22 +125,39 @@ def recover_interrupted_jobs() -> int:
         return cur.rowcount
 
 
-def enqueue_job(job_id: str, kind: str, payload: dict[str, Any]) -> None:
+def enqueue_job(
+    job_id: str,
+    kind: str,
+    payload: dict[str, Any],
+    owner_id: str = "user1",
+) -> None:
     with connect() as conn:
         conn.execute(
             """
             INSERT INTO jobs(
-                id, kind, status, progress, stage, payload_json,
+                id, owner_id, kind, status, progress, stage, payload_json,
                 created_at, external_id, cancel_requested
-            ) VALUES (?, ?, 'queued', 0, 'В очереди', ?, ?, NULL, 0)
+            ) VALUES (?, ?, ?, 'queued', 0, 'В очереди', ?, ?, NULL, 0)
             """,
-            (job_id, kind, json.dumps(payload, ensure_ascii=False), utcnow()),
+            (
+                job_id,
+                owner_id,
+                kind,
+                json.dumps(payload, ensure_ascii=False),
+                utcnow(),
+            ),
         )
 
 
-def get_job(job_id: str) -> dict[str, Any] | None:
+def get_job(job_id: str, owner_id: str | None = None) -> dict[str, Any] | None:
     with connect() as conn:
-        row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if owner_id is None:
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM jobs WHERE id=? AND owner_id=?",
+                (job_id, owner_id),
+            ).fetchone()
     return _decode_job(row) if row else None
 
 
@@ -121,7 +167,12 @@ def clone_failed_job(source_job_id: str, new_job_id: str) -> dict[str, Any]:
         raise LookupError("Job not found")
     if source["status"] != "failed":
         raise ValueError("Only failed jobs can be retried")
-    enqueue_job(new_job_id, source["kind"], source["payload"])
+    enqueue_job(
+        new_job_id,
+        source["kind"],
+        source["payload"],
+        owner_id=str(source.get("owner_id") or "user1"),
+    )
     return source
 
 
@@ -206,10 +257,19 @@ def update_job(
         )
 
 
-def request_cancel(job_id: str) -> dict[str, Any] | None:
+def request_cancel(
+    job_id: str,
+    owner_id: str | None = None,
+) -> dict[str, Any] | None:
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if owner_id is None:
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM jobs WHERE id=? AND owner_id=?",
+                (job_id, owner_id),
+            ).fetchone()
         if row is None:
             conn.execute("COMMIT")
             return None
@@ -239,7 +299,7 @@ def request_cancel(job_id: str) -> dict[str, Any] | None:
             )
         conn.execute("COMMIT")
 
-    return get_job(job_id)
+    return get_job(job_id, owner_id)
 
 
 def is_cancel_requested(job_id: str) -> bool:
@@ -305,6 +365,7 @@ def fail_job(job_id: str, error: str) -> None:
 def insert_media(
     *,
     media_id: str,
+    owner_id: str = "user1",
     filename: str,
     kind: str,
     title: str,
@@ -317,12 +378,13 @@ def insert_media(
         conn.execute(
             """
             INSERT INTO media(
-                id, parent_id, kind, filename, title,
+                id, owner_id, parent_id, kind, filename, title,
                 meta_json, size_bytes, duration, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 media_id,
+                owner_id,
                 parent_id,
                 kind,
                 filename,
@@ -335,90 +397,171 @@ def insert_media(
         )
 
 
-def get_media(media_id: str) -> dict[str, Any] | None:
+def get_media(media_id: str, owner_id: str | None = None) -> dict[str, Any] | None:
     with connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM media WHERE id=?",
-            (media_id,),
-        ).fetchone()
+        if owner_id is None:
+            row = conn.execute(
+                "SELECT * FROM media WHERE id=?",
+                (media_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM media WHERE id=? AND owner_id=?",
+                (media_id, owner_id),
+            ).fetchone()
     return _decode_media(row) if row else None
 
 
-def list_media(limit: int = 100) -> list[dict[str, Any]]:
+def list_media(
+    limit: int = 100,
+    owner_id: str | None = None,
+) -> list[dict[str, Any]]:
+    limit = max(1, min(500, limit))
     with connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT *
-              FROM media
-             ORDER BY created_at DESC
-             LIMIT ?
-            """,
-            (max(1, min(500, limit)),),
-        ).fetchall()
+        if owner_id is None:
+            rows = conn.execute(
+                "SELECT * FROM media ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT *
+                  FROM media
+                 WHERE owner_id=?
+                 ORDER BY created_at DESC
+                 LIMIT ?
+                """,
+                (owner_id, limit),
+            ).fetchall()
     return [_decode_media(row) for row in rows]
 
 
-def list_media_page(page: int, page_size: int = PAGE_SIZE) -> dict[str, Any]:
+def list_media_page(
+    page: int,
+    page_size: int = PAGE_SIZE,
+    owner_id: str | None = None,
+) -> dict[str, Any]:
     page = max(1, int(page))
     page_size = max(1, min(100, int(page_size)))
     with connect() as conn:
-        total = int(conn.execute("SELECT COUNT(*) FROM media").fetchone()[0])
+        if owner_id is None:
+            total = int(conn.execute("SELECT COUNT(*) FROM media").fetchone()[0])
+        else:
+            total = int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM media WHERE owner_id=?",
+                    (owner_id,),
+                ).fetchone()[0]
+            )
         pages = max(1, (total + page_size - 1) // page_size)
         page = min(page, pages)
-        rows = conn.execute(
-            """
-            SELECT *
-              FROM media
-             ORDER BY created_at DESC
-             LIMIT ? OFFSET ?
-            """,
-            (page_size, (page - 1) * page_size),
-        ).fetchall()
+        if owner_id is None:
+            rows = conn.execute(
+                "SELECT * FROM media ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (page_size, (page - 1) * page_size),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT *
+                  FROM media
+                 WHERE owner_id=?
+                 ORDER BY created_at DESC
+                 LIMIT ? OFFSET ?
+                """,
+                (owner_id, page_size, (page - 1) * page_size),
+            ).fetchall()
     return _page_result([_decode_media(row) for row in rows], page, page_size, total)
 
 
-def delete_media_row(media_id: str) -> None:
+def delete_media_row(media_id: str, owner_id: str | None = None) -> None:
     with connect() as conn:
-        conn.execute("DELETE FROM media WHERE id=?", (media_id,))
+        if owner_id is None:
+            conn.execute("DELETE FROM media WHERE id=?", (media_id,))
+        else:
+            conn.execute(
+                "DELETE FROM media WHERE id=? AND owner_id=?",
+                (media_id, owner_id),
+            )
 
 
-def list_jobs(limit: int = 100) -> list[dict[str, Any]]:
+def list_jobs(
+    limit: int = 100,
+    owner_id: str | None = None,
+) -> list[dict[str, Any]]:
+    limit = max(1, min(500, limit))
     with connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT *
-              FROM jobs
-             ORDER BY created_at DESC
-             LIMIT ?
-            """,
-            (max(1, min(500, limit)),),
-        ).fetchall()
+        if owner_id is None:
+            rows = conn.execute(
+                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT *
+                  FROM jobs
+                 WHERE owner_id=?
+                 ORDER BY created_at DESC
+                 LIMIT ?
+                """,
+                (owner_id, limit),
+            ).fetchall()
     return [_decode_job(row) for row in rows]
 
 
-def list_jobs_page(page: int, page_size: int = PAGE_SIZE) -> dict[str, Any]:
+def list_jobs_page(
+    page: int,
+    page_size: int = PAGE_SIZE,
+    owner_id: str | None = None,
+) -> dict[str, Any]:
     page = max(1, int(page))
     page_size = max(1, min(100, int(page_size)))
     with connect() as conn:
-        total = int(conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
+        if owner_id is None:
+            total = int(conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
+        else:
+            total = int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM jobs WHERE owner_id=?",
+                    (owner_id,),
+                ).fetchone()[0]
+            )
         pages = max(1, (total + page_size - 1) // page_size)
         page = min(page, pages)
-        rows = conn.execute(
-            """
-            SELECT *
-              FROM jobs
-             ORDER BY created_at DESC
-             LIMIT ? OFFSET ?
-            """,
-            (page_size, (page - 1) * page_size),
-        ).fetchall()
+        if owner_id is None:
+            rows = conn.execute(
+                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (page_size, (page - 1) * page_size),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT *
+                  FROM jobs
+                 WHERE owner_id=?
+                 ORDER BY created_at DESC
+                 LIMIT ? OFFSET ?
+                """,
+                (owner_id, page_size, (page - 1) * page_size),
+            ).fetchall()
     return _page_result([_decode_job(row) for row in rows], page, page_size, total)
 
 
-def delete_terminal_job(job_id: str) -> dict[str, Any] | None:
+def delete_terminal_job(
+    job_id: str,
+    owner_id: str | None = None,
+) -> dict[str, Any] | None:
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if owner_id is None:
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM jobs WHERE id=? AND owner_id=?",
+                (job_id, owner_id),
+            ).fetchone()
         if row is None:
             conn.execute("COMMIT")
             return None
@@ -430,23 +573,45 @@ def delete_terminal_job(job_id: str) -> dict[str, Any] | None:
     return _decode_job(row)
 
 
-def clear_nonrunning_jobs() -> list[dict[str, Any]]:
+def clear_nonrunning_jobs(
+    owner_id: str | None = None,
+) -> list[dict[str, Any]]:
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        rows = conn.execute(
-            "SELECT * FROM jobs WHERE status != 'running'"
-        ).fetchall()
-        conn.execute("DELETE FROM jobs WHERE status != 'running'")
+        if owner_id is None:
+            rows = conn.execute(
+                "SELECT * FROM jobs WHERE status != 'running'"
+            ).fetchall()
+            conn.execute("DELETE FROM jobs WHERE status != 'running'")
+        else:
+            rows = conn.execute(
+                "SELECT * FROM jobs WHERE owner_id=? AND status != 'running'",
+                (owner_id,),
+            ).fetchall()
+            conn.execute(
+                "DELETE FROM jobs WHERE owner_id=? AND status != 'running'",
+                (owner_id,),
+            )
         conn.execute("COMMIT")
     return [_decode_job(row) for row in rows]
 
 
-def active_media_ids() -> set[str]:
+def active_media_ids(owner_id: str | None = None) -> set[str]:
     protected: set[str] = set()
     with connect() as conn:
-        rows = conn.execute(
-            "SELECT payload_json FROM jobs WHERE status IN ('queued', 'running')"
-        ).fetchall()
+        if owner_id is None:
+            rows = conn.execute(
+                "SELECT payload_json FROM jobs WHERE status IN ('queued', 'running')"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT payload_json
+                  FROM jobs
+                 WHERE owner_id=? AND status IN ('queued', 'running')
+                """,
+                (owner_id,),
+            ).fetchall()
     for row in rows:
         try:
             payload = json.loads(row["payload_json"])
@@ -461,11 +626,22 @@ def active_media_ids() -> set[str]:
     return protected
 
 
-def clear_media_except(exclude_ids: set[str] | None = None) -> list[dict[str, Any]]:
+def clear_media_except(
+    exclude_ids: set[str] | None = None,
+    owner_id: str | None = None,
+) -> list[dict[str, Any]]:
     exclude_ids = {str(value) for value in (exclude_ids or set())}
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        rows = conn.execute("SELECT * FROM media ORDER BY created_at DESC").fetchall()
+        if owner_id is None:
+            rows = conn.execute(
+                "SELECT * FROM media ORDER BY created_at DESC"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM media WHERE owner_id=? ORDER BY created_at DESC",
+                (owner_id,),
+            ).fetchall()
         delete_ids = [row["id"] for row in rows if row["id"] not in exclude_ids]
         if delete_ids:
             placeholders = ",".join("?" for _ in delete_ids)
@@ -477,15 +653,29 @@ def clear_media_except(exclude_ids: set[str] | None = None) -> list[dict[str, An
     return [_decode_media(row) for row in rows if row["id"] in delete_ids]
 
 
-def state_counts() -> dict[str, int]:
+def state_counts(owner_id: str | None = None) -> dict[str, int]:
     with connect() as conn:
-        queued = conn.execute(
-            "SELECT COUNT(*) FROM jobs WHERE status='queued'"
-        ).fetchone()[0]
-        running = conn.execute(
-            "SELECT COUNT(*) FROM jobs WHERE status='running'"
-        ).fetchone()[0]
-        media_count = conn.execute("SELECT COUNT(*) FROM media").fetchone()[0]
+        if owner_id is None:
+            queued = conn.execute(
+                "SELECT COUNT(*) FROM jobs WHERE status='queued'"
+            ).fetchone()[0]
+            running = conn.execute(
+                "SELECT COUNT(*) FROM jobs WHERE status='running'"
+            ).fetchone()[0]
+            media_count = conn.execute("SELECT COUNT(*) FROM media").fetchone()[0]
+        else:
+            queued = conn.execute(
+                "SELECT COUNT(*) FROM jobs WHERE owner_id=? AND status='queued'",
+                (owner_id,),
+            ).fetchone()[0]
+            running = conn.execute(
+                "SELECT COUNT(*) FROM jobs WHERE owner_id=? AND status='running'",
+                (owner_id,),
+            ).fetchone()[0]
+            media_count = conn.execute(
+                "SELECT COUNT(*) FROM media WHERE owner_id=?",
+                (owner_id,),
+            ).fetchone()[0]
     return {
         "queued": int(queued),
         "running": int(running),
