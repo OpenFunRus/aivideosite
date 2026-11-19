@@ -22,8 +22,7 @@
 2. Поддерживать T2V / I2V / First+Last Frame.
 3. Хранить очередь и библиотеку независимо от браузера.
 4. Позволять закрыть сайт, вернуться позже и увидеть результат.
-5. Делать LipSync через LatentSync.
-6. Делать простые операции со звуком через FFmpeg.
+5. Делать простые операции со звуком через FFmpeg.
 7. В перспективе добавить отдельный audio-driven генератор Wan2.2 S2V:
    - reference image;
    - audio/vocal;
@@ -175,24 +174,6 @@ ComfyUI venv:
 /opt/ai/ComfyUI/.venv
 ```
 
-LatentSync:
-
-```text
-/opt/ai/LatentSync
-```
-
-Conda env LatentSync:
-
-```text
-/home/openfun/miniconda3/envs/latentsync
-```
-
-LatentSync Python:
-
-```text
-/home/openfun/miniconda3/envs/latentsync/bin/python
-```
-
 AI Video Site:
 
 ```text
@@ -294,129 +275,6 @@ Fast
 
 ---
 
-## 6. LatentSync
-
-Установлен отдельно от ComfyUI.
-
-Путь:
-
-```text
-/opt/ai/LatentSync
-```
-
-Python:
-
-```text
-/home/openfun/miniconda3/envs/latentsync/bin/python
-```
-
-Checkpoint:
-
-```text
-/opt/ai/LatentSync/checkpoints/latentsync_unet.pt
-```
-
-Whisper:
-
-```text
-/opt/ai/LatentSync/checkpoints/whisper/tiny.pt
-```
-
-Базовая команда, вокруг которой построен worker:
-
-```bash
-/home/openfun/miniconda3/envs/latentsync/bin/python -m scripts.inference \
-  --unet_config_path configs/unet/stage2_512.yaml \
-  --inference_ckpt_path checkpoints/latentsync_unet.pt \
-  --inference_steps 20 \
-  --guidance_scale 1.5 \
-  --enable_deepcache \
-  --video_path INPUT_25FPS.mp4 \
-  --audio_path VOCAL_16K_MONO.wav \
-  --video_out_path OUTPUT.mp4
-```
-
-Перед этим сайт:
-
-- делает видео 25 FPS;
-- удаляет исходный звук из временного video;
-- делает audio 16 kHz mono;
-- учитывает `audio_start`;
-- ограничивает audio длительностью исходного видео.
-
-### Исправленная проблема VRAM
-
-Была ошибка:
-
-```text
-torch.OutOfMemoryError
-GPU 0 has ... Process ComfyUI has ~21.84 GiB memory in use
-```
-
-Причина:
-
-- H3/ComfyUI после генерации продолжал держать почти всю VRAM;
-- LatentSync не мог загрузить свои модели.
-
-Сайт теперь перед LatentSync:
-
-1. вызывает ComfyUI:
-   `POST /free`
-2. передаёт:
-   ```json
-   {
-     "unload_models": true,
-     "free_memory": true
-   }
-   ```
-3. проверяет реальную VRAM через `nvidia-smi`;
-4. ждёт минимум около 19000 MiB свободной памяти;
-5. только затем запускает LatentSync;
-6. запускает его с:
-   ```text
-   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-   ```
-
-После LipSync ComfyUI при следующей H3-задаче загружает модель снова.
-
-### Исправленная проблема Face not detected
-
-Получена реальная ошибка:
-
-```text
-RuntimeError: Face not detected
-```
-
-Это происходило на extreme close-up, когда лицо почти целиком занимало кадр.
-
-В сайт добавлен:
-
-```text
-app/latentsync_face_check.py
-```
-
-Он использует тот же InsightFace / `FaceDetector`, что LatentSync.
-
-Алгоритм:
-
-1. подготовить исходный 25 FPS video;
-2. preflight по всем кадрам тем же face detector;
-3. если лицо определяется во всех кадрах — запускать LatentSync как раньше;
-4. если не определяется:
-   - временно уменьшить video до 85% с полями;
-   - проверить;
-   - если не помогло — 75%;
-   - затем 65%;
-5. если один вариант проходит — LatentSync работает по временному safe-frame;
-6. после LipSync поля crop-ятся;
-7. видео растягивается обратно в исходное разрешение;
-8. аудио сохраняется;
-9. если даже 65% не проходит — возвращается понятная ошибка с проблемным frame.
-
-ВАЖНО: этот fallback реализован, но после последнего изменения пользователь ещё должен подтвердить его runtime-результат.
-
----
-
 ## 7. AI Video Site — backend
 
 Stack:
@@ -446,7 +304,7 @@ app/config.py
 app/db.py
 app/comfy.py
 app/worker.py
-app/latentsync_face_check.py
+app/удалённый legacy lip-sync_face_check.py
 ```
 
 Frontend:
@@ -795,7 +653,7 @@ Video stream копируется:
 
 ## 16. Установка сайта на чистой/восстановленной Ubuntu VM
 
-Предполагается, что ComfyUI и LatentSync уже настроены.
+Предполагается, что ComfyUI и удалённый legacy lip-sync уже настроены.
 
 ```bash
 cd /opt/ai
@@ -863,8 +721,6 @@ PORT=8000
 DATA_DIR=/opt/ai/aivideosite/data
 COMFYUI_URL=http://127.0.0.1:8188
 COMFYUI_OUTPUT_DIR=/opt/ai/ComfyUI/output
-LATENTSYNC_DIR=/opt/ai/LatentSync
-LATENTSYNC_PYTHON=/home/openfun/miniconda3/envs/latentsync/bin/python
 FFMPEG_BIN=/usr/bin/ffmpeg
 FFPROBE_BIN=/usr/bin/ffprobe
 
@@ -1007,10 +863,8 @@ journalctl -u aivideosite -f
 Текущий pipeline:
 
 ```text
-H3 -> готовый video -> LatentSync -> final
+H3 -> готовый video -> FFmpeg/монтаж -> final
 ```
-
-LipSync постфактум ограничен face detector и меняет только область лица.
 
 Для музыкального клипа лучше:
 
@@ -1028,7 +882,7 @@ Wan2.2 S2V подходит для:
 
 ### Выбранный стартовый вариант для dual-GPU VM
 
-Использовать native ComfyUI Wan2.2 S2V. Первый целевой GPU для S2V — отдельная RTX 2080 Ti mod 22 GB через `comfyui-wan.service` на port 8189. RTX 3090 остаётся основным GPU для H3/LatentSync. Если S2V FP8 не заработает приемлемо на Turing/22 GB, fallback — тестировать Wan на RTX 3090.
+Использовать native ComfyUI Wan2.2 S2V. Первый целевой GPU для S2V — отдельная RTX 2080 Ti mod 22 GB через `comfyui-wan.service` на port 8189. RTX 3090 используется как основной целевой GPU для Wan2.2 S2V. Если S2V FP8 не заработает приемлемо на Turing/22 GB, fallback — тестировать Wan на RTX 3090.
 
 Основная модель:
 
@@ -1156,13 +1010,11 @@ Wan2.2 S2V
 
 Worker должен:
 
-1. сериализовать S2V с остальными GPU jobs;
-2. выгрузить H3/лишние модели перед S2V;
-3. загрузить S2V;
-4. использовать audio as conditioning;
-5. сохранить output в Library;
-6. записать prompt/seed/audio metadata;
-7. mux original requested audio в final file, если Comfy graph выдаёт silent video.
+1. сериализовать S2V с остальными GPU jobs на соответствующем backend;
+2. использовать audio as conditioning;
+3. сохранить output в Library;
+4. записать prompt/seed/audio metadata;
+5. mux original requested audio в final file, если Comfy graph выдаёт silent video.
 
 ---
 
@@ -1205,7 +1057,6 @@ Demucs/UVR пока НЕ установлен и не интегрирован.
 5. Lightning LoRA для S2V не является специально обученной S2V LoRA и может портить результат.
 6. H3 quality/max profiles в текущем сайте нельзя считать полностью runtime-tested так же хорошо, как Fast.
 7. 1536x864 H3 presets не считать гарантированно проверенными по VRAM/performance.
-8. LatentSync face-safe fallback 85/75/65 реализован, но после последнего commit требует реального runtime retest.
 9. Demucs/UVR отсутствует.
 10. Полноценный timeline editor отсутствует.
 11. Browser не может восстановить local file input после F5 — это ограничение браузера.
@@ -1292,7 +1143,7 @@ journalctl -u comfyui -n 200 --no-pager
 - H3 T2V/I2V/First+Last;
 - native H3 audio;
 - Library;
-- LatentSync;
+- удалённый legacy lip-sync;
 - FFmpeg audio tools;
 - responsive mobile UI;
 - localStorage;
@@ -1302,9 +1153,6 @@ journalctl -u comfyui -n 200 --no-pager
 - first/last image preview + remove cross;
 - fix Library playback reset from polling;
 - fix JS selector regression by replacing ambiguous `$ / $$` with `qs / qsa`;
-- automatic ComfyUI VRAM unload before LatentSync;
-- LatentSync face detector preflight;
-- close-up fallback 85% / 75% / 65%;
 - planned next engine: native Wan2.2 S2V.
 
 ---
@@ -1314,15 +1162,14 @@ journalctl -u comfyui -n 200 --no-pager
 Пока Wan models скачиваются:
 
 1. не менять H3 pipeline;
-2. закончить runtime test текущего LatentSync close-up fallback;
-3. после download перезапустить/обновить ComfyUI только если native S2V nodes отсутствуют;
-4. открыть native Wan2.2 S2V template;
-5. test reference image + 4–5 sec Russian vocal;
-6. записать speed/VRAM/quality;
-7. решить:
+2. после download перезапустить/обновить ComfyUI только если native S2V nodes отсутствуют;
+3. открыть native Wan2.2 S2V template;
+4. test reference image + 4–5 sec Russian vocal;
+5. записать speed/VRAM/quality;
+6. решить:
    - 20-step quality;
    - 4-step preview;
-8. после этого реализовать engine switch в сайте.
+7. после этого реализовать engine switch в сайте.
 
 
 ---
