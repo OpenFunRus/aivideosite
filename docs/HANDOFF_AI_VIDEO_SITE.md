@@ -857,7 +857,7 @@ Status:
 
 ```bash
 systemctl status comfyui --no-pager
-systemctl status comfyui-wan --no-pager
+systemctl status comfyui-secondary --no-pager
 systemctl status aivideosite --no-pager
 ```
 
