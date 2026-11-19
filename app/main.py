@@ -71,13 +71,27 @@ app.mount(
 templates = Jinja2Templates(directory=settings.root_dir / "app" / "templates")
 
 
+def _current_user(request: Request):
+    if request.session.get("authenticated") is not True:
+        return None
+    user_id = str(request.session.get("user_id") or "")
+    return next((user for user in settings.site_users if user.id == user_id), None)
+
+
 def _is_authenticated(request: Request) -> bool:
-    return request.session.get("authenticated") is True
+    return _current_user(request) is not None
 
 
-def require_auth(request: Request) -> None:
-    if not _is_authenticated(request):
+def require_user(request: Request) -> str:
+    user = _current_user(request)
+    if user is None:
         raise HTTPException(status_code=401, detail="Authentication required")
+    return user.id
+
+
+def _user_label(user_id: str) -> str:
+    user = next((user for user in settings.site_users if user.id == user_id), None)
+    return user.label if user is not None else user_id
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -93,9 +107,16 @@ async def login_page(request: Request):
 
 @app.post("/login", response_class=HTMLResponse)
 async def login(request: Request, password: Annotated[str, Form()]):
-    if hmac.compare_digest(password, settings.site_password):
+    matched_user = None
+    for user in settings.site_users:
+        if hmac.compare_digest(password, user.password):
+            matched_user = user
+            break
+
+    if matched_user is not None:
         request.session.clear()
         request.session["authenticated"] = True
+        request.session["user_id"] = matched_user.id
         return RedirectResponse("/", status_code=303)
 
     return templates.TemplateResponse(
@@ -116,10 +137,11 @@ async def logout(request: Request):
 async def dashboard(request: Request):
     if not _is_authenticated(request):
         return RedirectResponse("/login", status_code=303)
+    user = _current_user(request)
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={},
+        context={"current_user": user},
     )
 
 
@@ -127,10 +149,10 @@ async def dashboard(request: Request):
 async def api_state(
     media_page: int = Query(1, ge=1),
     jobs_page: int = Query(1, ge=1),
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    media_data = db.list_media_page(media_page, 20)
-    jobs_data = db.list_jobs_page(jobs_page, 20)
+    media_data = db.list_media_page(media_page, 20, owner_id=user_id)
+    jobs_data = db.list_jobs_page(jobs_page, 20, owner_id=user_id)
     return {
         "server_now": time.time(),
         "jobs": jobs_data["items"],
@@ -141,7 +163,9 @@ async def api_state(
         "media_pagination": {
             key: media_data[key] for key in ("page", "page_size", "total", "pages")
         },
-        "counts": db.state_counts(),
+        "counts": db.state_counts(user_id),
+        "global_counts": db.state_counts(),
+        "user": {"id": user_id, "label": _user_label(user_id)},
         "system": get_system_status(),
     }
 
@@ -159,7 +183,7 @@ async def api_generate(
     generate_audio: Annotated[bool, Form()] = False,
     first_frame: UploadFile | None = File(None),
     last_frame: UploadFile | None = File(None),
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
     del request
 
@@ -211,6 +235,7 @@ async def api_generate(
             "generate_audio": bool(generate_audio),
             "images": image_paths,
         },
+        owner_id=user_id,
     )
     return {"ok": True, "job_id": job_id}
 
@@ -219,9 +244,9 @@ async def api_generate(
 async def api_cancel_job(
     job_id: str,
     request: Request,
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    job = db.request_cancel(job_id)
+    job = db.request_cancel(job_id, user_id)
     if job is None:
         raise HTTPException(404, "Задача не найдена.")
 
@@ -237,9 +262,9 @@ async def api_cancel_job(
 @app.post("/api/jobs/{job_id}/retry")
 async def api_retry_job(
     job_id: str,
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    source = db.get_job(job_id)
+    source = db.get_job(job_id, user_id)
     if source is None:
         raise HTTPException(404, "Задача не найдена.")
     if source["status"] != "failed":
@@ -258,7 +283,7 @@ async def api_retry_job(
     for clip in payload.get("clips") or []:
         if not isinstance(clip, dict) or not clip.get("media_id"):
             continue
-        media = db.get_media(str(clip["media_id"]))
+        media = db.get_media(str(clip["media_id"]), user_id)
         if media is None or not (settings.library_dir / media["filename"]).is_file():
             missing.append(f"media:{clip['media_id']}")
     if missing:
@@ -275,10 +300,10 @@ async def api_retry_job(
 @app.delete("/api/jobs/{job_id}")
 async def api_delete_job(
     job_id: str,
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
     try:
-        job = db.delete_terminal_job(job_id)
+        job = db.delete_terminal_job(job_id, user_id)
     except ValueError:
         raise HTTPException(
             409,
@@ -292,12 +317,12 @@ async def api_delete_job(
 
 @app.delete("/api/jobs")
 async def api_clear_jobs(
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    jobs = db.clear_nonrunning_jobs()
+    jobs = db.clear_nonrunning_jobs(user_id)
     for job in jobs:
         _cleanup_job_uploads(job)
-    counts = db.state_counts()
+    counts = db.state_counts(user_id)
     return {
         "ok": True,
         "deleted": len(jobs),
@@ -310,9 +335,9 @@ async def api_replace_audio(
     media_id: str,
     audio: UploadFile = File(...),
     audio_start: Annotated[float, Form()] = 0.0,
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    _ensure_media(media_id)
+    _ensure_media(media_id, user_id)
     audio_path = await save_upload(
         audio,
         kind="audio",
@@ -327,6 +352,7 @@ async def api_replace_audio(
             "audio_path": str(audio_path),
             "audio_start": max(0.0, audio_start),
         },
+        owner_id=user_id,
     )
     return {"ok": True, "job_id": job_id}
 
@@ -334,30 +360,31 @@ async def api_replace_audio(
 @app.post("/api/media/{media_id}/remove-audio")
 async def api_remove_audio(
     media_id: str,
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    _ensure_media(media_id)
+    _ensure_media(media_id, user_id)
     job_id = uuid.uuid4().hex
     db.enqueue_job(
         job_id,
         "audio_remove",
         {"media_id": media_id},
+        owner_id=user_id,
     )
     return {"ok": True, "job_id": job_id}
 
 
 @app.get("/api/editor/media")
 async def api_editor_media(
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    return {"items": db.list_media(500)}
+    return {"items": db.list_media(500, owner_id=user_id)}
 
 
 @app.post("/api/editor/export")
 async def api_editor_export(
     project: Annotated[str, Form()],
     audio: UploadFile | None = File(None),
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
     try:
         data = json.loads(project)
@@ -379,7 +406,7 @@ async def api_editor_export(
         media_id = str(clip.get("media_id") or "").strip()
         if not media_id:
             raise HTTPException(400, f"Не указан ролик для клипа #{index}.")
-        _ensure_media(media_id)
+        _ensure_media(media_id, user_id)
         volume = _editor_float(
             clip.get("volume", 1.0),
             f"Громкость клипа #{index}",
@@ -448,16 +475,17 @@ async def api_editor_export(
                 "volume": audio_volume,
             },
         },
+        owner_id=user_id,
     )
     return {"ok": True, "job_id": job_id}
 
 
 @app.delete("/api/media")
 async def api_clear_media(
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    protected_ids = db.active_media_ids()
-    media_items = db.clear_media_except(protected_ids)
+    protected_ids = db.active_media_ids(user_id)
+    media_items = db.clear_media_except(protected_ids, owner_id=user_id)
     deleted_files = 0
     for media in media_items:
         path = settings.library_dir / media["filename"]
@@ -477,15 +505,15 @@ async def api_clear_media(
 @app.delete("/api/media/{media_id}")
 async def api_delete_media(
     media_id: str,
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    media = _ensure_media(media_id)
-    if media_id in db.active_media_ids():
+    media = _ensure_media(media_id, user_id)
+    if media_id in db.active_media_ids(user_id):
         raise HTTPException(409, "Этот ролик используется активной задачей.")
 
     path = settings.library_dir / media["filename"]
     path.unlink(missing_ok=True)
-    db.delete_media_row(media_id)
+    db.delete_media_row(media_id, user_id)
     return {"ok": True}
 
 
@@ -493,9 +521,9 @@ async def api_delete_media(
 async def media_file(
     media_id: str,
     request: Request,
-    _: None = Depends(require_auth),
+    user_id: str = Depends(require_user),
 ):
-    media = _ensure_media(media_id)
+    media = _ensure_media(media_id, user_id)
     path = settings.library_dir / media["filename"]
     if not path.is_file():
         raise HTTPException(404, "Файл не найден.")
@@ -581,8 +609,8 @@ def _editor_float(
     return number
 
 
-def _ensure_media(media_id: str) -> dict:
-    media = db.get_media(media_id)
+def _ensure_media(media_id: str, owner_id: str) -> dict:
+    media = db.get_media(media_id, owner_id)
     if media is None:
         raise HTTPException(404, "Ролик не найден.")
     return media
