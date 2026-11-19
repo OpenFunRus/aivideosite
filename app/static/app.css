@@ -108,6 +108,7 @@ img, video { max-width: 100%; }
   text-align: center;
 }
 .sidebar-footer { margin-top: auto; display: grid; gap: 10px; }
+.gpu-mini-stack { display: grid; gap: 8px; }
 .gpu-mini {
   display: flex;
   align-items: center;
@@ -376,7 +377,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .badge-red { color: #ffb2b6; background: rgba(232,89,95,.12); }
 .badge-gray { color: #b7c1d1; background: rgba(141,154,176,.12); }
 
-.dashboard-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 18px; }
+.dashboard-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
 .metric-card {
   min-width: 0;
   padding: 14px;
