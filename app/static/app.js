@@ -837,7 +837,7 @@
     const taskField = qs("#reference-task-field");
     if (taskField) taskField.hidden = mode === "digital_human" || mode === "multiframe";
     if (mode === "multiframe" && qs("#reference-task")) {
-      qs("#reference-task").value = "keyframe_completion";
+      qs("#reference-task").value = "timeline_guides";
     }
 
     qsa('[name="profile"]', generationForm).forEach((input) => {
