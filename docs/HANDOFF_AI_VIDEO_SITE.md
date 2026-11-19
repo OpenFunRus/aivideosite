@@ -304,7 +304,6 @@ app/config.py
 app/db.py
 app/comfy.py
 app/worker.py
-app/удалённый legacy lip-sync_face_check.py
 ```
 
 Frontend:
@@ -448,7 +447,6 @@ server_now
 
 - inline video preview;
 - download;
-- LipSync;
 - audio replace;
 - remove audio;
 - delete;
@@ -653,7 +651,7 @@ Video stream копируется:
 
 ## 16. Установка сайта на чистой/восстановленной Ubuntu VM
 
-Предполагается, что ComfyUI и удалённый legacy lip-sync уже настроены.
+Предполагается, что ComfyUI уже настроен.
 
 ```bash
 cd /opt/ai
@@ -1143,7 +1141,6 @@ journalctl -u comfyui -n 200 --no-pager
 - H3 T2V/I2V/First+Last;
 - native H3 audio;
 - Library;
-- удалённый legacy lip-sync;
 - FFmpeg audio tools;
 - responsive mobile UI;
 - localStorage;
