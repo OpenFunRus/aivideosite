@@ -40,15 +40,10 @@ Observed from the site Queue after both completed. The same prompt/settings were
 
 ## Experiment — disable Comfy compiler
 
-Both H3 ComfyUI services are launched with:
+A/B test on RTX 3090 with the exact saved benchmark:
 
-```text
---disable-comfy-compiler
-```
+- baseline: `00:03:36`;
+- with `--disable-comfy-compiler`: `00:03:33`;
+- difference: 3 seconds (~1.4%), treated as measurement noise / no practical gain.
 
-This is an A/B performance test only. Keep the exact baseline prompt/seed/settings above and compare against:
-
-- RTX 3090 stock baseline: `00:03:36`;
-- RTX 2080 Ti stock baseline: `00:06:15`.
-
-Do not conclude that it is faster until the user records real runtime results on the VM.
+Result: reverted. Do not keep this flag solely for H3 performance on the current stack.
