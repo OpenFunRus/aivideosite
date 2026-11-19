@@ -1590,6 +1590,16 @@
   });
 
   const infoDialog = qs("#media-info-dialog");
+  const guideDialog = qs("#prompt-guide-dialog");
+  const guideOpenButton = qs("#prompt-guide-open");
+
+  guideOpenButton?.addEventListener("click", () => {
+    guideDialog?.showModal();
+  });
+
+  qsa("[data-close-guide]").forEach((button) => {
+    button.addEventListener("click", () => guideDialog?.close());
+  });
 
   const profileLabel = (value) => PROFILE_LABELS[value] || value || "—";
 
@@ -1657,6 +1667,16 @@
     document.execCommand("copy");
     helper.remove();
   };
+
+  qs("#copy-ai-guide-link")?.addEventListener("click", async () => {
+    const url = new URL("/static/h3-prompting-guide-ai.txt", window.location.origin).href;
+    try {
+      await copyText(url);
+      showToast("Ссылка для нейронки скопирована.");
+    } catch {
+      showToast("Не удалось скопировать ссылку.", "error");
+    }
+  });
 
   qsa("[data-copy-target]").forEach((button) => {
     button.addEventListener("click", async () => {
