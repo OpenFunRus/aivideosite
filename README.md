@@ -7,17 +7,20 @@
 - три независимых password-only профиля: у каждого своя библиотека, очередь/история и browser-настройки;
 - тёмный адаптивный интерфейс без внешних CDN;
 - локальные SVG-иконки Tabler;
-- три H3-режима: FL2VA «Кадры», Ref2VA «Референсы» и Digital Human;
+- четыре H3-режима: FL2VA «Кадры», Ref2VA «Референсы», native «Таймлайн» с exact guide frames и Digital Human;
 - FL2VA: T2V / First Frame / Last Frame / First+Last Frame с точными endpoint anchors;
 - Ref2VA: до 9 reference images, 3 reference videos, 3 standalone audio и 15 media всего; роли и retention на каждый direct reference;
 - per-user библиотека «Персонажи»: 1–4 appearance images, описание постоянных признаков и optional voice reference;
-- Ref2VA task presets: reference generation, storyboard/keyframe completion, video editing, video continuation, audio reuse и audio reference;
+- Ref2VA task presets: reference generation, semantic storyboard/keyframe completion, video editing, video continuation, audio reuse и audio reference;
+- Timeline: до 16 exact guide images с точным временем; сайт строит native `MiniMaxH3AddGuide` chain и переводит секунды в `frame_idx`;
+- H3 Fun ControlNet Union поверх любого режима: Canny Auto, prepared Canny/Pose/Depth/HED/MLSD и video inpainting через source+mask;
 - Digital Human: visual references + ровно один driving audio;
 - длительность 1–30 секунд, по умолчанию 5 секунд;
 - все ratio локального H3 Easy: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9; классы 360p / 480p / 720p / 1080p округляются вверх до сетки ×32, плюс 256×256 для 1:1 тестов;
 - FPS 12/16/20/24/25/30, по умолчанию рекомендованные 24 FPS;
-- FL2VA: 4/8 шагов используют FL Turbo LoRA; 12/16/20 — Base. Ref2VA: 4 шага используют отдельную Ref Turbo LoRA, 8/12/16/20 — Base;
-- полноэкранный гайд по MiniMax H3 прямо в интерфейсе: FL2VA/Ref2VA/Digital Human, Characters, roles/retention, video editing/continuation, shots/timing, camera, dialogue/audio, ограничения и примеры;
+- FL2VA: 4/8 шагов используют FL Turbo LoRA; 12/16/20 — Base. Ref2VA/Timeline/Digital Human: 4 шага используют отдельную Ref Turbo LoRA, 8/12/16/20 — Base;
+- native Timeline Guides и ControlNet переключают sampler на `res_multistep`, как в официальных ComfyUI H3 workflows; обычный Easy path остаётся на `euler`;
+- полноэкранный гайд по MiniMax H3 прямо в интерфейсе: FL2VA/Ref2VA/Timeline/Digital Human, Characters, roles/retention, ControlNet, video editing/continuation, shots/timing, camera, dialogue/audio, ограничения и примеры;
 - отдельный machine-readable guide: `/static/h3-prompting-guide-ai.txt`, плюс готовый copy-paste для ChatGPT;
 - опциональное нативное аудио MiniMax H3 через Audio VAE, выключено по умолчанию;
 - prompt и все параметры генерации автоматически сохраняются в localStorage и восстанавливаются после перезагрузки;
@@ -141,9 +144,10 @@ H3_VIDEO_VAE=minimax_h3_video_vae_fp16.safetensors
 H3_AUDIO_VAE=minimax_h3_audio_vae_fp32.safetensors
 H3_TURBO_LORA=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
 H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors
+H3_CONTROLNET_MODEL_PATCH=minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors
 ```
 
-Если файл модели называется иначе, достаточно изменить `.env`, код трогать не нужно. FL2VA и Ref2VA передаются в EasyLoader раздельно, поэтому отсутствие нового Ref2VA checkpoint не ломает старые FL2VA-задачи; Ref2VA начнёт работать после установки указанного checkpoint. Для 4-step Ref Turbo отдельно нужен Ref2V Turbo LoRA.
+Если файл модели называется иначе, достаточно изменить `.env`, код трогать не нужно. FL2VA и Ref2VA передаются в EasyLoader раздельно, поэтому отсутствие нового Ref2VA checkpoint не ломает старые FL2VA-задачи; Ref2VA начнёт работать после установки указанного checkpoint. Для 4-step Ref Turbo отдельно нужен Ref2V Turbo LoRA. ControlNet требует отдельный model patch в ComfyUI `models/model_patches`. Модели приложение само не скачивает.
 
 ### Профили шагов и разрешения
 
@@ -151,8 +155,8 @@ H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors
 
 - FL2VA 4/8 шагов — FL Turbo;
 - FL2VA 12/16/20 — Base;
-- Ref2VA / Digital Human 4 шага — отдельный Ref Turbo;
-- Ref2VA / Digital Human 8/12/16/20 — Base.
+- Ref2VA / Timeline / Digital Human 4 шага — отдельный Ref Turbo;
+- Ref2VA / Timeline / Digital Human 8/12/16/20 — Base.
 
 UI позволяет выбрать все aspect ratio, которые поддерживает текущий MiniMaxH3Easy node: `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `9:16`, `16:9`, `21:9`. Для каждого ratio классы 360p/480p/720p/1080p строятся на сетке ×32 с округлением вверх. В 1:1 дополнительно доступен 256×256 test. 21:9 1080-class шире 2048 px, поэтому API допускает стороны до 3072 px; этот режим требует отдельной проверки VRAM.
 
@@ -165,10 +169,12 @@ UI позволяет выбрать все aspect ratio, которые под�
 - `<Subject N>`, `<Picture N>`, `<Video N>`, `<Audio N>`;
 - Characters и saved voice references;
 - roles / visual retention / audio retention;
-- reference generation, storyboard guidance, video editing и continuation;
+- reference generation, semantic storyboard guidance, video editing и continuation;
+- exact Timeline Guides через native `MiniMaxH3AddGuide`;
+- ControlNet Union: Canny/Pose/Depth/HED/MLSD/inpaint;
 - Digital Human;
 - shots, тайминги, camera, dialogue `<d>`, H3 native audio и concrete exclusions;
-- чёткое ограничение: Ref2VA storyboard Picture не выдаётся за точный arbitrary-time latent keyframe.
+- чёткое различие: обычный Ref2VA storyboard Picture — semantic reference, а Timeline Guide — точный `frame_idx` anchor.
 
 Для агентов/локальных нейронок есть чистый текст без UI:
 
@@ -176,7 +182,7 @@ UI позволяет выбрать все aspect ratio, которые под�
 /static/h3-prompting-guide-ai.txt
 ```
 
-В модалке есть кнопка `Ссылка для нейронки`, копирование абсолютного URL и отдельный copy-paste блок для ChatGPT. Machine guide теперь описывает все реально подключённые режимы: FL2VA, Ref2VA, Characters, video/audio references и Digital Human.
+В модалке есть кнопка `Ссылка для нейронки`, копирование абсолютного URL и отдельный copy-paste блок для ChatGPT. Machine guide теперь описывает все реально подключённые режимы: FL2VA, Ref2VA, exact Timeline Guides, Characters, video/audio references, Digital Human и ControlNet Union.
 
 ## Пользователи и изоляция данных
 
@@ -215,13 +221,22 @@ data/tmp/
 
 Оригинальные и производные ролики хранятся отдельно. Операции с аудио и монтаж не перезаписывают исходник.
 
-## Ref2VA / Characters — runtime-файлы и staging
+## H3 References / Timeline / ControlNet — runtime-файлы и staging
 
 - Character originals живут в `data/characters/<owner>/<character_id>/` и не удаляются после генерации.
 - Direct reference uploads живут в `data/uploads/` до успешного завершения или удаления задачи, чтобы Retry мог повторить failed job.
-- Перед Ref2VA запуском сайт копирует нужные image/video/audio в `COMFYUI_INPUT_DIR/aivideosite/<job_id>/`; staging всегда удаляется в `finally` после success/error/cancel.
-- В metadata готового ролика сохраняются generation mode, task, reference map, ref image size, actual prompt, user prompt и GPU backend.
+- Перед Ref2VA/Timeline/ControlNet запуском сайт копирует нужные image/video/audio в `COMFYUI_INPUT_DIR/aivideosite/<job_id>/`; каталог создаётся лениво только для такой задачи и всегда удаляется в `finally` после success/error/cancel.
+- В metadata готового ролика сохраняются generation mode, task, reference map, Timeline guide times, sanitized ControlNet settings, ref image size, actual prompt, user prompt и GPU backend.
 - План этапа и ручных проверок: `docs/H3_REFERENCES_CHARACTERS_PLAN.md`.
+
+## Требования для новых H3 controls
+
+- Для Ref2VA нужен актуальный `ComfyUI-MiniMaxH3-Easy` и Ref2VA checkpoint.
+- Exact Timeline Guides используют native `MiniMaxH3AddGuide` и требуют ComfyUI 0.34+.
+- Fun ControlNet Union v1 использует native `ModelPatchLoader` + `MiniMaxH3FunControlNetApply` и требует ComfyUI 0.35+.
+- Текущий default намеренно использует Union v1 patch; Union 2.0 не включён автоматически и требует отдельного обновления/проверки более нового ComfyUI.
+- Canny Auto строится сайтом через встроенный ComfyUI Canny. Для Pose/Depth/HED/MLSD загружается уже подготовленное control video; сайт не выдаёт обычное RGB-видео за эти control representations.
+- Inpaint требует source video и чёрно-белое mask video; белая область маски регенерируется.
 
 ## Безопасность
 
