@@ -801,6 +801,10 @@ systemd/comfyui-secondary.service
 
 и общие модели на диске, но CUDA context и VRAM полностью раздельные.
 
+### Current H3 performance experiment
+
+Both ComfyUI services currently include `--disable-comfy-compiler`. This is being A/B tested because recent H3 reports show the Comfy compiler can slow MiniMax H3 or cause problematic compilation/VRAM behavior on some stacks. It is an official ComfyUI startup flag and does not change prompt, sampler, steps, seed, model files or output resolution. Keep it only if the saved benchmark improves in real runtime.
+
 Secondary H3 service:
 
 ```ini
