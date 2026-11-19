@@ -6,9 +6,30 @@
   const appPage = qs(".app-page");
   if (!appPage) return;
 
-  const SETTINGS_KEY = "aivideosite-settings-v1";
-  const STORAGE_PREFIX = "aivideosite-";
-  const EDITOR_EXPORT_JOB_KEY = "aivideosite-editor-export-job";
+  const appShell = qs(".app-shell");
+  const currentUserId = appShell?.dataset.userId || "user";
+  const STORAGE_PREFIX = `aivideosite-${currentUserId}-`;
+  const SETTINGS_KEY = `${STORAGE_PREFIX}settings-v2`;
+  const VIEW_KEY = `${STORAGE_PREFIX}view`;
+  const EDITOR_EXPORT_JOB_KEY = `${STORAGE_PREFIX}editor-export-job`;
+
+  if (currentUserId === "user1") {
+    const legacySettings = localStorage.getItem("aivideosite-settings-v1");
+    if (!localStorage.getItem(SETTINGS_KEY) && legacySettings) {
+      localStorage.setItem(SETTINGS_KEY, legacySettings);
+    }
+    const legacyView = localStorage.getItem("aivideosite-view");
+    if (!localStorage.getItem(VIEW_KEY) && legacyView) {
+      localStorage.setItem(VIEW_KEY, legacyView);
+    }
+    const legacyEditorJob = localStorage.getItem("aivideosite-editor-export-job");
+    if (!localStorage.getItem(EDITOR_EXPORT_JOB_KEY) && legacyEditorJob) {
+      localStorage.setItem(EDITOR_EXPORT_JOB_KEY, legacyEditorJob);
+    }
+    localStorage.removeItem("aivideosite-settings-v1");
+    localStorage.removeItem("aivideosite-view");
+    localStorage.removeItem("aivideosite-editor-export-job");
+  }
 
   let stateTimer = null;
   let lastState = null;
@@ -17,7 +38,7 @@
   let jobsPage = 1;
   let serverClockAtFetchMs = null;
   let serverClockPerfAtFetch = null;
-  let currentView = localStorage.getItem("aivideosite-view") || "generate";
+  let currentView = localStorage.getItem(VIEW_KEY) || "generate";
   const uploadObjectUrls = new Map();
   let editorMedia = [];
   let editorClips = [];
@@ -182,7 +203,7 @@
     if (!["generate", "editor", "library", "queue"].includes(view)) view = "generate";
     currentView = view;
     if (persist) {
-      localStorage.setItem("aivideosite-view", view);
+      localStorage.setItem(VIEW_KEY, view);
     }
 
     qsa("[data-view]").forEach((element) =>
@@ -449,6 +470,8 @@
     const comfySecondary = state.system?.comfyui_secondary;
     const running = Number(state.counts?.running || 0);
     const queued = Number(state.counts?.queued || 0);
+    const globalRunning = Number(state.global_counts?.running || 0);
+    const globalQueued = Number(state.global_counts?.queued || 0);
 
     const comfyPill = qs("#comfy-status");
     const comfyDot = qs(".status-dot", comfyPill);
@@ -465,14 +488,14 @@
     }
 
     const active = qs("#active-status");
-    active.innerHTML = running
+    active.innerHTML = globalRunning
       ? `${icon("bolt")}<span>GPU занят</span>`
       : `${icon("check")}<span>GPU свободен</span>`;
 
     qs("#sidebar-queue-count").textContent = String(running + queued);
     qs("#mobile-queue-count").textContent = String(running + queued);
     qs("#sidebar-media-count").textContent = String(state.counts?.media || 0);
-    qs("#metric-queue").textContent = String(running + queued);
+    qs("#metric-queue").textContent = String(globalRunning + globalQueued);
 
     const miniDot = qs("#gpu-status-dot");
     if (gpu) {
