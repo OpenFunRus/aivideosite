@@ -81,3 +81,25 @@ RTX 2080 Ti mod 22 GB: 00:06:15
 ```
 
 Next measurement: rerun the exact same H3 benchmark prompt, seed and settings to measure the real application-level gain.
+
+
+## Dual-unlock H3 retest — 2026-11-19
+
+After enabling the Turing unlock path and booting with both targets:
+
+```text
+gpu_unlock.targets=0000:01:00.0,0000:02:00.0
+```
+
+the exact same H3 benchmark produced:
+
+| GPU | Baseline | Best previous unlocked | Current dual-unlock run | Practical result |
+| --- | ---: | ---: | ---: | --- |
+| RTX 3090 24 GB | 00:03:36 | 00:03:04 | 00:03:35 | back to stock-like speed |
+| RTX 2080 Ti mod 22 GB | 00:06:15 | — | 00:06:12 | effectively no H3 gain |
+
+Interpretation:
+
+- RTX 2080 Ti unlock is confirmed by kernel logs, but this current H3 Fast/Turbo 8 workload shows essentially no end-to-end speedup.
+- RTX 3090 previously showed a real H3 gain (3:36 -> 3:04), but the later dual-target/Turing-branch boot did not preserve that application-level gain even though the card remained functional.
+- Do not treat synthetic FP16 GEMM gains as equivalent to H3 runtime gains.
