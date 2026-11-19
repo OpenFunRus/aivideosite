@@ -108,6 +108,17 @@ img, video { max-width: 100%; }
   text-align: center;
 }
 .sidebar-footer { margin-top: auto; display: grid; gap: 10px; }
+.user-mini {
+  padding: 10px 12px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: rgba(8,12,20,.55);
+}
+.user-mini strong { font-size: 12px; color: #dbe4f2; }
+.user-mini small { font-size: 10px; color: var(--muted); }
+
 .gpu-mini-stack { display: grid; gap: 8px; }
 .gpu-mini {
   display: flex;
@@ -536,7 +547,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   :root { --sidebar: 76px; }
   .sidebar { padding-inline: 10px; }
   .brand { justify-content: center; padding-inline: 0; }
-  .brand > span:last-child, .nav-item > span:not(.nav-count), .gpu-mini > div { display: none; }
+  .brand > span:last-child, .nav-item > span:not(.nav-count), .gpu-mini > div, .user-mini { display: none; }
   .nav-item { justify-content: center; padding: 0; }
   .nav-count { position: absolute; margin: -26px 0 0 26px; min-width: 18px; padding: 1px 5px; }
   .gpu-mini { justify-content: center; padding: 11px 6px; }
