@@ -40,6 +40,9 @@
   let serverClockPerfAtFetch = null;
   let currentView = localStorage.getItem(VIEW_KEY) || "generate";
   const uploadObjectUrls = new Map();
+  let characters = [];
+  const selectedCharacterIds = new Set();
+  let refreshCharacters = async () => {};
   let editorMedia = [];
   let editorClips = [];
   let editorDraggedClipIndex = null;
@@ -200,7 +203,7 @@
   };
 
   const switchView = (view, refresh = false, persist = true) => {
-    if (!["generate", "editor", "library", "queue"].includes(view)) view = "generate";
+    if (!["generate", "characters", "editor", "library", "queue"].includes(view)) view = "generate";
     currentView = view;
     if (persist) {
       localStorage.setItem(VIEW_KEY, view);
@@ -215,12 +218,19 @@
 
     const titles = {
       generate: "Генерация",
+      characters: "Персонажи",
       editor: "Монтаж",
       library: "Библиотека",
       queue: "Очередь",
     };
     qs("#page-title").textContent = titles[view];
 
+    if (view === "characters") {
+      refreshCharacters();
+    }
+    if (view === "generate") {
+      refreshCharacters();
+    }
     if (view === "editor") {
       refreshEditorMedia();
     }
@@ -239,28 +249,55 @@
   const secondsValue = qs("#seconds-value");
   const resolutionSelect = qs("#resolution");
 
-  const RESOLUTION_PRESETS = {
-    square: [
-      { value: "256x256", tier: "draft", label: "256 × 256 · быстрый тест" },
-      { value: "384x384", tier: "360", label: "360p · 384 × 384" },
-      { value: "480x480", tier: "480", label: "480p · 480 × 480" },
-      { value: "736x736", tier: "720", label: "720p · 736 × 736" },
-      { value: "1088x1088", tier: "1080", label: "1080p · 1088 × 1088" },
-    ],
-    landscape: [
-      { value: "672x384", tier: "360", label: "360p · 672 × 384" },
-      { value: "864x480", tier: "480", label: "480p · 864 × 480" },
-      { value: "1312x736", tier: "720", label: "720p · 1312 × 736" },
-      { value: "1920x1088", tier: "1080", label: "1080p · 1920 × 1088" },
-    ],
-    portrait: [
-      { value: "384x672", tier: "360", label: "360p · 384 × 672" },
-      { value: "480x864", tier: "480", label: "480p · 480 × 864" },
-      { value: "736x1312", tier: "720", label: "720p · 736 × 1312" },
-      { value: "1088x1920", tier: "1080", label: "1080p · 1088 × 1920" },
-    ],
+  const RESOLUTION_RATIOS = {
+    "1:1": [1, 1],
+    "2:3": [2, 3],
+    "3:2": [3, 2],
+    "3:4": [3, 4],
+    "4:3": [4, 3],
+    "9:16": [9, 16],
+    "16:9": [16, 9],
+    "21:9": [21, 9],
   };
-  const DEFAULT_RESOLUTION_SHAPE = "landscape";
+  const RESOLUTION_TIERS = [
+    { tier: "360", short: 384, label: "360p" },
+    { tier: "480", short: 480, label: "480p" },
+    { tier: "720", short: 736, label: "720p" },
+    { tier: "1080", short: 1088, label: "1080p" },
+  ];
+  const roundGridUp = (value) => Math.ceil(Number(value) / 32) * 32;
+  const buildResolutionPresets = (ratioName) => {
+    const [rw, rh] = RESOLUTION_RATIOS[ratioName] || RESOLUTION_RATIOS["16:9"];
+    const ratio = rw / rh;
+    const presets = RESOLUTION_TIERS.map(({ tier, short, label }) => {
+      let width = short;
+      let height = short;
+      if (ratio > 1) {
+        height = short;
+        width = roundGridUp(short * ratio);
+      } else if (ratio < 1) {
+        width = short;
+        height = roundGridUp(short / ratio);
+      }
+      return {
+        value: `${width}x${height}`,
+        tier,
+        label: `${label} · ${width} × ${height}`,
+      };
+    });
+    if (ratioName === "1:1") {
+      presets.unshift({
+        value: "256x256",
+        tier: "draft",
+        label: "256 × 256 · быстрый тест",
+      });
+    }
+    return presets;
+  };
+  const RESOLUTION_PRESETS = Object.fromEntries(
+    Object.keys(RESOLUTION_RATIOS).map((ratio) => [ratio, buildResolutionPresets(ratio)])
+  );
+  const DEFAULT_RESOLUTION_SHAPE = "16:9";
   const DEFAULT_RESOLUTION = "1312x736";
   const LEGACY_PROFILE_MAP = {
     fast: "steps8",
@@ -281,8 +318,14 @@
   const inferResolutionShape = (value) => {
     const [width, height] = String(value || "").split("x").map(Number);
     if (!width || !height) return DEFAULT_RESOLUTION_SHAPE;
-    if (width === height) return "square";
-    return width > height ? "landscape" : "portrait";
+    const ratio = width / height;
+    return Object.entries(RESOLUTION_RATIOS).reduce(
+      (best, [name, [rw, rh]]) => {
+        const error = Math.abs(Math.log(ratio / (rw / rh)));
+        return error < best.error ? { name, error } : best;
+      },
+      { name: DEFAULT_RESOLUTION_SHAPE, error: Number.POSITIVE_INFINITY }
+    ).name;
   };
 
   const inferResolutionTier = (value) => {
@@ -344,6 +387,10 @@
       profile: checkedProfile?.value || "steps8",
       seed: qs('[name="seed"]', generationForm)?.value || "-1",
       generate_audio: Boolean(qs("#generate-audio")?.checked),
+      generation_mode:
+        qs('[name="generation_mode"]:checked', generationForm)?.value || "frames",
+      reference_task: qs("#reference-task")?.value || "reference_generation",
+      ref_image_size: qs("#ref-image-size")?.value || "match",
     };
   };
 
@@ -375,11 +422,8 @@
     const shape = RESOLUTION_PRESETS[savedShape]
       ? savedShape
       : DEFAULT_RESOLUTION_SHAPE;
-    const shapeInput = qs(
-      `[name="resolution_shape"][value="${CSS.escape(shape)}"]`,
-      generationForm
-    );
-    if (shapeInput) shapeInput.checked = true;
+    const shapeInput = qs("#resolution-shape", generationForm);
+    if (shapeInput) shapeInput.value = shape;
     renderResolutionOptions(
       shape,
       savedResolution,
@@ -429,6 +473,30 @@
       audio.checked = Boolean(saved.generate_audio);
     }
 
+    const savedMode = ["frames", "reference", "digital_human"].includes(saved.generation_mode)
+      ? saved.generation_mode
+      : "frames";
+    const modeInput = qs(
+      `[name="generation_mode"][value="${CSS.escape(savedMode)}"]`,
+      generationForm
+    );
+    if (modeInput) modeInput.checked = true;
+
+    const referenceTask = qs("#reference-task");
+    if (
+      referenceTask &&
+      [...referenceTask.options].some((option) => option.value === String(saved.reference_task))
+    ) {
+      referenceTask.value = String(saved.reference_task);
+    }
+    const refSize = qs("#ref-image-size");
+    if (
+      refSize &&
+      [...refSize.options].some((option) => option.value === String(saved.ref_image_size))
+    ) {
+      refSize.value = String(saved.ref_image_size);
+    }
+
     updateSeconds();
   };
 
@@ -453,16 +521,208 @@
     showToast("Промт и настройки сброшены по умолчанию.");
   };
 
-  qsa('[name="resolution_shape"]', generationForm).forEach((input) => {
-    input.addEventListener("change", () => {
-      if (!input.checked) return;
-      const tier = resolutionSelect?.selectedOptions?.[0]?.dataset?.tier || "";
-      renderResolutionOptions(input.value, "", tier);
-      saveGeneratorSettings();
-    });
+  qs("#resolution-shape", generationForm)?.addEventListener("change", (event) => {
+    const tier = resolutionSelect?.selectedOptions?.[0]?.dataset?.tier || "";
+    renderResolutionOptions(event.target.value, "", tier);
+    saveGeneratorSettings();
   });
 
   restoreGeneratorSettings();
+
+  const referenceInputs = {
+    images: qs("#reference-images"),
+    videos: qs("#reference-videos"),
+    audios: qs("#reference-audios"),
+  };
+
+  const roleOptions = {
+    images: [
+      ["character", "Персонаж / внешность"],
+      ["object", "Предмет"],
+      ["setting", "Локация / окружение"],
+      ["style", "Стиль"],
+      ["composition", "Композиция"],
+      ["storyboard", "Storyboard / keyframe"],
+    ],
+    videos: [
+      ["motion", "Движение / действие"],
+      ["camera_motion", "Движение камеры"],
+      ["character", "Персонаж / поведение"],
+      ["setting", "Локация / окружение"],
+      ["style", "Стиль"],
+      ["composition", "Композиция"],
+    ],
+    audios: [
+      ["voice", "Голос / тембр"],
+      ["audio", "Звук / ритм"],
+    ],
+  };
+  const retentionOptions = {
+    images: [
+      ["fully_preserved", "Полностью сохранить"],
+      ["partially_preserved", "Частично сохранить"],
+      ["attribute_transfer", "Перенести атрибут"],
+      ["weak_reference", "Слабый ориентир"],
+    ],
+    videos: [
+      ["fully_preserved", "Полностью сохранить"],
+      ["partially_preserved", "Частично сохранить"],
+      ["attribute_transfer", "Перенести атрибут"],
+      ["weak_reference", "Слабый ориентир"],
+    ],
+    audios: [
+      ["fully_copy", "Полностью копировать"],
+      ["partially_copy", "Частично копировать"],
+      ["reference", "Референс"],
+      ["weak_reference", "Слабый ориентир"],
+    ],
+  };
+
+  const currentGenerationMode = () =>
+    qs('[name="generation_mode"]:checked', generationForm)?.value || "frames";
+
+  const referenceFiles = (kind) => [...(referenceInputs[kind]?.files || [])];
+
+  const renderReferenceList = (kind) => {
+    const container = qs(`#reference-${kind}-list`);
+    if (!container) return;
+    const files = referenceFiles(kind);
+    if (!files.length) {
+      container.innerHTML = "";
+      return;
+    }
+    container.innerHTML = files
+      .map((file, index) => {
+        const roleChoices = roleOptions[kind]
+          .map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`)
+          .join("");
+        const retentionChoices = retentionOptions[kind]
+          .map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`)
+          .join("");
+        const typeLabel = kind === "images" ? "Picture" : kind === "videos" ? "Video" : "Audio";
+        return `
+          <div class="reference-file-row" data-ref-kind="${kind}" data-ref-index="${index}">
+            <div class="reference-file-name">
+              <strong>${typeLabel} · ${index + 1}</strong>
+              <span title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+            </div>
+            <select class="ref-role" aria-label="Роль референса">${roleChoices}</select>
+            <select class="ref-retention" aria-label="Сила сохранения">${retentionChoices}</select>
+            <input class="ref-note" maxlength="240" placeholder="Короткое уточнение роли · необязательно">
+          </div>`;
+      })
+      .join("");
+  };
+
+  const syncCharacterSelection = () => {
+    qsa("#generator-character-list input[type=checkbox]").forEach((input) => {
+      if (input.checked) selectedCharacterIds.add(input.value);
+      else selectedCharacterIds.delete(input.value);
+    });
+    const hidden = qs("#character-ids");
+    if (hidden) hidden.value = JSON.stringify([...selectedCharacterIds]);
+  };
+
+  const getReferenceBudget = () => {
+    const selected = characters.filter((item) => selectedCharacterIds.has(item.id));
+    const characterImages = selected.reduce((sum, item) => sum + Number(item.image_count || 0), 0);
+    const characterVoices = selected.reduce((sum, item) => sum + (item.voice ? 1 : 0), 0);
+    const images = characterImages + referenceFiles("images").length;
+    const videos = referenceFiles("videos").length;
+    const audios = characterVoices + referenceFiles("audios").length;
+    return { images, videos, audios, total: images + videos + audios };
+  };
+
+  const updateReferenceBudget = () => {
+    syncCharacterSelection();
+    const budget = getReferenceBudget();
+    const element = qs("#reference-budget");
+    if (!element) return budget;
+    element.textContent =
+      `${budget.total} / 15 media · ${budget.images} / 9 images · ${budget.videos} / 3 videos · ${budget.audios} / 3 audio`;
+    const mode = currentGenerationMode();
+    const invalid =
+      budget.total > 15 ||
+      budget.images > 9 ||
+      budget.videos > 3 ||
+      budget.audios > 3 ||
+      (mode === "digital_human" && budget.audios !== 1);
+    element.classList.toggle("is-error", invalid);
+    return budget;
+  };
+
+  const buildReferenceManifest = () => {
+    const manifest = { images: [], videos: [], audios: [] };
+    qsa(".reference-file-row").forEach((row) => {
+      const kind = row.dataset.refKind;
+      if (!manifest[kind]) return;
+      manifest[kind][Number(row.dataset.refIndex)] = {
+        role: qs(".ref-role", row)?.value || "",
+        retention: qs(".ref-retention", row)?.value || "",
+        note: qs(".ref-note", row)?.value || "",
+      };
+    });
+    const hidden = qs("#reference-manifest");
+    if (hidden) hidden.value = JSON.stringify(manifest);
+    return manifest;
+  };
+
+  const updateGenerationModeUI = () => {
+    const mode = currentGenerationMode();
+    const frames = qs("#frames-mode-panel");
+    const references = qs("#reference-mode-panel");
+    if (frames) frames.hidden = mode !== "frames";
+    if (references) references.hidden = mode === "frames";
+    const kicker = qs("#generator-mode-kicker");
+    if (kicker) {
+      kicker.textContent =
+        mode === "frames"
+          ? "MiniMax H3 FL2VA"
+          : mode === "digital_human"
+            ? "MiniMax H3 DIGITAL HUMAN"
+            : "MiniMax H3 REF2VA";
+    }
+    const audioInput = referenceInputs.audios;
+    if (audioInput) audioInput.multiple = mode !== "digital_human";
+    const audioTitle = qs("#reference-audio-title");
+    const audioHelp = qs("#reference-audio-help");
+    if (audioTitle) audioTitle.textContent = mode === "digital_human" ? "Driving audio" : "Аудио / голос";
+    if (audioHelp) {
+      audioHelp.textContent =
+        mode === "digital_human"
+          ? "ровно 1 driving audio вместе с Character voice"
+          : "до 3 standalone audio";
+    }
+    const taskField = qs("#reference-task-field");
+    if (taskField) taskField.hidden = mode === "digital_human";
+    const note = qs("#reference-mode-note");
+    if (note) {
+      note.textContent =
+        mode === "digital_human"
+          ? "Digital Human: минимум один визуальный reference и ровно один Audio reference. Это driving track, а не обычная подсказка тембра."
+          : "Ref2VA: Pictures/Videos/Audio — референсы. Storyboard images задают ориентиры, но не являются точными latent-keyframes на произвольной секунде.";
+    }
+    updateReferenceBudget();
+  };
+
+  Object.entries(referenceInputs).forEach(([kind, input]) => {
+    input?.addEventListener("change", () => {
+      renderReferenceList(kind);
+      buildReferenceManifest();
+      updateReferenceBudget();
+    });
+  });
+  qs("#reference-mode-panel")?.addEventListener("input", () => {
+    buildReferenceManifest();
+    updateReferenceBudget();
+  });
+  qsa('[name="generation_mode"]', generationForm).forEach((input) => {
+    input.addEventListener("change", () => {
+      updateGenerationModeUI();
+      saveGeneratorSettings();
+    });
+  });
+  updateGenerationModeUI();
 
   generationForm.addEventListener("input", (event) => {
     if (event.target.matches('input[type="file"]')) return;
