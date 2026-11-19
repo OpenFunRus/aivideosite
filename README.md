@@ -63,7 +63,7 @@ cp .env.example .env
 
 ### Первый ручной запуск
 
-H3 ComfyUI должен быть доступен на `127.0.0.1:8188`; отдельный Wan backend — на `127.0.0.1:8189`.
+H3 ComfyUI слушает `0.0.0.0:8188`, отдельный Wan backend — `0.0.0.0:8189`; внутри сайта используются localhost URL `127.0.0.1:8188/8189`, а из LAN UI доступен по IP VM.
 
 ```bash
 source /opt/ai/aivideosite/.venv/bin/activate
