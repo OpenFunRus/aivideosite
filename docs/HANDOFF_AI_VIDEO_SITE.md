@@ -90,15 +90,15 @@ main
 
 - гипервизор: Proxmox VE 8.4;
 - CPU хоста: Intel Core i9-10980XE;
-- GPU: NVIDIA GeForce RTX 3090;
-- VRAM: 24 GB;
-- GPU проброшена в Ubuntu VM через passthrough.
+- GPU 0: NVIDIA GeForce RTX 3090, 24576 MiB VRAM, PCI bus `00000000:01:00.0`;
+- GPU 1: NVIDIA GeForce RTX 2080 Ti mod, 22528 MiB VRAM, PCI bus `00000000:02:00.0`;
+- обе GPU проброшены в Ubuntu VM через PCI passthrough и видны `nvidia-smi`.
 
 ### Ubuntu VM
 
 - Ubuntu Server 24.04;
 - vCPU: 12;
-- RAM: 48 GiB;
+- RAM: 56 GiB;
 - виртуальный диск после расширения: примерно 328 GB;
 - NVIDIA driver работает;
 - `nvidia-smi` работает;
@@ -126,8 +126,25 @@ ip route
 
 ### Проверка GPU
 
+Подтверждённый вывод после подключения второй карты:
+
+```text
+GPU 0: NVIDIA GeForce RTX 3090
+GPU 1: NVIDIA GeForce RTX 2080 Ti
+```
+
+VRAM:
+
+```text
+GPU 0: 24576 MiB
+GPU 1: 22528 MiB
+```
+
+Проверка:
+
 ```bash
-nvidia-smi
+nvidia-smi -L
+nvidia-smi --query-gpu=index,name,memory.total,pci.bus_id --format=csv
 ```
 
 Для мониторинга:
@@ -884,6 +901,46 @@ WorkingDirectory=/opt/ai/ComfyUI
 ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 127.0.0.1 --port 8188
 ```
 
+### ComfyUI Wan / GPU 1
+
+Repo file:
+
+```text
+systemd/comfyui-wan.service
+```
+
+Схема GPU isolation:
+
+- `comfyui.service` -> `CUDA_VISIBLE_DEVICES=0` -> физическая RTX 3090 -> port 8188;
+- `comfyui-wan.service` -> `CUDA_VISIBLE_DEVICES=1` -> физическая RTX 2080 Ti 22 GB mod -> port 8189.
+
+Оба процесса используют один и тот же installation tree:
+
+```text
+/opt/ai/ComfyUI
+```
+
+и общие модели на диске, но CUDA context и VRAM полностью раздельные.
+
+WAN service:
+
+```ini
+User=openfun
+Group=openfun
+WorkingDirectory=/opt/ai/ComfyUI
+Environment=PYTHONUNBUFFERED=1
+Environment=CUDA_VISIBLE_DEVICES=1
+ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 127.0.0.1 --port 8189
+Restart=always
+```
+
+ВАЖНО:
+
+- внутри процесса `CUDA_VISIBLE_DEVICES=1` эта физическая GPU будет отображаться приложению как локальная CUDA device 0 — это нормально;
+- текущий сайт пока использует только `COMFYUI_URL=http://127.0.0.1:8188`;
+- интеграция WAN backend `http://127.0.0.1:8189` в сайт ещё не реализована;
+- S2V 14B FP8 на RTX 2080 Ti 22 GB ещё требует runtime smoke test; не считать, что оно гарантированно влезает/работает до реального запуска.
+
 ### Site
 
 Repo file:
@@ -908,10 +965,12 @@ Install:
 cd /opt/ai/aivideosite
 
 sudo cp systemd/comfyui.service /etc/systemd/system/comfyui.service
+sudo cp systemd/comfyui-wan.service /etc/systemd/system/comfyui-wan.service
 sudo cp systemd/aivideosite.service /etc/systemd/system/aivideosite.service
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now comfyui.service
+sudo systemctl enable --now comfyui-wan.service
 sudo systemctl enable --now aivideosite.service
 ```
 
@@ -919,6 +978,7 @@ Status:
 
 ```bash
 systemctl status comfyui --no-pager
+systemctl status comfyui-wan --no-pager
 systemctl status aivideosite --no-pager
 ```
 
