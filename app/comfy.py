@@ -395,7 +395,7 @@ class ComfyUIClient:
             "34": {
                 "class_type": "ModelAttentionBackend",
                 "inputs": {
-                    "model": ["24", 0] if use_turbo else ["2", 0],
+                    "model": ["2", 0],
                     "attention": settings.h3_attention_backend,
                 },
             },
@@ -494,6 +494,143 @@ class ComfyUIClient:
                 }
                 workflow["2"]["inputs"][f"media_{index}"] = [node_id, 0]
                 workflow["2"]["inputs"][f"media_type_{index}"] = media_type
+
+        model_source: list[Any] = ["24", 0] if use_turbo else ["2", 0]
+
+        if control_mode != "none":
+            if str(settings.h3_controlnet_model_patch).strip().lower() in {"", "none"}:
+                raise ComfyUIError(
+                    "H3 ControlNet is not configured. Set H3_CONTROLNET_MODEL_PATCH."
+                )
+
+            workflow["306"] = {
+                "class_type": "ModelPatchLoader",
+                "inputs": {"name": settings.h3_controlnet_model_patch},
+            }
+
+            control_image_ref: list[Any] | None = None
+            source_image_ref: list[Any] | None = None
+            mask_ref: list[Any] | None = None
+
+            control_video_name = staged_control.get("control_video")
+            if control_video_name:
+                workflow["300"] = {
+                    "class_type": "LoadVideo",
+                    "inputs": {"file": control_video_name},
+                }
+                workflow["301"] = {
+                    "class_type": "GetVideoComponents",
+                    "inputs": {"video": ["300", 0]},
+                }
+                control_image_ref = ["301", 0]
+                if control_mode == "canny_auto":
+                    workflow["302"] = {
+                        "class_type": "Canny",
+                        "inputs": {
+                            "image": control_image_ref,
+                            "low_threshold": float(staged_control.get("canny_low") or 0.4),
+                            "high_threshold": float(staged_control.get("canny_high") or 0.8),
+                        },
+                    }
+                    control_image_ref = ["302", 0]
+
+            source_video_name = staged_control.get("source_video")
+            if source_video_name:
+                workflow["310"] = {
+                    "class_type": "LoadVideo",
+                    "inputs": {"file": source_video_name},
+                }
+                workflow["311"] = {
+                    "class_type": "GetVideoComponents",
+                    "inputs": {"video": ["310", 0]},
+                }
+                source_image_ref = ["311", 0]
+
+            mask_video_name = staged_control.get("mask_video")
+            if mask_video_name:
+                workflow["312"] = {
+                    "class_type": "LoadVideo",
+                    "inputs": {"file": mask_video_name},
+                }
+                workflow["313"] = {
+                    "class_type": "GetVideoComponents",
+                    "inputs": {"video": ["312", 0]},
+                }
+                workflow["314"] = {
+                    "class_type": "ImageToMask",
+                    "inputs": {
+                        "image": ["313", 0],
+                        "channel": "red",
+                    },
+                }
+                mask_ref = ["314", 0]
+
+            apply_inputs: dict[str, Any] = {
+                "model": model_source,
+                "model_patch": ["306", 0],
+                "vae": ["13", 2],
+                "strength": float(staged_control.get("strength") or 1.0),
+                "start_percent": float(staged_control.get("start_percent") or 0.0),
+                "end_percent": float(staged_control.get("end_percent") or 1.0),
+            }
+            if control_image_ref is not None:
+                apply_inputs["control_video"] = control_image_ref
+            if mask_ref is not None:
+                apply_inputs["mask"] = mask_ref
+            if source_image_ref is not None:
+                apply_inputs["source_video"] = source_image_ref
+
+            workflow["307"] = {
+                "class_type": "MiniMaxH3FunControlNetApply",
+                "inputs": apply_inputs,
+            }
+            model_source = ["307", 0]
+
+        workflow["34"]["inputs"]["model"] = model_source
+
+        if staged_guides:
+            positive_ref: list[Any] = ["13", 0]
+            for index, guide in enumerate(staged_guides, start=1):
+                load_id = str(400 + index)
+                guide_id = str(500 + index)
+                workflow[load_id] = {
+                    "class_type": "LoadImage",
+                    "inputs": {"image": guide["name"]},
+                }
+                workflow[guide_id] = {
+                    "class_type": "MiniMaxH3AddGuide",
+                    "inputs": {
+                        "positive": positive_ref,
+                        "latent": ["13", 1],
+                        "vae": ["13", 2],
+                        "audio_vae": ["13", 3],
+                        "image": [load_id, 0],
+                        "frame_idx": int(round(float(guide.get("time_seconds") or 0.0) * fps)),
+                    },
+                }
+                positive_ref = [guide_id, 0]
+
+            workflow["31"] = {
+                "class_type": "RandomNoise",
+                "inputs": {"noise_seed": seed},
+            }
+            workflow["32"] = {
+                "class_type": "BasicGuider",
+                "inputs": {
+                    "model": ["34", 0],
+                    "conditioning": positive_ref,
+                },
+            }
+            workflow["30"] = {
+                "class_type": "SamplerCustomAdvanced",
+                "inputs": {
+                    "noise": ["31", 0],
+                    "guider": ["32", 0],
+                    "sampler": ["7", 0],
+                    "sigmas": ["5", 0],
+                    "latent_image": ["13", 1],
+                },
+            }
 
         return workflow
 
