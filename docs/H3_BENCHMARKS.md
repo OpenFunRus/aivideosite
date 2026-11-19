@@ -59,3 +59,16 @@ Both H3 ComfyUI services are launched with:
 Purpose: keep 2 GB of additional VRAM free so DynamicVRAM does not run the H3 sampler/VAE at the memory-pressure edge. This does not change model weights, prompt, sampler, seed, steps, resolution or attention math.
 
 Benchmark rule: do not repeat an identical workflow+seed in the same ComfyUI process, because ComfyUI execution cache can return cached node outputs in a few seconds. For A/B runs either restart ComfyUI between identical-seed tests or use a fresh seed and record it.
+
+
+### RTX 3090 result with 2 GB headroom
+
+Exact saved benchmark, first uncached run after restart:
+
+- baseline: `00:03:36` (216 s);
+- `--vram-headroom 2`: `00:03:18` (198 s);
+- wall-clock reduction: 18 s;
+- time reduction: ~8.3%;
+- throughput improvement: ~9.1%.
+
+This is large enough to treat as a potentially meaningful improvement, not just a few-second measurement fluctuation. Keep the flag enabled for now and confirm with a fresh-seed uncached warm run.
