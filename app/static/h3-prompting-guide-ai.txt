@@ -1,0 +1,273 @@
+MiniMax H3 Prompting Guide for AI Agents
+AI Video Studio / OpenFunRus/aivideosite
+Version: 2026-11-19
+
+PURPOSE
+Turn a user's idea into a production-ready MiniMax H3 prompt for this local site.
+This site uses the MiniMax H3 FL2VA path through ComfyUI-MiniMaxH3-Easy.
+Prompt optimization is disabled: the text you produce is sent to H3 as written.
+The site supports:
+1. T2V: no images.
+2. I2V: one FIRST frame.
+3. FL2V: FIRST + LAST frame.
+Do not write Ref2VA/Character/Video Reference instructions for this site unless the user explicitly says the site was upgraded to support them.
+
+OUTPUT POLICY
+- Return the finished H3 prompt first.
+- Do not wrap it in Markdown code fences unless the user asks.
+- Do not add explanations inside the H3 prompt.
+- Use English for structural labels, visual direction, camera direction and sound direction.
+- Preserve spoken dialogue, lyrics and visible on-screen text in the language requested by the user.
+- Never translate dialogue unless the user asks for translation.
+- Never invent extra dialogue, characters, cuts, music or events that contradict the brief.
+- Prefer concrete visible/audible actions over abstract story summaries.
+- Keep continuity explicit: identity, clothes, props, handedness, positions, lighting and environment should not change unless requested.
+
+BASE PROMPT FORMAT
+Use these three fields in this exact order:
+
+integrated_multimodal_description: ...
+overall_soundscape: ...
+non_diegetic_music: ...
+
+Leave a blank line between fields.
+
+MODE SELECTION
+
+A) T2V / no frames
+Start directly with integrated_multimodal_description.
+
+B) I2V / FIRST frame only
+The first line should anchor Picture 1 to the beginning of Shot 1. Then leave one blank line before the three fields.
+Treat the uploaded image as the exact opening composition. Preserve its identity, clothing, objects, scene layout, light direction and framing unless the user asks for a visible change.
+Describe what starts moving AFTER the opening frame.
+
+Recommended first-line form:
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+
+C) FL2V / FIRST + LAST frames
+The first line should state that Picture 1 is the opening and Picture 2 is the ending at the exact chosen duration. Then leave one blank line before the three fields.
+Do not waste the prompt by re-describing the two still images. Describe the continuous physical path between them.
+Prefer one continuous shot unless the user explicitly asks for cuts.
+
+Recommended first-line form:
+How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the S.SS-second mark of the target video.
+
+Replace:
+- N with the actual final shot number.
+- S.SS with the requested clip duration using two decimals, for example 5.00 or 10.00.
+
+SHOT GRAMMAR
+- Shot 1 has no timestamp.
+- Start Shot 1 with style + shot size + subject + place + starting state.
+- Later shots have an explicit increasing cut time.
+- Example syntax for a later shot:
+  [Shot 2] At 00:04.000, the camera cuts to a close-up of ...
+- Every cut should add new information: a new viewpoint, place, subject, state or time.
+- If only framing distance changes, prefer a camera move instead of a cut.
+- A continuous take should use one Shot 1 and explicitly say "in one continuous shot with no cuts".
+- Never ask for "one continuous shot" while also specifying multiple shots.
+
+WHAT EACH SHOT SHOULD CONTAIN
+Write in this order when practical:
+1. Style and shot size.
+2. Subject identity and exact starting pose/state.
+3. Environment, lighting and important props.
+4. One primary camera behavior.
+5. Actions in chronological order.
+6. Reactions / secondary motion.
+7. Action-synchronized sound.
+8. Dialogue, if any.
+9. End state or transition into the next shot.
+
+CAMERA VOCABULARY
+Use natural sentences, not a pile of tags.
+
+- static shot: camera remains still.
+- push in: camera physically moves closer.
+- pull out: camera physically moves away.
+- zoom in / zoom out: focal length changes while camera stays in place.
+- pan left / right: camera rotates horizontally.
+- tilt up / down: camera rotates vertically.
+- truck left / right: camera slides sideways.
+- pedestal up / down: camera moves vertically as a whole.
+- tracking shot: camera follows a moving subject.
+- arc shot: camera moves around a subject.
+- POV: subject's point of view.
+- shake slightly / strongly: handheld or impact shake.
+- roll clockwise / counterclockwise: camera rolls around lens axis.
+
+Optional precision:
+- with small amplitude / with large amplitude
+- at slow speed / at fast speed
+
+Do not stack multiple difficult camera moves unless the user explicitly wants them. One clear camera behavior per shot is usually more reliable.
+
+TIMING
+- The shot timeline must fit the exact clip length.
+- Do not place a cut after the end of the clip.
+- The final shot continues until the end.
+- Leave enough real speaking time for dialogue.
+- For a 5 second clip, usually 1 shot is safest; 2 short shots are possible.
+- For a 10 second clip, 1–3 shots is a practical range depending on action density.
+- When an action has several stages, state them in exact chronological order.
+
+DIALOGUE
+Assign a stable speaker ID only to characters who speak or vocalize:
+(S1), (S2), etc.
+
+Describe the voice once, when first used:
+- apparent adult age range if relevant
+- masculine/feminine voice when relevant
+- pitch
+- timbre
+- pace
+- accent if requested
+- on-screen or off-screen delivery
+
+Put exact spoken words inside dialogue tags:
+<d>[Russian] Я люблю котика.</d>
+<d>[English] We leave at dawn.</d>
+
+Rules:
+- Language tag matches the spoken language.
+- Exact dialogue stays exactly as the user wrote it.
+- Do not repeat the dialogue in overall_soundscape.
+- Keep a short line short enough to be spoken naturally inside its shot.
+- For voiceover, explicitly say it is off-screen voiceover.
+- If the visible character must not lip-sync to voiceover, state that their lips remain closed.
+
+SOUND MODEL
+Treat audio as three layers.
+
+Layer 1 — synchronized action sound:
+Put it inside integrated_multimodal_description next to the action.
+Examples: door slam, hammer strike, cloth rustle, glass impact, laughter produced at a specific moment.
+
+Layer 2 — continuous ambience:
+Put it in overall_soundscape.
+Examples: wind, room tone, distant traffic, rain, birds, crowd murmur, machinery hum.
+Write 1–4 concise sentences.
+
+Layer 3 — audience-only score:
+Put it in non_diegetic_music.
+Describe instruments, tempo, rhythm and dynamics.
+Use N/A when no score is wanted.
+
+Important for this site:
+The "H3 native audio" checkbox controls whether generated H3 audio is decoded into the final video. When it is OFF, audio instructions may still be part of conditioning but the exported file will not contain the H3 audio track. If the user wants audible dialogue/sound from H3, tell them to enable native H3 audio.
+
+DIEGETIC MUSIC
+Music that exists inside the scene (radio, phone, band, speaker) belongs in integrated_multimodal_description because the characters can hear it.
+Do not put scene music in non_diegetic_music unless a separate audience-only score is also requested.
+
+ON-SCREEN TEXT
+If visible text is required, quote the exact text in English double quotes while preserving its original language and punctuation.
+Ask for only one important text element per shot when possible.
+If no text should appear, add a concrete exclusion such as:
+No subtitles, captions, logos, watermarks, or on-screen text.
+
+NEGATIVE INSTRUCTIONS
+There is no separate negative-prompt field in this site.
+Write exclusions as direct sentences inside the relevant description.
+Prefer specific exclusions:
+- No subtitles or watermarks.
+- No extra people enter the frame.
+- His feet stay planted; only his torso and right arm move.
+- The camera does not orbit.
+Avoid long generic negative lists that compete with the main action.
+
+FIRST-FRAME RULES
+When Picture 1 is the first frame:
+- Treat it as the exact opening.
+- Do not reinvent the person's face, clothing, pose, camera angle or room.
+- Start with what changes from that frame.
+- If the user asks for a turn, walk, hand gesture or camera move, describe the first visible motion explicitly.
+- Preserve objects that should remain in place.
+
+FIRST + LAST FRAME RULES
+- Picture 1 is the opening anchor; Picture 2 is the ending anchor.
+- Describe the movement path, not two static captions.
+- Explicitly converge toward Picture 2 near the end.
+- Mention pose, spacing, prop state and camera composition that must land on the final frame.
+- Avoid impossible teleportation between incompatible frames; use an observable transition.
+- Prefer a single shot for interpolation unless a cut is intentional.
+
+ACTION PRECISION
+Bad:
+"A man gets angry and acts crazy."
+
+Better:
+"He narrows his eyes, clenches his jaw, points once toward the doorway, then drops his hand and takes one step forward."
+
+Bad:
+"She dances."
+
+Better:
+"She keeps both feet planted, shifts her shoulders side to side, rolls her torso once, and waves her right hand above shoulder height."
+
+Use measurable motion:
+- one/two steps
+- turns 90/180 degrees
+- raises left/right hand
+- looks toward camera / away from camera
+- pauses
+- smiles only after a specified moment
+- keeps legs still
+- object remains in left hand
+- camera stays behind the subject
+
+CONTINUITY CHECKLIST
+Before returning the prompt, verify:
+- Same character identity throughout.
+- Same clothing unless a change is requested.
+- Same prop in same hand unless deliberately moved.
+- No unrequested people appear.
+- Camera direction does not contradict the action.
+- Cuts fit the duration.
+- Dialogue fits its shot.
+- Sound is placed in the correct layer.
+- Music is not contradicted by "no music".
+- First/last frame instructions match the provided images.
+- The ending state is explicit.
+- No unsupported References/Characters syntax is added for this local site.
+
+PROMPT DENSITY
+Do not maximize word count. Maximize useful control.
+For a simple 5-second single-shot clip, a compact but concrete prompt is better than a 500-word description.
+For a complex 10-second multi-shot scene, give enough detail to establish timing, framing, actions and sound without repeating the same facts.
+
+TEMPLATE — TEXT TO VIDEO
+integrated_multimodal_description: [Shot 1] Live-action, cinematic, a [shot size] frames [subject] in [place], [starting state]. The camera [single camera behavior]. [Action 1], then [action 2], then [end state]. [Synchronized physical sounds if important]. [Dialogue block if any]. [Concrete exclusions if needed].
+
+overall_soundscape: [Continuous ambience and non-verbal physical sounds].
+
+non_diegetic_music: [Instrumentation, tempo, rhythm and dynamics, or N/A].
+
+TEMPLATE — FIRST FRAME
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+
+integrated_multimodal_description: [Shot 1] [Preserve the composition/style/identity already established by Picture 1]. The camera [move or stays static]. Starting from the exact first-frame state, [chronological motion] and ends with [clear final state].
+
+overall_soundscape: [Ambience and physical sounds].
+
+non_diegetic_music: [Score or N/A].
+
+TEMPLATE — FIRST + LAST FRAME
+How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 1) aligns with the 10.00-second mark of the target video.
+
+integrated_multimodal_description: [Shot 1] In one continuous shot with no cuts, the video begins exactly from Picture 1. The camera [behavior]. [Describe visible intermediate motion in chronological order]. During the final seconds, [subject/object/camera] progressively settles into the pose, spacing, object state, lighting and composition established by Picture 2.
+
+overall_soundscape: [Ambience and physical sounds].
+
+non_diegetic_music: [Score or N/A].
+
+FINAL RESPONSE BEHAVIOR FOR AN AI ASSISTANT
+When the user asks you to create an H3 prompt:
+1. Infer T2V, FIRST-frame, or FIRST+LAST mode from the user's supplied assets.
+2. Use the exact requested clip length.
+3. Preserve every explicit user constraint.
+4. Make reasonable cinematic decisions only where the user left details open.
+5. Do not ask unnecessary follow-up questions if the scene can be written from existing information.
+6. Output the ready-to-paste H3 prompt.
+7. After it, optionally add one short note listing recommended duration / native-audio setting only when it materially matters.
