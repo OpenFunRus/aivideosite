@@ -478,14 +478,14 @@ UI:
 
 - кнопка `Гайд` находится слева в desktop topbar;
 - открывается native `<dialog>` на весь viewport;
-- внутри есть quick start, 3-field format, shots/timing, camera vocabulary, first-frame, first+last-frame, dialogue/audio, exclusions и готовые examples;
+- внутри есть выбор FL2VA / Ref2VA / Digital Human, Characters, roles/retention, video editing/continuation, FL first/last endpoints, shots/timing, camera, dialogue/audio, exclusions и готовые examples;
 - секция `Для нейронки и ChatGPT` содержит:
   - публичный LAN static text `/static/h3-prompting-guide-ai.txt`;
   - кнопку открытия machine guide;
   - кнопку копирования абсолютной ссылки;
   - полноценный copy-paste prompt для ChatGPT.
 
-Machine guide адаптирован к реальному сайту: `MiniMaxH3Easy` работает в `mode=image`, prompt optimizer выключен, в UI подключены T2V / first frame / first+last frame и максимум две картинки. Не советовать пользователю Characters/Ref2VA/Video References, пока соответствующий workflow не будет реально подключён.
+Machine guide адаптирован к реальному сайту и теперь покрывает все три реально подключённых `MiniMaxH3Easy` режима: `image` (FL2VA), `reference` (Ref2VA) и `digital_human`. Он знает лимиты 9 Pictures / 3 Videos / 3 standalone Audio / 15 media, Characters, deterministic reference mapping, visual/audio retention, editing/continuation и важное ограничение: Ref2VA storyboard Picture не является точным arbitrary-time latent keyframe.
 
 Источники, на которых основана структура:
 
@@ -586,12 +586,15 @@ Browser security не позволяет восстановить выбранн
 - profile;
 - seed;
 - H3 native audio checkbox;
+- generation mode;
+- reference task;
+- ref image size;
 - текущий view.
 
 Key generator settings:
 
 ```text
-aivideosite-settings-v1
+aivideosite-<user>-settings-v2
 ```
 
 Кнопка:
@@ -606,10 +609,11 @@ aivideosite-settings-v1
 - default resolution;
 - 5 sec;
 - 24 FPS;
-- Fast;
+- steps8;
 - seed = -1;
 - native H3 audio = off;
-- first/last input cleared.
+- generation mode = frames;
+- first/last и direct reference file inputs очищаются браузером при reset/reload.
 
 ---
 
@@ -636,13 +640,18 @@ FPS:
 - 25;
 - 30.
 
-Resolution presets сгруппированы в UI по форме кадра:
+Resolution UI поддерживает все ratio текущего H3 Easy node:
 
-- квадрат 1:1: 256×256 (тест), 384×384 (360p), 480×480, 736×736, 1088×1088;
-- горизонталь ~16:9: 672×384 (360p), 864×480, 1312×736, 1920×1088;
-- вертикаль ~9:16: 384×672 (360p), 480×864, 736×1312, 1088×1920.
+- 1:1;
+- 2:3;
+- 3:2;
+- 3:4;
+- 4:3;
+- 9:16;
+- 16:9;
+- 21:9.
 
-Правило: выбранный класс никогда не уменьшается. Если 360/720/1080 не делится на 32, меньшая сторона округляется вверх (360→384, 720→736, 1080→1088), а вторая сторона выбирается кратной 32 и максимально близкой к целевому aspect ratio. По умолчанию используется горизонтальный 720p-класс 1312×736.
+Классы 360/480/720/1080 строятся динамически: короткая сторона округляется вверх до H3-сетки ×32 (384/480/736/1088), длинная сторона также округляется вверх до ×32 по выбранному ratio. Для 1:1 дополнительно есть 256×256 test. Backend допускает сторону до 3072, чтобы 21:9 1080-class не обрезался старым лимитом 2048. Этот ultrawide режим требует VRAM runtime test.
 
 ### H3 native audio
 
@@ -668,7 +677,7 @@ CreateVideo
 
 Это H3-generated audio.
 
-Это НЕ означает input song -> lip movement.
+В обычном FL2VA/Ref2VA это не означает input song -> lip movement. Для audio-driven лица/персонажа теперь есть отдельный режим Digital Human: минимум один visual reference + ровно один standalone driving audio.
 
 ---
 
@@ -774,18 +783,21 @@ DATA_DIR=/opt/ai/aivideosite/data
 COMFYUI_URL=http://127.0.0.1:8188
 COMFYUI_SECONDARY_URL=http://127.0.0.1:8189
 COMFYUI_OUTPUT_DIR=/opt/ai/ComfyUI/output
+COMFYUI_INPUT_DIR=/opt/ai/ComfyUI/input
 FFMPEG_BIN=/usr/bin/ffmpeg
 FFPROBE_BIN=/usr/bin/ffprobe
 
 H3_FL2VA_MODEL=minimax_h3_fl2va_pruned_int8_convrot.safetensors
-H3_REF2VA_MODEL=none
+H3_REF2VA_MODEL=minimax_h3_ref2va_pruned_int8_convrot.safetensors
 H3_TEXT_ENCODER=qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
 H3_VIDEO_VAE=minimax_h3_video_vae_fp16.safetensors
 H3_AUDIO_VAE=minimax_h3_audio_vae_fp32.safetensors
 H3_TURBO_LORA=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
+H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors
 H3_ATTENTION_BACKEND=comfy kitchen attention
 
 MAX_IMAGE_UPLOAD_MB=40
+MAX_VIDEO_UPLOAD_MB=500
 MAX_AUDIO_UPLOAD_MB=300
 ```
 
@@ -1049,13 +1061,15 @@ removed legacy video engine признан неподходящим по кач�
 ## 21. Известные ограничения
 
 1. Runtime/визуальные GPU-тесты выполняет пользователь на Ubuntu VM.
-2. RTX 2080 Ti примерно в 2 раза медленнее RTX 3090 в уже проверенном H3-тесте.
-3. Приоритет диспетчера учитывает занятость задачами сайта; ручные задания, отправленные напрямую через ComfyUI UI, не являются штатным способом работы сайта.
-4. Новые профили 4/12/16/20 шагов требуют runtime/визуальной проверки; 8-step Turbo остаётся наиболее проверенным.
-5. 1080p-классы 1920×1088 / 1088×1920 требуют проверки по VRAM/performance на обеих GPU.
-6. Browser не может восстановить local file input после F5.
-7. Сайт без HTTPS и рассчитан на LAN.
-8. ComfyUI 8188/8189 доступны в LAN без собственной авторизации — не пробрасывать их в интернет.
+2. RTX 2080 Ti примерно в 2 раза медленнее RTX 3090 в уже проверенном FL2VA baseline.
+3. Приоритет диспетчера учитывает занятость задачами сайта; ручные задания напрямую через ComfyUI UI не являются штатным способом работы сайта.
+4. FL2VA 8-step Turbo остаётся наиболее проверенным режимом. Ref2VA checkpoint, Ref2VA 4-step Turbo, video/audio references и Digital Human требуют нового runtime/visual smoke test.
+5. 1080p и особенно 21:9 2560×1088 требуют проверки VRAM/performance на обеих GPU.
+6. Browser не восстанавливает binary file inputs после F5; Characters постоянные, direct refs надо выбрать заново для новой задачи.
+7. Ref2VA storyboard/keyframe role — reference guidance, не точный arbitrary-time latent anchor. Exact endpoints даёт FL2VA First/Last.
+8. Ref2VA 4-step использует отдельную Ref Turbo LoRA; 8/12/16/20 идут через Base, чтобы не применять 4-step adapter на неподходящем расписании.
+9. Сайт без HTTPS и рассчитан на LAN.
+10. ComfyUI 8188/8189 доступны в LAN без собственной авторизации — не пробрасывать их в интернет.
 
 ---
 
@@ -1145,3 +1159,182 @@ journalctl -u aivideosite.service -n 150 --no-pager
 - output FPS фиксирован 24;
 - output frame size берётся из первого клипа; ролики другого aspect ratio вписываются с black padding;
 - browser binary audio не переживает reload страницы, поэтому после reload файл нужно выбрать снова.
+
+
+---
+
+## 24. H3 Ref2VA / Characters / Digital Human
+
+Добавлено 19 ноября 2026.
+
+### Режимы генератора
+
+`generation_mode`:
+
+- `frames` -> Easy `mode=image`;
+- `reference` -> Easy `mode=reference`;
+- `digital_human` -> Easy `mode=digital_human`.
+
+Модели в EasyLoader изолируются по режиму:
+
+- FL2VA job передаёт `fl2va_model=<H3_FL2VA_MODEL>`, `ref2va_model=none`;
+- Ref2VA/Digital Human job передаёт `fl2va_model=none`, `ref2va_model=<H3_REF2VA_MODEL>`.
+
+Это специально сделано так, чтобы отсутствие нового Ref2VA checkpoint не ломало существующие FL2VA jobs.
+
+### Ref2VA media
+
+Direct uploads:
+
+- images: PNG/JPG/WebP;
+- videos: MP4/MOV/MKV/WebM/M4V;
+- audio: WAV/MP3/FLAC/M4A/AAC/OGG/OPUS.
+
+Лимиты H3 Easy:
+
+- 9 images;
+- 3 videos;
+- 3 standalone audio;
+- 15 resources total;
+- нужен минимум один visual image/video;
+- Digital Human требует ровно один standalone driving audio.
+
+Перед запуском reference media копируются в:
+
+```text
+COMFYUI_INPUT_DIR/aivideosite/<job_id>/
+```
+
+и подключаются стандартными Comfy nodes:
+
+- `LoadImage`;
+- `LoadVideo`;
+- `LoadAudio`.
+
+Staging удаляется через `finally` после success/error/cancel.
+
+### Characters
+
+SQLite table:
+
+```text
+characters
+```
+
+Поля:
+
+- id;
+- owner_id;
+- name;
+- description;
+- images_json;
+- voice_file;
+- created_at;
+- updated_at.
+
+Файлы:
+
+```text
+data/characters/<owner_id>/<character_id>/
+```
+
+Каждый Character:
+
+- 1–4 appearance image;
+- immutable visual description;
+- optional voice reference.
+
+Owner isolation обязательна. Preview route также проверяет owner. Удаление блокируется, если Character используется queued/running generation.
+
+### Reference mapping
+
+Сайт строит deterministic map:
+
+1. Character Pictures;
+2. direct Pictures;
+3. Videos;
+4. soundtrack каждого reference Video получает Audio ordinal;
+5. Character voice и direct standalone Audio получают следующие Audio ordinals.
+
+Simple prompt автоматически оборачивается в six-field Ref2VA format:
+
+- subject_definitions;
+- summary;
+- retention_analysis;
+- detailed_description;
+- overall_soundscape;
+- non_diegetic_music.
+
+Если prompt уже содержит все шесть полей, он сохраняется как есть.
+
+### Roles / retention
+
+Visual roles:
+
+- character;
+- object;
+- setting;
+- style;
+- composition;
+- storyboard;
+- motion;
+- camera_motion.
+
+Audio roles:
+
+- voice;
+- audio.
+
+Visual retention:
+
+- fully_preserved;
+- partially_preserved;
+- attribute_transfer;
+- weak_reference.
+
+Audio retention:
+
+- fully_copy;
+- partially_copy;
+- reference;
+- weak_reference.
+
+### Task presets
+
+- reference_generation;
+- keyframe_completion;
+- video_editing;
+- video_continuation;
+- audio_reuse;
+- audio_reference.
+
+### Turbo
+
+FL2VA:
+
+- steps4/steps8 -> `H3_TURBO_LORA`;
+- steps12/16/20 -> Base.
+
+Ref2VA/Digital Human:
+
+- steps4 -> `H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`;
+- steps8/12/16/20 -> Base.
+
+Не применять FL Turbo к Ref2VA.
+
+### Guides
+
+Обновлены:
+
+```text
+app/templates/index.html
+app/static/h3-prompting-guide-ai.txt
+```
+
+Оба гайда описывают новые режимы и предупреждают, что Ref2VA storyboard references не являются exact arbitrary-time keyframes.
+
+План этапа:
+
+```text
+docs/H3_REFERENCES_CHARACTERS_PLAN.md
+```
