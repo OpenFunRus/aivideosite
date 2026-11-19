@@ -30,6 +30,7 @@ class Settings:
     data_dir: Path
     upload_dir: Path
     library_dir: Path
+    character_dir: Path
     temp_dir: Path
     db_path: Path
 
@@ -56,6 +57,7 @@ class Settings:
     h3_attention_backend: str
 
     max_image_upload_bytes: int
+    max_video_upload_bytes: int
     max_audio_upload_bytes: int
 
 
@@ -155,6 +157,7 @@ settings = Settings(
     data_dir=_data_dir,
     upload_dir=_data_dir / "uploads",
     library_dir=_data_dir / "library",
+    character_dir=_data_dir / "characters",
     temp_dir=_data_dir / "tmp",
     db_path=_data_dir / "aivideosite.db",
     site_users=_site_users(),
@@ -197,6 +200,7 @@ settings = Settings(
         "comfy kitchen attention",
     ),
     max_image_upload_bytes=int(os.getenv("MAX_IMAGE_UPLOAD_MB", "40")) * 1024 * 1024,
+    max_video_upload_bytes=int(os.getenv("MAX_VIDEO_UPLOAD_MB", "500")) * 1024 * 1024,
     max_audio_upload_bytes=int(os.getenv("MAX_AUDIO_UPLOAD_MB", "300")) * 1024 * 1024,
 )
 
@@ -204,6 +208,7 @@ for directory in (
     settings.data_dir,
     settings.upload_dir,
     settings.library_dir,
+    settings.character_dir,
     settings.temp_dir,
     settings.comfyui_input_dir,
 ):
