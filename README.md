@@ -96,7 +96,7 @@ sudo systemctl enable --now aivideosite.service
 
 ```bash
 systemctl status comfyui --no-pager
-systemctl status comfyui-wan --no-pager
+systemctl status comfyui-secondary --no-pager
 systemctl status aivideosite --no-pager
 ```
 
@@ -104,7 +104,7 @@ systemctl status aivideosite --no-pager
 
 ```bash
 journalctl -u comfyui -f
-journalctl -u comfyui-wan -f
+journalctl -u comfyui-secondary -f
 journalctl -u aivideosite -f
 ```
 
