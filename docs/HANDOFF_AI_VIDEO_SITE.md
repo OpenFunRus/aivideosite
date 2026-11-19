@@ -472,6 +472,31 @@ server_now
 
 ---
 
+## Built-in MiniMax H3 prompting guide
+
+UI:
+
+- кнопка `Гайд` находится слева в desktop topbar;
+- открывается native `<dialog>` на весь viewport;
+- внутри есть quick start, 3-field format, shots/timing, camera vocabulary, first-frame, first+last-frame, dialogue/audio, exclusions и готовые examples;
+- секция `Для нейронки и ChatGPT` содержит:
+  - публичный LAN static text `/static/h3-prompting-guide-ai.txt`;
+  - кнопку открытия machine guide;
+  - кнопку копирования абсолютной ссылки;
+  - полноценный copy-paste prompt для ChatGPT.
+
+Machine guide адаптирован к реальному сайту: `MiniMaxH3Easy` работает в `mode=image`, prompt optimizer выключен, в UI подключены T2V / first frame / first+last frame и максимум две картинки. Не советовать пользователю Characters/Ref2VA/Video References, пока соответствующий workflow не будет реально подключён.
+
+Источники, на которых основана структура:
+
+- Mage MiniMax-H3 prompting guide;
+- официальный MiniMax H3 base prompt-writing guide;
+- prompt guide из ComfyUI-MiniMaxH3-Easy.
+
+Текст в нашей модалке не является копией Mage: он переработан и сокращён под возможности текущего local workflow.
+
+---
+
 ## 11. Библиотека
 
 Реализовано:
