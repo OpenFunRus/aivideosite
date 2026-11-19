@@ -29,8 +29,8 @@ class ComfyUICancelled(ComfyUIError):
 
 
 class ComfyUIClient:
-    def __init__(self) -> None:
-        self.base_url = settings.comfyui_url
+    def __init__(self, base_url: str | None = None) -> None:
+        self.base_url = (base_url or settings.comfyui_url).rstrip("/")
         self.session = requests.Session()
 
     def health(self) -> bool:
