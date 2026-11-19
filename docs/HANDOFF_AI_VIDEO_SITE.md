@@ -803,7 +803,7 @@ systemd/comfyui-secondary.service
 
 ### Current H3 performance experiment: DynamicVRAM headroom
 
-Both H3 services currently use `--vram-headroom 2` for an A/B test. It reserves 2 GB of additional VRAM headroom for DynamicVRAM and does not alter H3 model/sampler/steps/seed/quality settings. Keep only if real uncached H3 runtime improves or becomes more stable.
+Both H3 services currently use `--vram-headroom 2`. On the RTX 3090 the first uncached saved benchmark improved from `03:36` to `03:18` (~8.3% less wall-clock time, ~9.1% higher throughput). Keep the flag enabled for now and confirm with additional fresh-seed uncached runs. It does not alter H3 model/sampler/steps/seed/quality settings.
 
 Important benchmark rule: an identical workflow with the same seed can be served from ComfyUI execution cache in a few seconds. Use a restarted ComfyUI process for an identical-seed A/B comparison, or use a fresh recorded seed for uncached warm tests.
 
