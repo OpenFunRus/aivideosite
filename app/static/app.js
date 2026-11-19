@@ -393,7 +393,6 @@
   const kindLabel = (kind) =>
     ({
       generated: "H3",
-      lipsync: "LipSync",
       audio: "Audio",
       silent: "Silent",
       edited: "Монтаж",
@@ -461,9 +460,6 @@
               <div class="media-actions">
                 <button type="button" data-action="info" title="Промт и параметры">
                   ${icon("info")}
-                </button>
-                <button type="button" data-action="lipsync" title="LipSync">
-                  ${icon("microphone")}
                 </button>
                 <button type="button" data-action="audio" title="Наложить аудио">
                   ${icon("music")}
@@ -717,7 +713,6 @@
   const jobLabel = (kind) =>
     ({
       generate: "MiniMax H3",
-      lipsync: "LatentSync",
       audio_replace: "Наложение аудио",
       audio_remove: "Удаление звука",
       editor_export: "Монтаж / экспорт",
@@ -1372,21 +1367,8 @@
   const dialog = qs("#action-dialog");
   const actionForm = qs("#action-form");
 
-  const openActionDialog = (mediaId, type) => {
+  const openActionDialog = (mediaId) => {
     qs("#action-media-id").value = mediaId;
-    qs("#action-type").value = type;
-    const isLipSync = type === "lipsync";
-
-    qs("#dialog-kicker").textContent = isLipSync
-      ? "LATENTSYNC 1.6"
-      : "FFMPEG AUDIO";
-    qs("#dialog-title").textContent = isLipSync
-      ? "LipSync по вокалу"
-      : "Наложить аудио";
-    qs("#audio-label").textContent = isLipSync
-      ? "Вокал / песня"
-      : "Аудиодорожка";
-    qs("#lipsync-options").style.display = isLipSync ? "" : "none";
     dialog.showModal();
   };
 
@@ -1397,27 +1379,19 @@
   actionForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const mediaId = qs("#action-media-id").value;
-    const type = qs("#action-type").value;
     const data = new FormData(actionForm);
     data.delete("media_id");
-    data.delete("action");
-
-    const endpoint =
-      type === "lipsync"
-        ? `/api/media/${encodeURIComponent(mediaId)}/lipsync`
-        : `/api/media/${encodeURIComponent(mediaId)}/audio`;
 
     qs("#action-submit").disabled = true;
     try {
-      await api(endpoint, { method: "POST", body: data });
+      await api(`/api/media/${encodeURIComponent(mediaId)}/audio`, {
+        method: "POST",
+        body: data,
+      });
       dialog.close();
       jobsPage = 1;
       switchView("queue");
-      showToast(
-        type === "lipsync"
-          ? "LipSync добавлен в очередь."
-          : "Обработка аудио добавлена в очередь."
-      );
+      showToast("Обработка аудио добавлена в очередь.");
       await refreshState(true, false);
     } catch (error) {
       showToast(error.message, "error");
@@ -1525,8 +1499,8 @@
       return;
     }
 
-    if (action === "lipsync" || action === "audio") {
-      openActionDialog(mediaId, action);
+    if (action === "audio") {
+      openActionDialog(mediaId);
       return;
     }
 
