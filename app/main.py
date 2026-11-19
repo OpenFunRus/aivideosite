@@ -467,8 +467,20 @@ async def api_generate(
                         "path": str(path),
                         "temporary": True,
                         "source_name": Path(upload.filename or path.name).name,
-                        "role": meta.get("role") or ("audio" if media_type == "audio" else "character"),
-                        "retention": meta.get("retention") or ("reference" if media_type == "audio" else "fully_preserved"),
+                        "role": meta.get("role") or (
+                            "audio"
+                            if media_type == "audio"
+                            else "motion"
+                            if media_type == "video"
+                            else "character"
+                        ),
+                        "retention": meta.get("retention") or (
+                            "reference"
+                            if media_type == "audio"
+                            else "partially_preserved"
+                            if media_type == "video"
+                            else "fully_preserved"
+                        ),
                         "note": meta.get("note") or "",
                     }
                     if media_type == "video":
