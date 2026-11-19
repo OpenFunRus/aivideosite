@@ -86,86 +86,90 @@ class ComfyUIClient:
                 staged_references.append({"type": media_type, "name": relative})
                 progress(3 + min(index, 10), f"Подготовка reference media {index}")
 
-        client_id = uuid.uuid4().hex
-        workflow = self._build_h3_workflow(
-            job_id=job_id,
-            payload=payload,
-            uploaded_images=uploaded_images,
-            staged_references=staged_references,
-        )
-
-        progress(8, "Передача H3-задачи в ComfyUI")
-        ws = None
-        prompt_id: str | None = None
-
         try:
-            ws = websocket.create_connection(
-                self._websocket_url(client_id),
-                timeout=8,
+            client_id = uuid.uuid4().hex
+            workflow = self._build_h3_workflow(
+                job_id=job_id,
+                payload=payload,
+                uploaded_images=uploaded_images,
+                staged_references=staged_references,
             )
-        except Exception:
+
+            progress(8, "Передача H3-задачи в ComfyUI")
             ws = None
+            prompt_id: str | None = None
 
-        response = self.session.post(
-            f"{self.base_url}/prompt",
-            json={"prompt": workflow, "client_id": client_id},
-            timeout=30,
-        )
-        if not response.ok:
-            if staging_dir is not None:
-                shutil.rmtree(staging_dir, ignore_errors=True)
-            raise ComfyUIError(
-                f"ComfyUI rejected workflow ({response.status_code}): "
-                f"{response.text[-3000:]}"
-            )
-
-        body = response.json()
-        prompt_id = body.get("prompt_id")
-        if not prompt_id:
-            raise ComfyUIError(f"ComfyUI did not return prompt_id: {body!r}")
-        if on_prompt_id is not None:
-            on_prompt_id(str(prompt_id))
-        if should_cancel and should_cancel():
-            self.cancel_prompt(str(prompt_id))
-            raise ComfyUICancelled("Generation cancelled.")
-
-        progress(10, "H3: подготовка модели")
-        if ws is not None:
             try:
-                self._wait_websocket(ws, prompt_id, progress, should_cancel)
-            except ComfyUICancelled:
-                raise
+                ws = websocket.create_connection(
+                    self._websocket_url(client_id),
+                    timeout=8,
+                )
             except Exception:
-                # WebSocket is only for responsive progress. History polling
-                # remains the source of truth and keeps jobs robust.
-                pass
-            finally:
-                try:
-                    ws.close()
-                except Exception:
-                    pass
+                ws = None
 
-        history = self._wait_history(prompt_id, progress, should_cancel=should_cancel)
-        output = self._find_video_output(history)
-        if output is None:
+            response = self.session.post(
+                f"{self.base_url}/prompt",
+                json={"prompt": workflow, "client_id": client_id},
+                timeout=30,
+            )
+            if not response.ok:
+                if staging_dir is not None:
+                    shutil.rmtree(staging_dir, ignore_errors=True)
+                raise ComfyUIError(
+                    f"ComfyUI rejected workflow ({response.status_code}): "
+                    f"{response.text[-3000:]}"
+                )
+
+            body = response.json()
+            prompt_id = body.get("prompt_id")
+            if not prompt_id:
+                raise ComfyUIError(f"ComfyUI did not return prompt_id: {body!r}")
+            if on_prompt_id is not None:
+                on_prompt_id(str(prompt_id))
+            if should_cancel and should_cancel():
+                self.cancel_prompt(str(prompt_id))
+                raise ComfyUICancelled("Generation cancelled.")
+
+            progress(10, "H3: подготовка модели")
+            if ws is not None:
+                try:
+                    self._wait_websocket(ws, prompt_id, progress, should_cancel)
+                except ComfyUICancelled:
+                    raise
+                except Exception:
+                    # WebSocket is only for responsive progress. History polling
+                    # remains the source of truth and keeps jobs robust.
+                    pass
+                finally:
+                    try:
+                        ws.close()
+                    except Exception:
+                        pass
+
+            history = self._wait_history(prompt_id, progress, should_cancel=should_cancel)
+            output = self._find_video_output(history)
+            if output is None:
+                if staging_dir is not None:
+                    shutil.rmtree(staging_dir, ignore_errors=True)
+                raise ComfyUIError(
+                    "ComfyUI finished the task but no saved video was found in history."
+                )
+
+            progress(92, "Копирование видео в библиотеку")
+            self._download_output(output, destination)
+            progress(97, "Видео сохранено")
+
+            result = {
+                "prompt_id": prompt_id,
+                "comfy_output": output,
+                "seed": int(payload.get("seed", 0)),
+            }
             if staging_dir is not None:
                 shutil.rmtree(staging_dir, ignore_errors=True)
-            raise ComfyUIError(
-                "ComfyUI finished the task but no saved video was found in history."
-            )
-
-        progress(92, "Копирование видео в библиотеку")
-        self._download_output(output, destination)
-        progress(97, "Видео сохранено")
-
-        result = {
-            "prompt_id": prompt_id,
-            "comfy_output": output,
-            "seed": int(payload.get("seed", 0)),
-        }
-        if staging_dir is not None:
-            shutil.rmtree(staging_dir, ignore_errors=True)
-        return result
+            return result
+        finally:
+            if staging_dir is not None:
+                shutil.rmtree(staging_dir, ignore_errors=True)
 
     def free_memory(self) -> bool:
         """Ask ComfyUI to unload all models and release cached GPU memory."""
