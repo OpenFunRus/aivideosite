@@ -247,6 +247,24 @@ class JobWorker(threading.Thread):
                     + len(payload.get("references") or [])
                 ),
                 "reference_map": payload.get("reference_map") or [],
+                "timeline_guides": [
+                    {
+                        "source_name": item.get("source_name"),
+                        "time_seconds": item.get("time_seconds"),
+                        "note": item.get("note") or "",
+                    }
+                    for item in (payload.get("guides") or [])
+                    if isinstance(item, dict)
+                ],
+                "control": {
+                    key: value
+                    for key, value in (
+                        payload.get("control")
+                        if isinstance(payload.get("control"), dict)
+                        else {}
+                    ).items()
+                    if key not in {"control_video_path", "source_video_path", "mask_video_path"}
+                },
                 "user_prompt": payload.get("user_prompt", payload.get("prompt", "")),
                 "comfy_prompt_id": result.get("prompt_id"),
                 "gpu_backend": gpu_label,
@@ -268,6 +286,17 @@ class JobWorker(threading.Thread):
                 str(item["path"])
                 for item in (payload.get("references") or [])
                 if isinstance(item, dict) and item.get("temporary") and item.get("path")
+            )
+            cleanup_paths.extend(
+                str(item["path"])
+                for item in (payload.get("guides") or [])
+                if isinstance(item, dict) and item.get("temporary") and item.get("path")
+            )
+            control = payload.get("control") if isinstance(payload.get("control"), dict) else {}
+            cleanup_paths.extend(
+                str(control[key])
+                for key in ("control_video_path", "source_video_path", "mask_video_path")
+                if control.get(key)
             )
             _remove_uploads(cleanup_paths)
             return media_id
