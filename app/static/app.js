@@ -1454,6 +1454,7 @@
       ["Длительность задания", meta.seconds ? `${meta.seconds} сек` : "—"],
       ["FPS", meta.fps ?? "—"],
       ["Профиль", profileLabel(meta.profile)],
+      ["GPU", meta.gpu_backend || "—"],
       ["Нативный звук H3", meta.generate_audio ? "Да" : "Нет"],
       ["Референсов", meta.reference_count ?? "—"],
       ["Длительность файла", humanDuration(item.duration)],
