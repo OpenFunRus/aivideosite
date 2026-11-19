@@ -261,7 +261,11 @@ class ComfyUIClient:
             if easy_mode == "image"
             else settings.h3_ref_turbo_lora
         )
-        use_turbo = bool(profile_config["turbo"]) and str(turbo_lora).strip().lower() not in {"", "none"}
+        use_turbo = (
+            bool(profile_config["turbo"])
+            and str(turbo_lora).strip().lower() not in {"", "none"}
+            and (easy_mode == "image" or steps == 4)
+        )
         if easy_mode != "image" and str(settings.h3_ref2va_model).strip().lower() in {"", "none"}:
             raise ComfyUIError(
                 "Ref2VA mode is not configured. Set H3_REF2VA_MODEL to a Ref2VA checkpoint."
