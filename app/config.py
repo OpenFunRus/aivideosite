@@ -54,6 +54,7 @@ class Settings:
     h3_audio_vae: str
     h3_turbo_lora: str
     h3_ref_turbo_lora: str
+    h3_controlnet_model_patch: str
     h3_attention_backend: str
 
     max_image_upload_bytes: int
@@ -197,6 +198,10 @@ settings = Settings(
     h3_ref_turbo_lora=os.getenv(
         "H3_REF_TURBO_LORA",
         "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+    ),
+    h3_controlnet_model_patch=os.getenv(
+        "H3_CONTROLNET_MODEL_PATCH",
+        "minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors",
     ),
     h3_attention_backend=os.getenv(
         "H3_ATTENTION_BACKEND",
