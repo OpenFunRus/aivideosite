@@ -252,9 +252,9 @@
     steps12: "12 шагов · Base",
     steps16: "16 шагов · Base",
     steps20: "20 шагов · Base",
-    fast: "8 шагов · Turbo",
-    quality: "20 шагов · Base",
-    max: "20 шагов · Base",
+    fast: "Fast · Turbo 8 (старый)",
+    quality: "Quality · Base 20 (старый)",
+    max: "Max · Base 30 (старый)",
   };
 
   const inferResolutionShape = (value) => {
