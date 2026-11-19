@@ -329,21 +329,46 @@ app/static/icons.svg
 
 ---
 
-## 8. Авторизация
+## 8. Авторизация / три пользователя
 
-Один общий пароль.
+Сайт использует три password-only профиля. Поле логина не требуется: каждый пароль однозначно соответствует одному `user_id`.
 
-Default:
-
-```text
-11332244
-```
-
-Задаётся:
+При первом запуске без явных паролей приложение генерирует три уникальных шестизначных числовых пароля и сохраняет их локально:
 
 ```text
-SITE_PASSWORD=11332244
+/opt/ai/aivideosite/data/.site_users.json
 ```
+
+Права файла: `0600`. Он не попадает в Git, потому что `data/` игнорируется.
+
+Посмотреть пароли:
+
+```bash
+cat /opt/ai/aivideosite/data/.site_users.json
+```
+
+Опциональные override в `.env`:
+
+```dotenv
+SITE_USER1_NAME=Пользователь 1
+SITE_USER1_PASSWORD=
+SITE_USER2_NAME=Пользователь 2
+SITE_USER2_PASSWORD=
+SITE_USER3_NAME=Пользователь 3
+SITE_USER3_PASSWORD=
+```
+
+Если задавать пароли через env, должны быть заполнены все три и значения должны быть уникальны. Legacy `SITE_PASSWORD` больше не используется.
+
+Изоляция данных:
+
+- `jobs.owner_id` — личная очередь/история;
+- `media.owner_id` — личная библиотека;
+- старые rows при миграции получают `owner_id='user1'`;
+- все media/job API проверяют владельца;
+- browser localStorage имеет user-specific prefix;
+- GPU worker и фактическая очередь выполнения общие для всех пользователей;
+- UI показывает личный счётчик задач, но общую занятость GPU/общую очередь.
 
 Session secret:
 
@@ -357,11 +382,7 @@ SESSION_SECRET=auto
 data/.session_secret
 ```
 
-Права файла пытаются выставиться `0600`.
-
-Сессия HttpOnly.
-
-Сайт рассчитан на LAN / HTTP. Не считать текущую конфигурацию интернет-facing production security.
+Сессия HttpOnly. Сайт рассчитан на LAN / HTTP.
 
 ---
 
@@ -714,7 +735,12 @@ sudo ufw allow 8000/tcp
 ## 17. .env — актуальный baseline
 
 ```dotenv
-SITE_PASSWORD=11332244
+SITE_USER1_NAME=Пользователь 1
+SITE_USER1_PASSWORD=
+SITE_USER2_NAME=Пользователь 2
+SITE_USER2_PASSWORD=
+SITE_USER3_NAME=Пользователь 3
+SITE_USER3_PASSWORD=
 SESSION_SECRET=auto
 HOST=0.0.0.0
 PORT=8000
