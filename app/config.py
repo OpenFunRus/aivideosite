@@ -31,6 +31,7 @@ class Settings:
     port: int
 
     comfyui_url: str
+    comfyui_wan_url: str
     comfyui_output_dir: Path
 
     ffmpeg_bin: Path
@@ -86,6 +87,7 @@ settings = Settings(
     host=os.getenv("HOST", "0.0.0.0"),
     port=int(os.getenv("PORT", "8000")),
     comfyui_url=os.getenv("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/"),
+    comfyui_wan_url=os.getenv("COMFYUI_WAN_URL", "http://127.0.0.1:8189").rstrip("/"),
     comfyui_output_dir=_path("COMFYUI_OUTPUT_DIR", "/opt/ai/ComfyUI/output"),
     ffmpeg_bin=_path("FFMPEG_BIN", "/usr/bin/ffmpeg"),
     ffprobe_bin=_path("FFPROBE_BIN", "/usr/bin/ffprobe"),
