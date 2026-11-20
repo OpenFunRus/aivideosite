@@ -2605,6 +2605,164 @@
     }
   });
 
+  const applyAssistantChanges = (changes = {}) => {
+    if (!changes || typeof changes !== "object") return [];
+
+    const applied = [];
+    const mark = (label) => {
+      if (!applied.includes(label)) applied.push(label);
+    };
+    const setSelect = (selector, value, label) => {
+      const select = qs(selector, generationForm);
+      if (!select || value === undefined || value === null) return false;
+      const normalized = String(value);
+      if (![...select.options].some((option) => option.value === normalized)) return false;
+      select.value = normalized;
+      mark(label);
+      return true;
+    };
+    const setInput = (selector, value, label) => {
+      const input = qs(selector, generationForm);
+      if (!input || value === undefined || value === null) return false;
+      input.value = String(value);
+      mark(label);
+      return true;
+    };
+
+    if (typeof changes.prompt === "string") {
+      const prompt = qs("#prompt", generationForm);
+      if (prompt) {
+        prompt.value = changes.prompt;
+        mark("промт");
+      }
+    }
+
+    if (typeof changes.generation_mode === "string") {
+      const mode = qs(
+        `[name="generation_mode"][value="${CSS.escape(changes.generation_mode)}"]`,
+        generationForm
+      );
+      if (mode) {
+        mode.checked = true;
+        mark("режим");
+      }
+    }
+
+    if (changes.seconds !== undefined) {
+      const value = Math.max(1, Math.min(30, Number(changes.seconds) || 5));
+      if (secondsRange) {
+        secondsRange.value = String(value);
+        mark("длительность");
+      }
+    }
+    if (changes.fps !== undefined) {
+      const fpsInput = qs("#fps-range", generationForm);
+      if (fpsInput) {
+        fpsInput.value = String(Math.max(6, Math.min(32, Math.round(Number(changes.fps) || 24))));
+        mark("FPS");
+      }
+    }
+    if (changes.steps !== undefined) {
+      const stepsInput = qs("#steps-range", generationForm);
+      if (stepsInput) {
+        let value = Math.max(6, Math.min(24, Math.round(Number(changes.steps) || 8)));
+        value = Math.max(6, Math.min(24, Math.round(value / 2) * 2));
+        stepsInput.value = String(value);
+        mark("шаги");
+      }
+    }
+    if (changes.seed !== undefined) setInput('[name="seed"]', changes.seed, "сид");
+
+    if (typeof changes.generate_audio === "boolean") {
+      const audio = qs("#generate-audio", generationForm);
+      if (audio) {
+        audio.checked = changes.generate_audio;
+        mark("H3 Audio");
+      }
+    }
+
+    let shapeChanged = false;
+    if (typeof changes.resolution_shape === "string" && RESOLUTION_PRESETS[changes.resolution_shape]) {
+      const shape = qs("#resolution-shape", generationForm);
+      if (shape) {
+        shape.value = changes.resolution_shape;
+        renderResolutionOptions(
+          changes.resolution_shape,
+          typeof changes.resolution === "string" ? changes.resolution : "",
+          typeof changes.resolution === "string" ? inferResolutionTier(changes.resolution) : ""
+        );
+        shapeChanged = true;
+        mark("формат");
+      }
+    }
+    if (typeof changes.resolution === "string") {
+      if (!shapeChanged) {
+        const inferred = inferResolutionShape(changes.resolution);
+        const shape = qs("#resolution-shape", generationForm);
+        if (shape && RESOLUTION_PRESETS[inferred]) {
+          shape.value = inferred;
+          renderResolutionOptions(inferred, changes.resolution, inferResolutionTier(changes.resolution));
+        }
+      }
+      if (
+        resolutionSelect &&
+        [...resolutionSelect.options].some((option) => option.value === changes.resolution)
+      ) {
+        resolutionSelect.value = changes.resolution;
+        mark("размер");
+      }
+    }
+
+    setSelect("#reference-task", changes.reference_task, "задача референсов");
+    setSelect("#ref-image-size", changes.ref_image_size, "размер референсов");
+
+    if (setSelect("#control-mode", changes.control_mode, "ControlNet")) {
+      updateControlNetUI();
+    }
+    [
+      ["#control-strength", changes.control_strength, "сила ControlNet"],
+      ["#control-start", changes.control_start_percent, "начало ControlNet"],
+      ["#control-end", changes.control_end_percent, "конец ControlNet"],
+      ["#control-canny-low", changes.control_canny_low, "Canny low"],
+      ["#control-canny-high", changes.control_canny_high, "Canny high"],
+    ].forEach(([selector, value, label]) => setInput(selector, value, label));
+
+    if (Array.isArray(changes.selected_character_ids)) {
+      const valid = new Set(characters.map((item) => String(item.id)));
+      selectedCharacterIds.clear();
+      changes.selected_character_ids.forEach((id) => {
+        const normalized = String(id);
+        if (valid.has(normalized)) selectedCharacterIds.add(normalized);
+      });
+      renderGeneratorCharacters();
+      mark("персонажи");
+    }
+
+    updateGenerationModeUI();
+    updateControlNetUI();
+    updateGeneratorRanges();
+    buildReferenceManifest();
+    buildGuideManifest();
+    updateReferenceBudget();
+    saveGeneratorSettings();
+    return applied;
+  };
+
+  window.AIVideoGenerator = {
+    getSettings: () => ({
+      ...collectGeneratorSettings(),
+      selected_character_ids: [...selectedCharacterIds],
+      available_characters: characters.map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description || "",
+        voice: Boolean(item.voice),
+        image_count: Number(item.image_count || 0),
+      })),
+    }),
+    applyChanges: applyAssistantChanges,
+  };
+
   enhanceHelpTips();
   enhanceModeHelpTips();
   enhanceModernFileInputs();
