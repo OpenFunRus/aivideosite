@@ -1585,10 +1585,10 @@ async def api_v2_audio(
         h3_prompt = prompt
         if generate_scene_audio and embed_track:
             h3_prompt = (
-                prompt.rstrip()
-                + "\n\nAudio instruction: generate only diegetic environmental and foley "
-                "sounds for the visible scene. Do not reproduce, sing, hum, or recreate the "
-                "driving music/vocals; the original track will be mixed separately."
+                "Audio constraint: generate only diegetic environmental and foley sounds "
+                "for the visible scene. Do not reproduce, sing, hum, or recreate the driving "
+                "music/vocals; the original track will be mixed separately.\n\n"
+                + prompt.lstrip()
             )
 
         job_id = _v2_enqueue_reference_job(
@@ -1733,10 +1733,10 @@ async def api_v2_clip(
         h3_prompt = prompt
         if embed_track and generate_scene_audio:
             h3_prompt = (
-                prompt.rstrip()
-                + "\n\nAudio instruction: generate only diegetic environmental and foley "
-                "sounds. Do not recreate the driving song, vocals or music; "
-                "the original track will be mixed separately."
+                "Audio constraint: generate only diegetic environmental and foley sounds. "
+                "Do not recreate the driving song, vocals or music; the original track will "
+                "be mixed separately.\n\n"
+                + prompt.lstrip()
             )
         job_id = _v2_enqueue_reference_job(
             user_id=user_id,
