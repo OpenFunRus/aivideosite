@@ -6,7 +6,7 @@
 >
 > Основная ветка: `main`
 >
-> Handoff обновлён 2026-11-19 после добавления Ref2VA, Characters, exact Timeline Guides и H3 Fun ControlNet Union.
+> Handoff обновлён 2026-11-20 после добавления локального Qwen3-ассистента, dynamic GPU/CPU failover, 32k context, Thinking toggle и последних UI-фиксов.
 >
 > После чтения этого файла новый исполнитель ОБЯЗАН сначала перечитать актуальный `main` на GitHub: SHA намеренно не фиксируется внутри handoff, чтобы не создавать самоссылочный устаревающий checkpoint.
 
@@ -1418,3 +1418,313 @@ COMFYUI_INPUT_DIR/aivideosite/<job_id>/
 ```
 
 Каталог создаётся лениво только при необходимости и удаляется в `finally` после success/error/cancel. После успешной job исходные temporary uploads также удаляются worker-ом. Character assets остаются persistent.
+
+
+---
+
+## 26. Локальный Qwen3-ассистент / чат / управление
+
+Добавлено 20 ноября 2026.
+
+### Модель
+
+Используется:
+
+\`\`\`text
+w3joe/Qwen3-8B-abliterated
+Q4_K_M GGUF
+\`\`\`
+
+Файл модели:
+
+\`\`\`text
+/opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf
+\`\`\`
+
+Runtime:
+
+\`\`\`text
+/opt/ai/llama.cpp/build/bin/llama-server
+\`\`\`
+
+Порты:
+
+- OpenAI-compatible chat API: \`127.0.0.1:8090\`;
+- локальный control API менеджера: \`127.0.0.1:8091\`.
+
+### CUDA / llama.cpp
+
+\`llama.cpp\` должен быть собран с CUDA:
+
+\`\`\`bash
+cd /opt/ai/llama.cpp
+
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGGML_CUDA=ON \
+  -DGGML_BLAS=ON \
+  -DGGML_BLAS_VENDOR=OpenBLAS \
+  -DCMAKE_CUDA_ARCHITECTURES="75;86"
+
+cmake --build build --config Release -j 18 -t llama-server
+\`\`\`
+
+Архитектуры:
+
+- \`75\` — RTX2080 / Turing;
+- \`86\` — RTX3090 / Ampere.
+
+### Dynamic GPU / CPU failover
+
+\`systemd/llm-assistant.service\` запускает:
+
+\`\`\`text
+app/llm_assistant_manager.py
+\`\`\`
+
+Менеджер держит LLM на свободном устройстве с приоритетом:
+
+1. RTX2080;
+2. RTX3090;
+3. CPU, если обе GPU заняты H3.
+
+H3 worker перед стартом GPU-job вызывает локальный manager:
+
+\`\`\`text
+POST 127.0.0.1:8091/reserve
+\`\`\`
+
+После завершения/error/cancel:
+
+\`\`\`text
+POST 127.0.0.1:8091/release
+\`\`\`
+
+Если LLM сидит на GPU, которую хочет H3, менеджер сначала переносит LLM на другую свободную GPU либо CPU. После освобождения карты LLM автоматически возвращается на GPU.
+
+Менеджер также проверяет \`/queue\` обоих ComfyUI backend, поэтому ручная задача в ComfyUI делает соответствующую GPU недоступной для LLM.
+
+Старый ручной \`llama-server --port 8090\` очищается через \`ExecStartPre\`, чтобы не было \`couldn't bind HTTP server socket\`.
+
+### Context
+
+Реальный context запуска:
+
+\`\`\`text
+LLM_CTX_SIZE=32768
+\`\`\`
+
+То есть Qwen работает с контекстом 32k tokens.
+
+System prompt использует:
+
+- operator layer в \`app/assistant.py\`;
+- полный machine-readable H3 guide:
+  \`app/static/h3-prompting-guide-ai.txt\`.
+
+Текущий полный guide примерно 31k символов (~8k tokens грубой оценки), а весь system context остаётся заметно ниже пользовательского лимита ~16k tokens для system prompt, оставляя место под history/current generator state/ответ.
+
+### Thinking toggle
+
+Thinking по умолчанию OFF.
+
+В заголовке локального чата есть кнопка-мозг:
+
+- выключена -> backend добавляет \`/no_think\`;
+- включена -> backend добавляет \`/think\`;
+- состояние сохраняется в browser localStorage отдельно на пользователя;
+- работает и для режима \`Разговор\`, и для \`Управление\`.
+
+Внутренний reasoning пользователю не показывается:
+
+- \`reasoning_content\` не форвардится;
+- inline \`<think>...</think>\` блоки удаляются/фильтруются.
+
+### UI чата
+
+На главной справа снизу:
+
+- кнопка \`ИИ\`;
+- плавающее окно;
+- режимы:
+  - \`Разговор\`;
+  - \`Управление\`;
+- per-user история в localStorage;
+- streaming ответа;
+- статус текущего target: RTX2080 / RTX3090 / CPU;
+- кнопка Thinking;
+- очистка истории;
+- копирование ответа.
+
+Browser НЕ ходит напрямую на llama port 8090. Всё проксируется через авторизованные site API:
+
+\`\`\`text
+GET  /api/assistant/status
+POST /api/assistant/chat
+POST /api/assistant/control
+\`\`\`
+
+### Разговор
+
+Обычный streaming chat + помощь по H3.
+
+Для H3 модель получает:
+
+- текущие настройки формы;
+- operator rules;
+- полный локальный H3 guide;
+- историю;
+- \`/think\` или \`/no_think\`.
+
+Жёсткое правило языка:
+
+- объяснение пользователю может быть на русском;
+- production-ready H3 prompt ОБЯЗАН быть на английском;
+- исключение: exact dialogue, lyrics и exact on-screen text остаются на исходном языке.
+
+Например русская реплика внутри английского H3 prompt:
+
+\`\`\`text
+<d>[Russian] Я люблю Котика.</d>
+\`\`\`
+
+### Управление
+
+\`Управление\` возвращает server-validated JSON и реально меняет форму генератора.
+
+Разрешённые поля:
+
+- prompt;
+- generation_mode;
+- seconds;
+- fps;
+- steps;
+- seed;
+- generate_audio;
+- resolution_shape / resolution;
+- reference_task;
+- ref_image_size;
+- ControlNet mode/strength/start/end/Canny thresholds;
+- selected saved Character IDs.
+
+Модель не получает произвольный shell/tool access. Она не может загрузить отсутствующие файлы и не должна выдумывать references/Character IDs.
+
+Backend валидирует значения перед применением.
+
+### H3 system prompt / guide
+
+Основные правила, которые должен соблюдать локальный агент:
+
+- правильно выбирать FL2VA / Ref2VA / Timeline / Digital Human;
+- не путать exact First/Last anchors, semantic Ref2VA storyboard refs и exact Timeline Guides;
+- писать observable actions строго по хронологии;
+- сохранять Character identity/outfit/props/handedness;
+- использовать корректные Ref2VA retention/roles;
+- учитывать H3 native audio;
+- различать structural ControlNet и identity refs;
+- помнить, что raw auto-preprocess на сайте есть только для Canny;
+- Pose/Depth/HED/MLSD ожидают заранее подготовленный control video;
+- не придумывать лишние people/dialogue/music/cuts/camera moves;
+- проверять, что действия и dialogue реально помещаются в duration;
+- готовый H3 prompt писать на английском.
+
+### Последние UI fixes
+
+Сделано:
+
+- duration range:
+  - 1–10 sec green;
+  - 11–20 yellow;
+  - 21–30 red;
+- steps:
+  - 6–10 green;
+  - 12–16 yellow;
+  - 18–24 red;
+- FPS:
+  - 24 green;
+  - 12–23 и 25 yellow;
+  - 6–11 и 26–32 red;
+- sliders приведены к единому тонкому Tabler-like стилю;
+- общий горизонтальный overflow главной страницы исправлен;
+- help-tip больше не просвечивает поверх sticky header;
+- sticky header находится ниже assistant overlay;
+- SSE от llama.cpp принудительно декодируется UTF-8;
+- уже сохранённый mojibake assistant history автоматически пытается восстановиться;
+- clipboard copy имеет fallback:
+  - сначала \`navigator.clipboard.writeText\`;
+  - при reject/error -> hidden textarea + \`document.execCommand("copy")\`;
+- fallback используется и в assistant chat, и в guide/copy-paste/link/media-info copy.
+
+### Основные файлы LLM
+
+\`\`\`text
+app/assistant.py
+app/llm_assistant_manager.py
+app/static/assistant.js
+app/static/h3-prompting-guide-ai.txt
+app/templates/index.html
+app/static/app.js
+app/static/app.css
+app/main.py
+app/worker.py
+systemd/llm-assistant.service
+systemd/aivideosite.service
+docs/LOCAL_LLM_ASSISTANT.md
+\`\`\`
+
+### Установка / обновление services
+
+После \`git pull\` при изменении systemd:
+
+\`\`\`bash
+cd /opt/ai/aivideosite
+
+sudo cp systemd/llm-assistant.service /etc/systemd/system/llm-assistant.service
+sudo cp systemd/aivideosite.service /etc/systemd/system/aivideosite.service
+
+sudo systemctl daemon-reload
+sudo systemctl enable llm-assistant.service
+sudo systemctl enable aivideosite.service
+
+sudo systemctl restart llm-assistant.service
+sudo systemctl restart aivideosite.service
+\`\`\`
+
+Для обычных site-only JS/Python/CSS изменений обычно достаточно:
+
+\`\`\`bash
+cd /opt/ai/aivideosite
+git pull origin main
+sudo systemctl restart aivideosite.service
+\`\`\`
+
+и затем browser \`Ctrl+F5\`.
+
+### Диагностика LLM
+
+\`\`\`bash
+systemctl --no-pager --full status llm-assistant.service
+journalctl -u llm-assistant.service -n 150 --no-pager
+
+curl -sS http://127.0.0.1:8091/status
+curl -sS http://127.0.0.1:8090/health
+
+watch -n 0.5 nvidia-smi
+\`\`\`
+
+Ожидаемый manager status при свободной RTX2080:
+
+\`\`\`json
+{"ok":true,"target":"RTX2080","reserved_gpus":[],"llama_alive":true,"llama_port":8090}
+\`\`\`
+
+### Что ещё требует runtime проверки пользователем
+
+- фактический 32k context после установки нового systemd service;
+- Thinking ON/OFF в browser;
+- отсутствие reasoning в visible output;
+- prompt generation всегда English при русском запросе;
+- copy buttons на текущем browser/origin;
+- dynamic LLM move RTX2080 -> RTX3090 -> CPU при реальных одновременных H3 jobs;
+- возврат LLM обратно на GPU после завершения H3;
+- визуальный UI на desktop/mobile.
