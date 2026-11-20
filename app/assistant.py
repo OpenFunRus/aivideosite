@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -13,8 +14,10 @@ import requests
 LLM_URL = os.getenv("LLM_ASSISTANT_URL", "http://127.0.0.1:8090").rstrip("/")
 LLM_MANAGER_URL = os.getenv("LLM_MANAGER_URL", "http://127.0.0.1:8091").rstrip("/")
 MODEL_NAME = os.getenv("LLM_ASSISTANT_MODEL", "local-h3-assistant")
-MAX_HISTORY_MESSAGES = 20
-MAX_HISTORY_CHARS = 28000
+MAX_HISTORY_MESSAGES = 200
+MAX_HISTORY_CHARS = 160000
+CONTEXT_TOKENS = 32768
+CONTEXT_SAFETY_TOKENS = 1200
 
 H3_GUIDE_PATH = Path(__file__).resolve().parent / "static" / "h3-prompting-guide-ai.txt"
 H3_GUIDE_MAX_CHARS = 60000
@@ -238,7 +241,95 @@ def normalize_messages(value: Any) -> list[dict[str, str]]:
         if len(normalized) >= MAX_HISTORY_MESSAGES:
             break
     normalized.reverse()
+    while normalized and normalized[0]["role"] == "assistant":
+        normalized.pop(0)
     return normalized
+
+
+def _fallback_token_count(text: str) -> int:
+    # Conservative fallback for mixed Russian/English H3 text.
+    return max(1, int(math.ceil(len(text) / 3.2)))
+
+
+def _token_count(text: str) -> int:
+    if not text:
+        return 0
+    try:
+        response = requests.post(
+            f"{LLM_URL}/tokenize",
+            json={"content": text},
+            timeout=2.5,
+        )
+        if response.ok:
+            data = _safe_json(response)
+            tokens = data.get("tokens")
+            if isinstance(tokens, list):
+                return len(tokens)
+            count = data.get("count")
+            if isinstance(count, int):
+                return count
+    except requests.RequestException:
+        pass
+    return _fallback_token_count(text)
+
+
+def _messages_token_count(messages: list[dict[str, str]]) -> int:
+    if not messages:
+        return 0
+    # Chat-template overhead is small but non-zero. Add a few tokens per item.
+    return sum(_token_count(item.get("content", "")) + 6 for item in messages) + 8
+
+
+def _trim_history_to_context(
+    system_messages: list[dict[str, str]],
+    history: list[dict[str, str]],
+    *,
+    max_tokens: int,
+) -> tuple[list[dict[str, str]], dict[str, int]]:
+    if not history:
+        return [], {
+            "context_limit": CONTEXT_TOKENS,
+            "estimated_tokens": _messages_token_count(system_messages),
+            "dropped_messages": 0,
+            "sent_messages": 0,
+        }
+
+    budget = max(
+        1024,
+        CONTEXT_TOKENS - int(max_tokens) - CONTEXT_SAFETY_TOKENS,
+    )
+    kept = list(history)
+
+    def combined_tokens() -> int:
+        return _messages_token_count(system_messages + kept)
+
+    current = combined_tokens()
+    dropped = 0
+    while current > budget and len(kept) > 1:
+        # Drop the oldest complete user+assistant turn. The newest user request
+        # is never removed.
+        remove_count = 1
+        if (
+            len(kept) >= 3
+            and kept[0].get("role") == "user"
+            and kept[1].get("role") == "assistant"
+        ):
+            remove_count = 2
+        del kept[:remove_count]
+        dropped += remove_count
+        while kept and kept[0].get("role") == "assistant" and len(kept) > 1:
+            kept.pop(0)
+            dropped += 1
+        current = combined_tokens()
+
+    return kept, {
+        "context_limit": CONTEXT_TOKENS,
+        "estimated_tokens": current + int(max_tokens),
+        "input_tokens": current,
+        "reserved_output_tokens": int(max_tokens),
+        "dropped_messages": dropped,
+        "sent_messages": len(kept),
+    }
 
 
 def _settings_context(settings: Any) -> str:
@@ -322,7 +413,12 @@ def _chat_payload(
             ),
         }
     )
-    prepared.extend(normalized)
+    trimmed, _usage = _trim_history_to_context(
+        prepared,
+        normalized,
+        max_tokens=max_tokens,
+    )
+    prepared.extend(trimmed)
     return {
         "model": MODEL_NAME,
         "stream": stream,
@@ -331,6 +427,44 @@ def _chat_payload(
         "messages": prepared,
     }
 
+
+
+def context_usage(
+    messages: Any,
+    *,
+    settings: Any = None,
+    thinking: bool = False,
+) -> dict[str, int]:
+    normalized = normalize_messages(messages)
+    max_tokens = 1800 if thinking else 1000
+    think_directive = "/think" if thinking else "/no_think"
+    system_messages: list[dict[str, str]] = [
+        {"role": "system", "content": CHAT_SYSTEM + "\n\n" + think_directive}
+    ]
+    settings_json = _settings_context(settings)
+    if settings_json:
+        system_messages.append(
+            {
+                "role": "system",
+                "content": "CURRENT_GENERATOR_STATE JSON:\n" + settings_json,
+            }
+        )
+    system_messages.append(
+        {
+            "role": "system",
+            "content": (
+                "HARD OUTPUT LANGUAGE RULE: MiniMax H3 production prompts are English; "
+                "exact dialogue/lyrics/visible text keep the requested language."
+            ),
+        }
+    )
+    _kept, usage = _trim_history_to_context(
+        system_messages,
+        normalized,
+        max_tokens=max_tokens,
+    )
+    usage["stored_messages"] = len(normalized)
+    return usage
 
 def stream_chat(
     messages: Any,
