@@ -1,0 +1,49 @@
+<section class="v2-view" data-v2-view="editor">
+      <div class="v2-editor" id="v2-editor">
+        <div class="v2-editor-top">
+<label class="v2-editor-title"><span>Название проекта</span><input id="v2-editor-title" value="Монтаж V2"></label>
+          <button class="v2-primary-button" id="v2-editor-export" type="button"><svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>Экспорт</button>
+        </div>
+        <div class="v2-editor-layout">
+          <aside class="v2-editor-library"><div class="v2-editor-panel-title">Библиотека</div><div id="v2-editor-media"></div></aside>
+          <section class="v2-editor-center">
+            <div class="v2-editor-monitor"><video id="v2-editor-preview" controls playsinline></video><div class="v2-editor-monitor-empty" id="v2-editor-monitor-empty">Выбери клип на таймлайне</div></div>
+            <div class="v2-editor-timeline-head">
+              <strong>Video 1</strong>
+              <div class="v2-editor-timeline-tools">
+                <span id="v2-editor-timecode">00:00 / 00:00</span>
+                <label class="v2-editor-snap"><input id="v2-editor-snap" type="checkbox" checked><span>Snap 0.5s</span></label>
+                <button id="v2-editor-zoom-out" type="button" title="Уменьшить масштаб">−</button>
+                <span id="v2-editor-zoom-label">14 px/s</span>
+                <button id="v2-editor-zoom-in" type="button" title="Увеличить масштаб">+</button>
+                <span class="v2-editor-total">Всего <b id="v2-editor-duration">00:00</b></span>
+              </div>
+            </div>
+            <div class="v2-editor-timeline" id="v2-editor-timeline"></div>
+            <div class="v2-editor-audio-track">
+              <div><strong>Music</strong><small>Отдельная аудиодорожка</small></div>
+              <label class="v2-file-button v2-file-button-small"><input id="v2-editor-audio" type="file" accept="audio/*"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><span>Выбрать аудио</span></label>
+              <label><span>Offset</span><input id="v2-editor-audio-offset" type="number" min="0" step="0.1" value="0"></label>
+              <label><span>Trim</span><input id="v2-editor-audio-trim" type="number" min="0" step="0.1" value="0"></label>
+              <label><span>Length</span><input id="v2-editor-audio-length" type="number" min="0" step="0.1" value="0"></label>
+              <label><span>Volume</span><input id="v2-editor-audio-volume" type="number" min="0" max="2" step="0.05" value="1"></label>
+            </div>
+          </section>
+          <aside class="v2-editor-inspector">
+            <div class="v2-editor-panel-title">Клип</div>
+            <div id="v2-editor-no-selection" class="v2-editor-no-selection">Выбери клип</div>
+            <div id="v2-editor-controls" hidden>
+              <strong id="v2-editor-clip-name"></strong>
+              <label><span>Начало, сек</span><input id="v2-editor-trim-start" type="number" min="0" step="0.1"></label>
+              <label><span>Длина, сек (0 = до конца)</span><input id="v2-editor-trim-duration" type="number" min="0" step="0.1"></label>
+              <label><span>Громкость</span><input id="v2-editor-volume" type="number" min="0" max="2" step="0.05"></label>
+              <label><span>Fade in</span><input id="v2-editor-fade-in" type="number" min="0" max="10" step="0.1"></label>
+              <label><span>Fade out</span><input id="v2-editor-fade-out" type="number" min="0" max="10" step="0.1"></label>
+              <label><span>Разрезать через, сек</span><input id="v2-editor-split-at" type="number" min="0.1" step="0.1" value="5"></label>
+              <button class="v2-secondary-button" id="v2-editor-split" type="button">Разрезать клип</button>
+              <button class="v2-danger-button" id="v2-editor-remove" type="button">Удалить с таймлайна</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
