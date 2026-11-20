@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 
@@ -132,6 +133,36 @@ def _structured_reference_prompt(prompt: str) -> bool:
     return all(label in lowered for label in required)
 
 
+def _simple_labeled_prompt(prompt: str) -> tuple[str, str, str, str] | None:
+    """Parse the canonical three-field V2/MiniMax scene prompt.
+
+    Returns: preamble, integrated description, soundscape, music.
+    The preamble is kept for FL2VA-style alignment notes if present, though
+    Ref2VA workspaces normally leave it empty.
+    """
+
+    pattern = re.compile(
+        r"(?is)^(?P<preamble>.*?)"
+        r"\bintegrated_multimodal_description\s*:\s*(?P<description>.*?)"
+        r"\boverall_soundscape\s*:\s*(?P<soundscape>.*?)"
+        r"\bnon_diegetic_music\s*:\s*(?P<music>.*)$"
+    )
+    match = pattern.match(prompt.strip())
+    if not match:
+        return None
+    description = match.group("description").strip()
+    soundscape = match.group("soundscape").strip()
+    music = match.group("music").strip()
+    if not description or not soundscape or not music:
+        return None
+    return (
+        match.group("preamble").strip(),
+        description,
+        soundscape,
+        music,
+    )
+
+
 def build_reference_prompt(
     prompt: str,
     *,
@@ -243,7 +274,23 @@ def build_reference_prompt(
     if not retention_lines:
         retention_lines.append("Preserve reference identity and requested attributes consistently.")
 
-    simple_prompt = prompt.strip()
+    labeled = _simple_labeled_prompt(prompt)
+    if labeled:
+        preamble, description, requested_soundscape, requested_music = labeled
+        simple_prompt = (
+            (preamble + "\n\n" if preamble else "")
+            + description
+        ).strip()
+    else:
+        simple_prompt = prompt.strip()
+        requested_soundscape = (
+            "Preserve and generate only the ambience, physical sounds, voices, "
+            "and reference audio explicitly requested in detailed_description."
+        )
+        requested_music = (
+            "N/A unless detailed_description explicitly requests audience-only score."
+        )
+
     target_sentence = {
         "video_editing": "The target video is an edited version of the supplied reference video.",
         "video_continuation": "The target video continues naturally from the supplied reference video.",
@@ -262,7 +309,9 @@ def build_reference_prompt(
         + "\n".join(f"- {line}" for line in retention_lines)
         + "\n\ndetailed_description: "
         + simple_prompt
-        + "\n\noverall_soundscape: Preserve and generate only the ambience, physical sounds, voices, and reference audio explicitly requested in detailed_description.\n"
-        + "\nnon_diegetic_music: N/A unless detailed_description explicitly requests audience-only score."
+        + "\n\noverall_soundscape: "
+        + requested_soundscape
+        + "\n\nnon_diegetic_music: "
+        + requested_music
     )
     return wrapped, reference_map
