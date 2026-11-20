@@ -1,0 +1,104 @@
+<section class="v2-view active" data-v2-view="create">
+      <form class="v2-create" id="v2-create-form">
+        <section class="v2-prompt-card">
+          <div class="v2-prompt-head">
+            <label for="v2-prompt">Что должно происходить в видео?</label>
+            <span id="v2-prompt-count">0 / 16 000</span>
+          </div>
+          <div class="v2-prompt-field">
+            <textarea id="v2-prompt" name="prompt" maxlength="16000" placeholder="Например: девушка стоит у окна, поворачивается к камере и улыбается..."></textarea>
+            <button class="v2-wand-button" id="v2-wand" type="button" title="Улучшить промт через локальный ИИ">
+              <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+            </button>
+          </div>
+          <p>Волшебная палочка перепишет обычное описание под MiniMax H3 и переведёт инструкции на английский, сохранив точные реплики.</p>
+        </section>
+
+        <div class="v2-media-grid">
+          <label class="v2-upload-card" data-v2-upload="first">
+            <input type="file" id="v2-first-frame" accept="image/png,image/jpeg,image/webp">
+            <span class="v2-upload-title"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Начальный кадр</span>
+            <span class="v2-upload-body">
+              <img class="v2-upload-preview" alt="Начальный кадр" hidden>
+              <span class="v2-upload-placeholder">
+                <svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>
+                <strong>Перетащите изображение</strong>
+                <small>или нажмите, чтобы выбрать · JPG, PNG, WEBP</small>
+              </span>
+            </span>
+            <button class="v2-upload-remove" type="button" aria-label="Убрать начальный кадр" hidden>
+              <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+            </button>
+          </label>
+
+          <label class="v2-upload-card" data-v2-upload="last">
+            <input type="file" id="v2-last-frame" accept="image/png,image/jpeg,image/webp">
+            <span class="v2-upload-title"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Конечный кадр</span>
+            <span class="v2-upload-body">
+              <img class="v2-upload-preview" alt="Конечный кадр" hidden>
+              <span class="v2-upload-placeholder">
+                <svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>
+                <strong>Перетащите изображение</strong>
+                <small>или нажмите, чтобы выбрать · JPG, PNG, WEBP</small>
+              </span>
+            </span>
+            <button class="v2-upload-remove" type="button" aria-label="Убрать конечный кадр" hidden>
+              <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+            </button>
+          </label>
+        </div>
+
+        <section class="v2-settings-card">
+          <div class="v2-setting-group">
+            <span class="v2-setting-label">Качество</span>
+            <div class="v2-segmented" data-setting="quality">
+              <button type="button" data-value="480">480p</button>
+              <button class="active" type="button" data-value="720">720p</button>
+              <button type="button" data-value="1080">1080p</button>
+            </div>
+          </div>
+          <div class="v2-setting-group">
+            <span class="v2-setting-label">Формат</span>
+            <div class="v2-segmented" data-setting="ratio">
+              <button type="button" data-value="1:1">1:1</button>
+              <button class="active" type="button" data-value="16:9">16:9</button>
+              <button type="button" data-value="9:16">9:16</button>
+            </div>
+          </div>
+          <div class="v2-setting-group">
+            <span class="v2-setting-label">Длительность</span>
+            <div class="v2-segmented" data-setting="seconds">
+              <button type="button" data-value="5">5 сек</button>
+              <button class="active" type="button" data-value="10">10 сек</button>
+              <button type="button" data-value="15">15 сек</button>
+            </div>
+          </div>
+          <div class="v2-setting-group">
+            <span class="v2-setting-label">Шаги</span>
+            <div class="v2-segmented" data-setting="steps">
+              <button type="button" data-value="8">8</button>
+              <button class="active" type="button" data-value="12">12</button>
+              <button type="button" data-value="16">16</button>
+            </div>
+          </div>
+          <div class="v2-settings-bottom">
+            <label class="v2-seed-field">
+              <span># Seed</span>
+              <input id="v2-seed" type="number" inputmode="numeric" placeholder="Авто (-1)">
+            </label>
+            <label class="v2-check">
+              <input id="v2-audio" type="checkbox" checked>
+              <span class="v2-check-mark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>
+              <span>Генерировать звук</span>
+            </label>
+          </div>
+        </section>
+
+        <div class="v2-create-warning" id="v2-create-warning" hidden></div>
+
+        <div class="v2-generate-row"><button class="v2-primary-button" id="v2-generate" type="submit">
+            <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
+            <span class="v2-generate-label">Сгенерировать видео</span>
+          </button></div>
+      </form>
+    </section>
