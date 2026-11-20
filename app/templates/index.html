@@ -679,6 +679,60 @@
   </nav>
 </div>
 
+<div class="assistant-widget" id="assistant-widget">
+  <button
+    class="assistant-toggle"
+    id="assistant-toggle"
+    type="button"
+    aria-controls="assistant-panel"
+    aria-expanded="false"
+    title="Открыть локальный ИИ">
+    <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+    <span>ИИ</span>
+    <span class="assistant-arrow" aria-hidden="true">⌃</span>
+  </button>
+
+  <section class="assistant-panel" id="assistant-panel" hidden aria-label="Локальный ИИ-помощник">
+    <header class="assistant-header">
+      <div class="assistant-heading">
+        <div>
+          <span class="panel-kicker">LOCAL QWEN · H3 ASSISTANT</span>
+          <strong>ИИ-помощник</strong>
+        </div>
+        <span class="assistant-status" id="assistant-status">LLM · проверка</span>
+      </div>
+      <div class="assistant-header-actions">
+        <button class="assistant-small-button" id="assistant-clear" type="button" title="Очистить историю">
+          <svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg>
+        </button>
+        <button class="assistant-small-button" id="assistant-close" type="button" title="Закрыть">
+          <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="assistant-modes" role="tablist" aria-label="Режим помощника">
+      <button class="active" type="button" data-assistant-mode="chat">Разговор</button>
+      <button type="button" data-assistant-mode="control">Управление</button>
+    </div>
+
+    <div class="assistant-messages" id="assistant-messages" aria-live="polite"></div>
+
+    <form class="assistant-form" id="assistant-form">
+      <textarea
+        id="assistant-input"
+        rows="2"
+        maxlength="8000"
+        placeholder="Напиши сообщение или попроси готовый H3-промт..."
+        aria-label="Сообщение локальному ИИ"></textarea>
+      <button class="assistant-send" id="assistant-send" type="submit" aria-label="Отправить">
+        <svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>
+      </button>
+    </form>
+    <div class="assistant-hint">Enter — отправить · Shift+Enter — новая строка</div>
+  </section>
+</div>
+
 <dialog class="guide-dialog" id="prompt-guide-dialog">
   <div class="guide-shell">
     <header class="guide-header">
@@ -1264,4 +1318,8 @@ ControlNet:
 </dialog>
 
 <div class="toast-container" id="toast-container" aria-live="polite"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='assistant.js') }}" defer></script>
 {% endblock %}
