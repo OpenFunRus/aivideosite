@@ -131,8 +131,23 @@ class AssistantManager:
             target = str(gpu["label"])
 
         print(f"[llm-manager] starting assistant on {target}", flush=True)
-        self.process = subprocess.Popen(args, env=env)
+        process = subprocess.Popen(args, env=env)
+        self.process = process
         self.target = target
+
+        # Catch immediate startup failures (most commonly: port 8090 is
+        # already occupied by an old/manual llama-server) before reporting
+        # the child as alive to the control API.
+        time.sleep(0.25)
+        return_code = process.poll()
+        if return_code is not None:
+            print(
+                f"[llm-manager] assistant failed to start on {target}, "
+                f"exit={return_code}",
+                flush=True,
+            )
+            if self.process is process:
+                self.process = None
 
     def reconcile(self, *, force: bool = False) -> None:
         with self.lock:
@@ -166,7 +181,10 @@ class AssistantManager:
 
     def status(self) -> dict[str, Any]:
         with self.lock:
-            alive = self.process is not None and self.process.poll() is None
+            process = self.process
+            alive = process is not None and process.poll() is None
+            if process is not None and not alive and self.process is process:
+                self.process = None
             return {
                 "ok": True,
                 "target": self.target,
