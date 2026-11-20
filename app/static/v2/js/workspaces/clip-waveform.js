@@ -67,7 +67,7 @@
     $("#v2-clip-window-label").textContent = seconds() + " сек";
     $("#v2-clip-total-time").textContent = time(duration);
     $("#v2-clip-start-label").textContent = time(position);
-    $("#v2-clip-end-label").textContent = time(Math.min(duration || Infinity, position + seconds() + 1));
+    $("#v2-clip-end-label").textContent = time(Math.min(duration || Infinity, position + seconds()));
     W.updateClipRange?.();
   };
   const load = async () => {
