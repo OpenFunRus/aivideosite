@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0b0c14">
   <title>AI Video Site V2</title>
-  <link rel="stylesheet" href="/static/v2.css?v=1">
+  <link rel="stylesheet" href="/static/v2.css?v=2">
 </head>
 <body>
 <div class="v2-app" data-user-id="{{ current_user.id }}">
@@ -72,7 +72,6 @@
       <div class="v2-topbar-status">
         <div class="v2-gpu-pill" id="v2-gpu-0"><span class="status-dot"></span><span>GPU 0 · проверка</span></div>
         <div class="v2-gpu-pill" id="v2-gpu-1"><span class="status-dot"></span><span>GPU 1 · проверка</span></div>
-        <span class="v2-draft-state" id="v2-draft-state">Черновик локально</span>
       </div>
     </header>
 
@@ -90,22 +89,6 @@
             </button>
           </div>
           <p>Волшебная палочка перепишет обычное описание под MiniMax H3 и переведёт инструкции на английский, сохранив точные реплики.</p>
-        </section>
-
-        <section class="v2-section-card v2-character-section">
-          <div class="v2-section-title">
-            <div>
-              <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
-              <span><strong>Персонажи</strong><small>Выберите сохранённых героев по имени</small></span>
-            </div>
-            <div class="v2-title-actions">
-              <span id="v2-character-count">Выбрано: 0</span>
-              <button class="v2-secondary-button" id="v2-open-characters" type="button">+ Добавить персонажа</button>
-            </div>
-          </div>
-          <div class="v2-selected-characters" id="v2-selected-characters">
-            <span class="v2-empty-inline">Персонажи не выбраны</span>
-          </div>
         </section>
 
         <div class="v2-media-grid">
@@ -188,13 +171,10 @@
           </div>
         </section>
 
-        <div class="v2-generate-row">
-          <span class="v2-stage-note">V2 shell · генерация будет подключена на следующем этапе</span>
-          <button class="v2-primary-button" id="v2-generate" type="button">
+        <div class="v2-generate-row"><button class="v2-primary-button" id="v2-generate" type="button">
             <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
             Сгенерировать видео
-          </button>
-        </div>
+          </button></div>
       </form>
     </section>
 
@@ -308,35 +288,46 @@
     </section>
   </main>
 
-  <dialog class="v2-character-dialog" id="v2-character-dialog">
-    <div class="v2-character-dialog-head">
-      <div>
-        <span class="v2-kicker">CHARACTERS</span>
-        <h2>Выбор персонажей</h2>
+  <aside class="v2-character-rail" id="v2-character-rail" aria-label="Персонажи">
+    <div class="v2-character-rail-head">
+      <span class="v2-character-rail-icon" title="Персонажи">
+        <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+        <span class="v2-character-count-badge" id="v2-character-count">0</span>
+      </span>
+      <span class="v2-character-rail-title">
+        <strong>Персонажи</strong>
+        <small>Выбор героев для генерации</small>
+      </span>
+    </div>
+
+    <div class="v2-character-panel">
+      <label class="v2-search">
+        <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+        <input id="v2-character-search" type="search" placeholder="Поиск по имени...">
+      </label>
+
+      <div class="v2-character-tabs">
+        <button class="active" type="button" data-character-tab="all">Все</button>
+        <button type="button" data-character-tab="selected">Выбранные <span id="v2-selected-tab-count">0</span></button>
+        <button type="button" data-character-tab="recent">Недавние</button>
       </div>
-      <button class="v2-icon-button" id="v2-close-characters" type="button" aria-label="Закрыть">
-        <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
-      </button>
+
+      <div class="v2-selected-characters v2-selected-characters-rail" id="v2-selected-characters">
+        <span class="v2-empty-inline">Персонажи не выбраны</span>
+      </div>
+
+      <div class="v2-character-grid" id="v2-character-grid"></div>
+      <div class="v2-character-empty" id="v2-character-empty" hidden>Персонажи не найдены.</div>
+
+      <div class="v2-character-dialog-foot">
+        <span id="v2-character-total">0 персонажей</span>
+        <span class="v2-character-hint">Наведи на панель, чтобы раскрыть</span>
+      </div>
     </div>
-    <label class="v2-search">
-      <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
-      <input id="v2-character-search" type="search" placeholder="Поиск персонажа по имени...">
-    </label>
-    <div class="v2-character-tabs">
-      <button class="active" type="button" data-character-tab="all">Все</button>
-      <button type="button" data-character-tab="selected">Выбранные <span id="v2-selected-tab-count">0</span></button>
-      <button type="button" data-character-tab="recent">Недавние</button>
-    </div>
-    <div class="v2-character-grid" id="v2-character-grid"></div>
-    <div class="v2-character-empty" id="v2-character-empty" hidden>Персонажи не найдены.</div>
-    <div class="v2-character-dialog-foot">
-      <span id="v2-character-total">0 персонажей</span>
-      <button class="v2-primary-button" id="v2-character-done" type="button">Готово</button>
-    </div>
-  </dialog>
+  </aside>
 
   <div class="v2-toast" id="v2-toast" role="status" aria-live="polite"></div>
 </div>
-<script src="/static/v2.js?v=1" defer></script>
+<script src="/static/v2.js?v=2" defer></script>
 </body>
 </html>
