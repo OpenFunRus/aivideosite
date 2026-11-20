@@ -297,6 +297,7 @@ class JobWorker(threading.Thread):
                 "user_prompt": payload.get("user_prompt", payload.get("prompt", "")),
                 "comfy_prompt_id": result.get("prompt_id"),
                 "gpu_backend": gpu_label,
+                "v2_context": payload.get("v2_context") or {},
             }
 
             db.insert_media(
