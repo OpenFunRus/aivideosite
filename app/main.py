@@ -318,8 +318,8 @@ async def api_generate(
     width: Annotated[int, Form()] = 1312,
     height: Annotated[int, Form()] = 736,
     seconds: Annotated[float, Form()] = 5.0,
-    fps: Annotated[float, Form()] = 24.0,
-    profile: Annotated[str, Form()] = "steps8",
+    fps: Annotated[int, Form()] = 24,
+    steps: Annotated[int, Form()] = 8,
     seed: Annotated[int, Form()] = -1,
     generate_audio: Annotated[bool, Form()] = False,
     generation_mode: Annotated[str, Form()] = "frames",
@@ -360,16 +360,10 @@ async def api_generate(
         raise HTTPException(400, "Ширина и высота должны делиться на 32.")
     if seconds < 1 or seconds > 30:
         raise HTTPException(400, "Длительность должна быть от 1 до 30 секунд.")
-    allowed_fps = {12.0, 16.0, 20.0, 24.0, 25.0, 30.0}
-    if float(fps) not in allowed_fps:
-        raise HTTPException(400, "Поддерживаются FPS: 12, 16, 20, 24, 25, 30.")
-    profile = {
-        "fast": "steps8",
-        "quality": "steps20",
-        "max": "steps20",
-    }.get(profile, profile)
-    if profile not in {"steps4", "steps8", "steps12", "steps16", "steps20"}:
-        raise HTTPException(400, "Неизвестный профиль шагов.")
+    if fps < 6 or fps > 32:
+        raise HTTPException(400, "FPS должен быть от 6 до 32.")
+    if steps < 6 or steps > 24 or steps % 2:
+        raise HTTPException(400, "Шаги должны быть от 6 до 24 с шагом 2.")
 
     generation_mode = generation_mode.strip().lower()
     if generation_mode not in {"frames", "reference", "multiframe", "digital_human"}:
@@ -677,7 +671,7 @@ async def api_generate(
                 "height": height,
                 "seconds": seconds,
                 "fps": fps,
-                "profile": profile,
+                "steps": steps,
                 "seed": seed,
                 "generate_audio": bool(generate_audio),
                 "generation_mode": generation_mode,
