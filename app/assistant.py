@@ -285,10 +285,13 @@ def stream_chat(messages: Any, *, settings: Any = None) -> Iterator[bytes]:
                 raise AssistantUnavailable(
                     str(data.get("error") or data.get("detail") or f"LLM HTTP {response.status_code}")
                 )
-            for raw_line in response.iter_lines(decode_unicode=True):
-                if not raw_line or not raw_line.startswith("data:"):
+            for raw_line in response.iter_lines(decode_unicode=False):
+                if not raw_line or not raw_line.startswith(b"data:"):
                     continue
-                raw = raw_line[5:].strip()
+                try:
+                    raw = raw_line[5:].strip().decode("utf-8")
+                except UnicodeDecodeError:
+                    continue
                 if not raw or raw == "[DONE]":
                     continue
                 try:
