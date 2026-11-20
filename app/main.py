@@ -924,6 +924,582 @@ async def api_v2_generate(
     return result
 
 
+def _v2_seed(raw: object) -> int:
+    text = str(raw or "").strip()
+    if not text:
+        return -1
+    try:
+        return int(text)
+    except ValueError as exc:
+        raise HTTPException(
+            400,
+            "Seed должен быть целым числом или пустым для Auto (-1).",
+        ) from exc
+
+
+def _v2_validate_simple_settings(seconds: int, steps: int) -> None:
+    if seconds not in V2_DURATIONS:
+        raise HTTPException(400, "V2 поддерживает длительность только 5, 10 или 15 секунд.")
+    if steps not in V2_STEPS:
+        raise HTTPException(400, "V2 поддерживает только 8, 12 или 16 шагов.")
+
+
+def _v2_character_references(
+    character_ids: list[str],
+    user_id: str,
+    *,
+    include_voice: bool,
+) -> list[dict]:
+    items: list[dict] = []
+    for character_id in character_ids:
+        character = db.get_character(character_id, user_id)
+        if character is None:
+            raise HTTPException(404, "Один из выбранных персонажей не найден.")
+        for path_value in character.get("images") or []:
+            path = Path(path_value)
+            if not path.is_file():
+                raise HTTPException(
+                    409,
+                    f"У персонажа «{character['name']}» отсутствует файл изображения.",
+                )
+            items.append(
+                {
+                    "type": "image",
+                    "path": str(path),
+                    "temporary": False,
+                    "source_name": path.name,
+                    "role": "character",
+                    "retention": "fully_preserved",
+                    "character_id": character_id,
+                    "character_name": character["name"],
+                    "character_description": character.get("description") or "",
+                }
+            )
+        if include_voice and character.get("voice_file"):
+            path = Path(str(character["voice_file"]))
+            if not path.is_file():
+                raise HTTPException(
+                    409,
+                    f"У персонажа «{character['name']}» отсутствует файл голоса.",
+                )
+            items.append(
+                {
+                    "type": "audio",
+                    "path": str(path),
+                    "temporary": False,
+                    "source_name": path.name,
+                    "role": "voice",
+                    "retention": "reference",
+                    "character_id": character_id,
+                    "character_name": character["name"],
+                    "character_description": character.get("description") or "",
+                }
+            )
+    return items
+
+
+def _v2_fit_video_size(width: int, height: int) -> tuple[int, int]:
+    width = max(2, int(width))
+    height = max(2, int(height))
+    scale = min(1.0, 3072.0 / max(width, height))
+    width = int(round(width * scale))
+    height = int(round(height * scale))
+
+    def grid(value: int) -> int:
+        return max(256, min(3072, int(round(value / 32.0) * 32)))
+
+    return grid(width), grid(height)
+
+
+async def _v2_source_video(
+    *,
+    source_media_id: str,
+    source_video: UploadFile | None,
+    user_id: str,
+) -> tuple[dict, int, int]:
+    media_id = str(source_media_id or "").strip()
+    has_upload = source_video is not None and bool(source_video.filename)
+    if bool(media_id) == bool(has_upload):
+        raise HTTPException(
+            400,
+            "Выберите ровно один исходный ролик: из Библиотеки или загрузите файл.",
+        )
+
+    if media_id:
+        media = _ensure_media(media_id, user_id)
+        path = settings.library_dir / media["filename"]
+        if not path.is_file():
+            raise HTTPException(404, "Файл исходного ролика не найден.")
+        source_name = media.get("title") or path.name
+        temporary = False
+        meta = media.get("meta") or {}
+        width = int(meta.get("width") or 0)
+        height = int(meta.get("height") or 0)
+    else:
+        assert source_video is not None
+        path = await save_upload(
+            source_video,
+            kind="video",
+            max_bytes=settings.max_video_upload_bytes,
+        )
+        source_name = Path(source_video.filename or path.name).name
+        temporary = True
+        width = 0
+        height = 0
+
+    probed = probe_video_size(path)
+    if probed is not None:
+        width, height = probed
+    if width <= 0 or height <= 0:
+        if temporary:
+            path.unlink(missing_ok=True)
+        raise HTTPException(400, "Не удалось определить размер исходного видео.")
+
+    width, height = _v2_fit_video_size(width, height)
+    item = {
+        "type": "video",
+        "path": str(path),
+        "temporary": temporary,
+        "source_name": str(source_name),
+        "role": "motion",
+        "retention": "fully_preserved",
+        "has_audio": probe_has_audio(path),
+        "audio_retention": "reference",
+        "note": "Primary source video. Continue from its final visible state and motion.",
+    }
+    if media_id:
+        item["media_id"] = media_id
+    return item, width, height
+
+
+def _v2_enqueue_reference_job(
+    *,
+    user_id: str,
+    prompt: str,
+    width: int,
+    height: int,
+    seconds: int,
+    steps: int,
+    seed: int,
+    generate_audio: bool,
+    generation_mode: str,
+    reference_task: str,
+    items: list[dict],
+    v2_context: dict | None = None,
+) -> str:
+    compact_prompt = " ".join(prompt.split()) if "\n" not in prompt else prompt.strip()
+    if not compact_prompt:
+        raise HTTPException(400, "Введите prompt.")
+    if len(compact_prompt) > 16000:
+        raise HTTPException(400, "Prompt слишком длинный.")
+
+    media_order = {"image": 0, "video": 1, "audio": 2}
+    items.sort(key=lambda item: media_order.get(str(item.get("type") or ""), 99))
+    try:
+        validate_reference_items(
+            items,
+            digital_human=generation_mode == "digital_human",
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    actual_prompt, reference_map = build_reference_prompt(
+        compact_prompt,
+        task=reference_task,
+        items=items,
+    )
+    job_id = uuid.uuid4().hex
+    db.enqueue_job(
+        job_id,
+        "generate",
+        {
+            "prompt": actual_prompt,
+            "user_prompt": compact_prompt,
+            "width": int(width),
+            "height": int(height),
+            "seconds": float(seconds),
+            "fps": 24,
+            "steps": int(steps),
+            "seed": int(seed),
+            "generate_audio": bool(generate_audio),
+            "generation_mode": generation_mode,
+            "keyframe_role": "first",
+            "reference_task": reference_task,
+            "ref_image_size": "match",
+            "images": [],
+            "references": items,
+            "reference_map": reference_map,
+            "guides": [],
+            "control": {"mode": "none"},
+            "v2_context": v2_context or {},
+        },
+        owner_id=user_id,
+    )
+    return job_id
+
+
+async def _v2_audio_segment(
+    upload: UploadFile,
+    *,
+    start_seconds: float,
+    duration: float,
+) -> Path:
+    source = await save_upload(
+        upload,
+        kind="audio",
+        max_bytes=settings.max_audio_upload_bytes,
+    )
+    destination = settings.upload_dir / f"{uuid.uuid4().hex}_segment.wav"
+
+    def extract() -> None:
+        subprocess.run(
+            [
+                str(settings.ffmpeg_bin),
+                "-y",
+                "-ss",
+                f"{max(0.0, start_seconds):.6f}",
+                "-i",
+                str(source),
+                "-t",
+                f"{max(0.1, duration):.6f}",
+                "-vn",
+                "-ac",
+                "2",
+                "-ar",
+                "48000",
+                "-c:a",
+                "pcm_s16le",
+                str(destination),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+
+    try:
+        await asyncio.to_thread(extract)
+    except Exception as exc:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(400, "Не удалось подготовить сегмент аудиотрека.") from exc
+    finally:
+        source.unlink(missing_ok=True)
+
+    if not destination.is_file():
+        raise HTTPException(400, "Не удалось подготовить сегмент аудиотрека.")
+    return destination
+
+
+@app.get("/api/v2/state")
+async def api_v2_state(
+    media_page: int = Query(1, ge=1),
+    jobs_page: int = Query(1, ge=1),
+    user_id: str = Depends(require_user),
+):
+    media_data = db.list_media_page(media_page, 40, owner_id=user_id)
+    jobs_data = db.list_jobs_page(jobs_page, 60, owner_id=user_id)
+    active_global = []
+    for job in db.list_jobs(200):
+        if job.get("status") not in {"queued", "running"}:
+            continue
+        payload = job.get("payload") or {}
+        active_global.append(
+            {
+                "id": job.get("id"),
+                "owner_id": job.get("owner_id"),
+                "user_label": _user_label(str(job.get("owner_id") or "")),
+                "kind": job.get("kind"),
+                "status": job.get("status"),
+                "progress": job.get("progress"),
+                "stage": job.get("stage"),
+                "created_at": job.get("created_at"),
+                "started_at": job.get("started_at"),
+                "prompt": str(payload.get("user_prompt") or payload.get("prompt") or "")[:180],
+            }
+        )
+
+    return {
+        "server_now": time.time(),
+        "user": {"id": user_id, "label": _user_label(user_id)},
+        "users": [
+            {"id": item.id, "label": item.label}
+            for item in settings.site_users
+        ],
+        "media": media_data["items"],
+        "media_pagination": {
+            key: media_data[key] for key in ("page", "page_size", "total", "pages")
+        },
+        "jobs": jobs_data["items"],
+        "jobs_pagination": {
+            key: jobs_data[key] for key in ("page", "page_size", "total", "pages")
+        },
+        "active_global": active_global,
+        "counts": db.state_counts(user_id),
+        "global_counts": db.state_counts(),
+        "system": get_system_status(),
+        "assistant": await asyncio.to_thread(local_assistant.status),
+    }
+
+
+@app.post("/api/assistant/context")
+async def api_assistant_context(
+    request: Request,
+    user_id: str = Depends(require_user),
+):
+    del user_id
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(400, "Некорректный запрос контекста.") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "Некорректный запрос контекста.")
+    return await asyncio.to_thread(
+        local_assistant.context_usage,
+        payload.get("messages"),
+        settings=payload.get("settings"),
+        thinking=bool(payload.get("thinking")),
+    )
+
+
+@app.post("/api/v2/continue")
+async def api_v2_continue(
+    prompt: Annotated[str, Form()],
+    source_media_id: Annotated[str, Form()] = "",
+    seconds: Annotated[int, Form()] = 10,
+    steps: Annotated[int, Form()] = 12,
+    seed: Annotated[str, Form()] = "",
+    generate_audio: Annotated[bool, Form()] = True,
+    character_ids: Annotated[str, Form()] = "[]",
+    source_video: UploadFile | None = File(None),
+    user_id: str = Depends(require_user),
+):
+    _v2_validate_simple_settings(seconds, steps)
+    selected = _v2_character_ids(character_ids)
+    temporary_paths: list[Path] = []
+    try:
+        source_item, width, height = await _v2_source_video(
+            source_media_id=source_media_id,
+            source_video=source_video,
+            user_id=user_id,
+        )
+        if source_item.get("temporary"):
+            temporary_paths.append(Path(str(source_item["path"])))
+        items = _v2_character_references(
+            selected,
+            user_id,
+            include_voice=True,
+        )
+        items.append(source_item)
+        job_id = _v2_enqueue_reference_job(
+            user_id=user_id,
+            prompt=prompt,
+            width=width,
+            height=height,
+            seconds=seconds,
+            steps=steps,
+            seed=_v2_seed(seed),
+            generate_audio=generate_audio,
+            generation_mode="reference",
+            reference_task="video_continuation",
+            items=items,
+            v2_context={
+                "workspace": "continue",
+                "source_media_id": str(source_media_id or "") or None,
+            },
+        )
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "width": width,
+            "height": height,
+        }
+    except Exception:
+        for path in temporary_paths:
+            path.unlink(missing_ok=True)
+        raise
+
+
+@app.post("/api/v2/audio")
+async def api_v2_audio(
+    prompt: Annotated[str, Form()],
+    quality: Annotated[str, Form()] = "720",
+    ratio: Annotated[str, Form()] = "16:9",
+    seconds: Annotated[int, Form()] = 10,
+    steps: Annotated[int, Form()] = 12,
+    seed: Annotated[str, Form()] = "",
+    character_ids: Annotated[str, Form()] = "[]",
+    audio: UploadFile = File(...),
+    visual_reference: UploadFile | None = File(None),
+    user_id: str = Depends(require_user),
+):
+    _v2_validate_simple_settings(seconds, steps)
+    width, height = _v2_resolution(quality, ratio)
+    selected = _v2_character_ids(character_ids)
+    temporary_paths: list[Path] = []
+    try:
+        items = _v2_character_references(
+            selected,
+            user_id,
+            include_voice=False,
+        )
+        if visual_reference is not None and visual_reference.filename:
+            image_path = await save_upload(
+                visual_reference,
+                kind="image",
+                max_bytes=settings.max_image_upload_bytes,
+            )
+            temporary_paths.append(image_path)
+            items.append(
+                {
+                    "type": "image",
+                    "path": str(image_path),
+                    "temporary": True,
+                    "source_name": Path(visual_reference.filename).name,
+                    "role": "character",
+                    "retention": "fully_preserved",
+                    "note": "Primary visual reference for the audio-driven performance.",
+                }
+            )
+
+        audio_path = await save_upload(
+            audio,
+            kind="audio",
+            max_bytes=settings.max_audio_upload_bytes,
+        )
+        temporary_paths.append(audio_path)
+        items.append(
+            {
+                "type": "audio",
+                "path": str(audio_path),
+                "temporary": True,
+                "source_name": Path(audio.filename or audio_path.name).name,
+                "role": "audio",
+                "retention": "fully_copy",
+                "note": "Driving performance audio. Synchronize visible performance to this audio.",
+            }
+        )
+
+        if not any(item.get("type") == "image" for item in items):
+            raise HTTPException(
+                400,
+                "Для генерации по аудио выберите Character или добавьте визуальный референс.",
+            )
+
+        job_id = _v2_enqueue_reference_job(
+            user_id=user_id,
+            prompt=prompt,
+            width=width,
+            height=height,
+            seconds=seconds,
+            steps=steps,
+            seed=_v2_seed(seed),
+            generate_audio=True,
+            generation_mode="digital_human",
+            reference_task="audio_reference",
+            items=items,
+            v2_context={"workspace": "audio"},
+        )
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "width": width,
+            "height": height,
+        }
+    except Exception:
+        for path in temporary_paths:
+            path.unlink(missing_ok=True)
+        raise
+
+
+@app.post("/api/v2/clip")
+async def api_v2_clip(
+    prompt: Annotated[str, Form()],
+    source_media_id: Annotated[str, Form()] = "",
+    audio_start: Annotated[float, Form()] = 0.0,
+    seconds: Annotated[int, Form()] = 10,
+    steps: Annotated[int, Form()] = 12,
+    seed: Annotated[str, Form()] = "",
+    character_ids: Annotated[str, Form()] = "[]",
+    source_video: UploadFile | None = File(None),
+    master_audio: UploadFile = File(...),
+    user_id: str = Depends(require_user),
+):
+    _v2_validate_simple_settings(seconds, steps)
+    if audio_start < 0 or audio_start > 86400:
+        raise HTTPException(400, "Позиция аудиотрека должна быть неотрицательной.")
+    selected = _v2_character_ids(character_ids)
+    temporary_paths: list[Path] = []
+    try:
+        source_item, width, height = await _v2_source_video(
+            source_media_id=source_media_id,
+            source_video=source_video,
+            user_id=user_id,
+        )
+        if source_item.get("temporary"):
+            temporary_paths.append(Path(str(source_item["path"])))
+
+        segment = await _v2_audio_segment(
+            master_audio,
+            start_seconds=audio_start,
+            duration=float(seconds),
+        )
+        temporary_paths.append(segment)
+
+        items = _v2_character_references(
+            selected,
+            user_id,
+            include_voice=False,
+        )
+        items.extend(
+            [
+                source_item,
+                {
+                    "type": "audio",
+                    "path": str(segment),
+                    "temporary": True,
+                    "source_name": f"track_{audio_start:g}_{audio_start + seconds:g}.wav",
+                    "role": "audio",
+                    "retention": "fully_copy",
+                    "note": (
+                        f"Master-track segment from {audio_start:g}s to "
+                        f"{audio_start + seconds:g}s. Keep performance synchronized to it."
+                    ),
+                },
+            ]
+        )
+        job_id = _v2_enqueue_reference_job(
+            user_id=user_id,
+            prompt=prompt,
+            width=width,
+            height=height,
+            seconds=seconds,
+            steps=steps,
+            seed=_v2_seed(seed),
+            generate_audio=True,
+            generation_mode="reference",
+            reference_task="video_continuation",
+            items=items,
+            v2_context={
+                "workspace": "clip",
+                "source_media_id": str(source_media_id or "") or None,
+                "audio_start": float(audio_start),
+                "audio_end": float(audio_start) + seconds,
+            },
+        )
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "width": width,
+            "height": height,
+            "audio_start": audio_start,
+            "audio_end": audio_start + seconds,
+        }
+    except Exception:
+        for path in temporary_paths:
+            path.unlink(missing_ok=True)
+        raise
+
+
 @app.post("/api/jobs/{job_id}/cancel")
 async def api_cancel_job(
     job_id: str,
