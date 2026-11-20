@@ -1050,6 +1050,34 @@ def control(
     settings_payload = dict(settings) if isinstance(settings, dict) else {}
     settings_payload["available_characters"] = characters
 
+    workspace = str(settings_payload.get("workspace") or "").strip().lower()
+    if workspace in _V2_WAND_WORKSPACES:
+        prompt = _generate_v2_wand_prompt(
+            messages,
+            settings_payload=settings_payload,
+            thinking=thinking,
+        )
+        source_text = _wand_source_text(messages)
+        issues = _v2_prompt_validation_issues(prompt, settings_payload)
+        issues.extend(_semantic_faithfulness_issues(source_text, prompt))
+        if issues:
+            repaired = _repair_control_prompt(
+                messages,
+                settings_payload=settings_payload,
+                bad_prompt=prompt,
+                issues=issues,
+                thinking=thinking,
+            )
+            prompt = str((repaired.get("changes") or {}).get("prompt") or "").strip()
+            repaired_issues = _v2_prompt_validation_issues(prompt, settings_payload)
+            repaired_issues.extend(_semantic_faithfulness_issues(source_text, prompt))
+            if repaired_issues:
+                raise AssistantUnavailable(
+                    "Локальная LLM дважды нарушила формат/смысл H3: "
+                    + "; ".join(repaired_issues[:4])
+                )
+        return {"message": "Промт подготовлен.", "changes": {"prompt": prompt}}
+
     payload = _chat_payload(
         messages,
         settings=settings_payload,
@@ -1061,37 +1089,6 @@ def control(
     )
     content = _request_control_content(payload)
     decoded = _decode_control_json(content)
+    message = str(decoded.get("message") or "Настройки обновлены.").strip()[:4000]
     changes = sanitize_changes(decoded.get("changes"), valid_character_ids=valid_ids)
-
-    prompt = changes.get("prompt")
-    if isinstance(prompt, str) and prompt:
-        source_text = _wand_source_text(messages)
-        issues = _v2_prompt_validation_issues(prompt, settings_payload)
-        issues.extend(_semantic_faithfulness_issues(source_text, prompt))
-        if issues:
-            decoded = _repair_control_prompt(
-                messages,
-                settings_payload=settings_payload,
-                bad_prompt=prompt,
-                issues=issues,
-                thinking=thinking,
-            )
-            changes = sanitize_changes(decoded.get("changes"), valid_character_ids=valid_ids)
-            repaired_prompt = changes.get("prompt")
-            repaired_issues = (
-                _v2_prompt_validation_issues(repaired_prompt, settings_payload)
-                if isinstance(repaired_prompt, str) and repaired_prompt
-                else ["corrective retry did not return changes.prompt"]
-            )
-            if isinstance(repaired_prompt, str) and repaired_prompt:
-                repaired_issues.extend(
-                    _semantic_faithfulness_issues(source_text, repaired_prompt)
-                )
-            if repaired_issues:
-                raise AssistantUnavailable(
-                    "Локальная LLM дважды нарушила формат/смысл H3: "
-                    + "; ".join(repaired_issues[:4])
-                )
-
-    message = str(decoded.get("message") or "Промт подготовлен.").strip()[:4000]
     return {"message": message, "changes": changes}
