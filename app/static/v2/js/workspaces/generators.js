@@ -205,11 +205,6 @@
   });
 
   continueUploadTab?.addEventListener("click", () => {
-    if (continueLibrary) continueLibrary.value = "";
-    setContinueSourceMode("upload");
-    clearContinueSourceVisual();
-    if (continueUploadHint) continueUploadHint.hidden = false;
-    if (continueLibraryPicker) continueLibraryPicker.hidden = true;
     continueUpload?.click();
   });
 
@@ -252,6 +247,100 @@
 
   setContinueSourceMode("library");
 
+  const librarySourceContext = (selectId, uploadId) => {
+    const select = qs(selectId);
+    const upload = qs(uploadId);
+    const file = upload?.files?.[0] || null;
+    const item = select?.value ? W.mediaById(select.value) : null;
+    if (file) {
+      return {
+        source_kind: "upload",
+        source_title: file.name,
+        source_prompt: "",
+        source_duration: null,
+        source_workspace: "",
+      };
+    }
+    if (item) {
+      return {
+        source_kind: "library",
+        source_title: String(item.title || item.filename || ""),
+        source_prompt: W.mediaPrompt(item),
+        source_duration: Number(item.duration || item.meta?.seconds || 0) || null,
+        source_workspace: String(item.meta?.v2_context?.workspace || ""),
+      };
+    }
+    return {
+      source_kind: "none",
+      source_title: "",
+      source_prompt: "",
+      source_duration: null,
+      source_workspace: "",
+    };
+  };
+
+  const currentWorkspaceAssistantSettings = (kind) => {
+    const selected_character_ids = W.selectedCharacterIds();
+    if (kind === "continue") {
+      return {
+        workspace: "continue",
+        generation_mode: "reference",
+        reference_task: "video_continuation",
+        quality: W.settingValue("continue-quality", "720"),
+        resolution_shape: W.settingValue("continue-ratio", "16:9"),
+        seconds: Number(W.settingValue("continue-seconds", "10")),
+        steps: Number(W.settingValue("continue-steps", "12")),
+        seed: Number(qs("#v2-continue-seed")?.value || -1),
+        generate_audio: Boolean(qs("#v2-continue-audio")?.checked),
+        selected_character_ids,
+        ...librarySourceContext("#v2-continue-library", "#v2-continue-upload"),
+      };
+    }
+    if (kind === "audio") {
+      return {
+        workspace: "audio",
+        generation_mode: "digital_human",
+        reference_task: "audio_reference",
+        quality: W.settingValue("audio-quality", "720"),
+        resolution_shape: W.settingValue("audio-ratio", "16:9"),
+        seconds: Number(W.settingValue("audio-seconds", "10")),
+        steps: Number(W.settingValue("audio-steps", "12")),
+        seed: Number(qs("#v2-audio-seed")?.value || -1),
+        embed_track: Boolean(qs("#v2-audio-embed-track")?.checked),
+        generate_scene_audio: Boolean(qs("#v2-audio-scene-sound")?.checked),
+        generate_audio: Boolean(qs("#v2-audio-scene-sound")?.checked),
+        selected_character_ids,
+        ...(W.audioAssistantContext?.() || {}),
+      };
+    }
+    if (kind === "clip") {
+      const seconds = Number(W.settingValue("clip-seconds", "10"));
+      const audioStart = Number(qs("#v2-clip-audio-start")?.value || 0);
+      const track = (W.snapshot?.tracks || []).find(
+        (item) => String(item.id) === String(qs("#v2-clip-track")?.value || "")
+      );
+      return {
+        workspace: "clip",
+        generation_mode: "reference",
+        reference_task: "video_continuation",
+        quality: W.settingValue("clip-quality", "720"),
+        resolution_shape: W.settingValue("clip-ratio", "16:9"),
+        seconds,
+        steps: Number(W.settingValue("clip-steps", "12")),
+        seed: Number(qs("#v2-clip-seed")?.value || -1),
+        embed_track: Boolean(qs("#v2-clip-embed-track")?.checked),
+        generate_scene_audio: Boolean(qs("#v2-clip-scene-sound")?.checked),
+        generate_audio: Boolean(qs("#v2-clip-scene-sound")?.checked),
+        audio_start: audioStart,
+        audio_end: audioStart + seconds,
+        master_track_title: String(track?.title || qs("#v2-clip-audio")?.files?.[0]?.name || ""),
+        selected_character_ids,
+        ...librarySourceContext("#v2-clip-library", "#v2-clip-upload"),
+      };
+    }
+    return { workspace: kind, selected_character_ids };
+  };
+
   const improvePrompt = async (kind) => {
     const config = {
       continue: {
@@ -262,14 +351,6 @@
           "Не придумывай reference labels. В [Shot 1] начинай ровно из конечного состояния source video: поза, направление движения, momentum, camera direction, свет и география сцены сохраняются. " +
           "Дальше опиши только новое действие. Тайминг shots обязан укладываться в выбранную duration. " +
           "Если звук включён — физические звуки/атмосфера в overall_soundscape; если выключен — N/A. Музыку не добавляй без просьбы. Return only changes.prompt.",
-        settings: () => ({
-          workspace: "continue",
-          generation_mode: "reference",
-          reference_task: "video_continuation",
-          seconds: Number(W.settingValue("continue-seconds", "10")),
-          steps: Number(W.settingValue("continue-steps", "12")),
-          generate_audio: Boolean(qs("#v2-continue-audio")?.checked),
-        }),
       },
       audio: {
         target: "#v2-audio-prompt",
@@ -279,15 +360,6 @@
           "Синхронизируй видимое исполнение, артикуляцию, жесты и body motion с driving audio, но не выдумывай lyrics, если пользователь их не дал. " +
           "Если «Фоновые звуки H3» выключены — overall_soundscape: N/A; если включены — только физические/фоновые звуки сцены, без дублирования master track. " +
           "Backend сам добавит реальные reference labels. Тайминг shots обязан укладываться в выбранную duration. Return only changes.prompt.",
-        settings: () => ({
-          workspace: "audio",
-          generation_mode: "digital_human",
-          reference_task: "audio_reference",
-          seconds: Number(W.settingValue("audio-seconds", "10")),
-          steps: Number(W.settingValue("audio-steps", "12")),
-          embed_track: Boolean(qs("#v2-audio-embed-track")?.checked),
-          generate_scene_audio: Boolean(qs("#v2-audio-scene-sound")?.checked),
-        }),
       },
       clip: {
         target: "#v2-clip-prompt",
@@ -297,16 +369,6 @@
           "Начинай из точного end-state предыдущего ролика, сохраняй identity, pose, screen direction, momentum, camera motion, lighting и scene geography. " +
           "Master track уже внешний: non_diegetic_music: N/A. Если «Фоновые звуки H3» выключены — overall_soundscape: N/A; если включены — только дополнительные звуки сцены. " +
           "Backend сам добавит реальные reference labels. Тайминг shots обязан укладываться в выбранную duration. Return only changes.prompt.",
-        settings: () => ({
-          workspace: "clip",
-          generation_mode: "reference",
-          reference_task: "video_continuation",
-          seconds: Number(W.settingValue("clip-seconds", "10")),
-          steps: Number(W.settingValue("clip-steps", "12")),
-          embed_track: Boolean(qs("#v2-clip-embed-track")?.checked),
-          generate_scene_audio: Boolean(qs("#v2-clip-scene-sound")?.checked),
-          audio_start: Number(qs("#v2-clip-audio-start")?.value || 0),
-        }),
       },
     }[kind];
     if (!config) return;
@@ -326,11 +388,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [{ role: "user", content: config.instruction + "\n\n" + source }],
-          settings: {
-            ...(api.currentAssistantSettings?.() || {}),
-            ...(typeof config.settings === "function" ? config.settings() : config.settings),
-            selected_character_ids: W.selectedCharacterIds(),
-          },
+          settings: currentWorkspaceAssistantSettings(kind),
           thinking: false,
         }),
       });
@@ -358,10 +416,14 @@
     const data = new FormData();
     const prompt = qs("#v2-continue-prompt")?.value.trim() || "";
     if (!prompt) return showToast("Напишите, что должно происходить дальше.", "error");
+    const sourceId = qs("#v2-continue-library")?.value || "";
+    const sourceUpload = qs("#v2-continue-upload")?.files?.[0];
+    if (!sourceId && !sourceUpload) {
+      return showToast("Выберите исходный ролик из библиотеки или загрузите файл.", "error");
+    }
     data.set("prompt", prompt);
-    data.set("source_media_id", qs("#v2-continue-library")?.value || "");
-    const upload = qs("#v2-continue-upload")?.files?.[0];
-    if (upload) data.set("source_video", upload);
+    data.set("source_media_id", sourceId);
+    if (sourceUpload) data.set("source_video", sourceUpload);
     data.set("quality", W.settingValue("continue-quality", "720"));
     data.set("ratio", W.settingValue("continue-ratio", "16:9"));
     data.set("seconds", W.settingValue("continue-seconds", "10"));
@@ -396,7 +458,6 @@
   for (const [kind, inputId] of [["video", "v2-clip-upload"], ["track", "v2-clip-audio"]]) {
     qs("#v2-clip-" + kind + "-library-tab")?.addEventListener("click", () => setClipSourceMode(kind, "library"));
     qs("#v2-clip-" + kind + "-upload-tab")?.addEventListener("click", () => {
-      setClipSourceMode(kind, "upload");
       qs("#" + inputId)?.click();
     });
     qs("#" + inputId)?.addEventListener("change", () => {
@@ -453,15 +514,19 @@
     const audio = clipAudio?.files?.[0];
     const trackId = clipTrackSelect?.value || "";
     if (!prompt) return showToast("Опишите следующий фрагмент.", "error");
+    const sourceId = qs("#v2-clip-library")?.value || "";
+    const sourceUpload = qs("#v2-clip-upload")?.files?.[0];
+    if (!sourceId && !sourceUpload) {
+      return showToast("Выберите предыдущий ролик или загрузите исходное видео.", "error");
+    }
     if (!audio && !trackId) {
       return showToast("Выберите сохранённый master track или новый файл.", "error");
     }
 
     const data = new FormData();
     data.set("prompt", prompt);
-    data.set("source_media_id", qs("#v2-clip-library")?.value || "");
-    const upload = qs("#v2-clip-upload")?.files?.[0];
-    if (upload) data.set("source_video", upload);
+    data.set("source_media_id", sourceId);
+    if (sourceUpload) data.set("source_video", sourceUpload);
     data.set("track_id", trackId);
     if (audio) data.set("master_audio", audio);
     data.set("audio_start", qs("#v2-clip-audio-start")?.value || "0");
