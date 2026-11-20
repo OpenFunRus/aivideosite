@@ -12,6 +12,26 @@
 
 ---
 
+## V2 — новый интерфейс рядом с V1
+
+20 ноября 2026 утверждён отдельный task-first дизайн V2.
+
+- V1 остаётся на `/` и не удаляется.
+- V2 открывается на `/v2`.
+- V2 использует отдельные `app/templates/v2.html`, `app/static/v2.css`, `app/static/v2.js` и не подключает старые V1 CSS/JS.
+- Утверждённый экран `Создать`: prompt + magic wand, масштабируемый Character selector, first/last frame previews, кнопки 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 sec, 8/12/16 steps, seed, sound.
+- Character selector: поиск, Все / Выбранные / Недавние, прокрутка, выбранные chips; при выборе учитываются H3 reference budgets.
+- Magic wand уже вызывает существующий локальный Qwen через `/api/assistant/control` только для улучшения prompt; старый режим автозаполнения формы в V2 не возвращается.
+- Отдельная вкладка `Инструкция`: обучение по V2 + MiniMax H3.
+- Кнопка ChatGPT copy-paste динамически объединяет `app/static/v2-chatgpt-site-guide.txt` + актуальный `app/static/h3-prompting-guide-ai.txt`.
+- Остальные V2-разделы пока являются shell placeholders и реализуются поэтапно по `docs/v2/PLAN.md`.
+- Кнопка генерации V2 на текущем этапе ещё не подключена к H3: сначала пользователь визуально проверяет Stage 2 shell.
+- Важное техническое ограничение текущего backend: FL2VA first/last и Ref2VA Characters пока разделены режимами. Не обещать их одновременное conditioning до отдельного решения на Stage 3.
+
+Подробный план: `docs/v2/PLAN.md`.
+
+---
+
 ## 1. Цель проекта
 
 `aivideosite` — локальная веб-панель для AI-видео на одной Ubuntu VM с двумя GPU: RTX3090 24 GB и RTX2080 mod 22 GB.
