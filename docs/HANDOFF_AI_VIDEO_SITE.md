@@ -14,7 +14,7 @@
 
 ## 1. Цель проекта
 
-`aivideosite` — локальная веб-панель для AI-видео на одной Ubuntu VM с двумя GPU: RTX 3090 24 GB и RTX 2080 Ti mod 22 GB.
+`aivideosite` — локальная веб-панель для AI-видео на одной Ubuntu VM с двумя GPU: RTX3090 24 GB и RTX2080 mod 22 GB.
 
 Основные задачи:
 
@@ -24,8 +24,8 @@
 4. Позволять закрыть сайт, вернуться позже и увидеть результат.
 5. Делать простые операции со звуком через FFmpeg.
 7. Использовать обе GPU для MiniMax H3 с автоматическим распределением:
-   - RTX 3090 — primary;
-   - RTX 2080 Ti mod 22 GB — secondary;
+   - RTX3090 — primary;
+   - RTX2080 mod 22 GB — secondary;
    - если primary занят генерацией сайта, следующая H3-задача запускается на secondary.
 8. Сохранять монтажный и аудио workflow через FFmpeg.
 
@@ -97,8 +97,8 @@ main
 
 - гипервизор: Proxmox VE 8.4;
 - CPU хоста: Intel Core i9-10980XE;
-- GPU 0: NVIDIA GeForce RTX 3090, 24576 MiB VRAM, PCI bus `00000000:01:00.0`;
-- GPU 1: NVIDIA GeForce RTX 2080 Ti mod, 22528 MiB VRAM, PCI bus `00000000:02:00.0`;
+- GPU 0: NVIDIA GeForce RTX3090, 24576 MiB VRAM, PCI bus `00000000:01:00.0`;
+- GPU 1: NVIDIA GeForce RTX2080 mod, 22528 MiB VRAM, PCI bus `00000000:02:00.0`;
 - обе GPU проброшены в Ubuntu VM через PCI passthrough и видны `nvidia-smi`.
 
 ### Ubuntu VM
@@ -136,8 +136,8 @@ ip route
 Подтверждённый вывод после подключения второй карты:
 
 ```text
-GPU 0: NVIDIA GeForce RTX 3090
-GPU 1: NVIDIA GeForce RTX 2080 Ti
+GPU 0: NVIDIA GeForce RTX3090
+GPU 1: NVIDIA GeForce RTX2080
 ```
 
 VRAM:
@@ -227,7 +227,7 @@ ss -ltnp | grep 8188
 ComfyUI-MiniMaxH3-Easy
 ```
 
-Исторически проверенная вручную H3-конфигурация на RTX 3090 (после перехода на dual-GPU тот же H3 профиль нужно подтвердить на RTX 2080 Ti mod 22 GB):
+Исторически проверенная вручную H3-конфигурация на RTX3090 (после перехода на dual-GPU тот же H3 профиль нужно подтвердить на RTX2080 mod 22 GB):
 
 - 1344x768;
 - 24 FPS;
@@ -269,19 +269,17 @@ Turbo LoRA:
 /opt/ai/ComfyUI/models/loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
 ```
 
-### H3 профили в сайте
+### H3 steps / FPS в сайте
 
-Текущие UI/API профили:
+Текущий UI/API больше не использует дискретные профили:
 
-- `steps4`: Turbo LoRA + 4 steps;
-- `steps8`: Turbo LoRA + 8 steps;
-- `steps12`: base + 12 steps;
-- `steps16`: base + 16 steps;
-- `steps20`: base + 20 steps.
+- `steps`: 6–24 с шагом 2, по умолчанию 8;
+- `fps`: 6–32 с шагом 1, по умолчанию 24;
+- новый FL2VA на 8 шагах использует `H3_TURBO_LORA`;
+- остальные новые FL2VA значения используют Base;
+- Ref2VA / Timeline / Digital Human в новом диапазоне 6–24 используют Base, потому что `H3_REF_TURBO_LORA` рассчитана на 4 шага.
 
-По умолчанию: `steps8`.
-
-Legacy-значения `fast`, `quality`, `max` принимаются только для совместимости старых сохранённых/queued jobs и нормализуются соответственно в 8/20/20 шагов. 30-step режим удалён.
+Старые payload с `profile=steps4/steps8/steps12/steps16/steps20` и legacy `fast/quality/max` остаются совместимыми внутри `app/comfy.py`.
 
 ---
 
@@ -810,8 +808,8 @@ MAX_AUDIO_UPLOAD_MB=300
 
 Оба ComfyUI backend слушают на всех интерфейсах:
 
-- H3 primary / RTX 3090: `0.0.0.0:8188`;
-- H3 secondary / RTX 2080 Ti: `0.0.0.0:8189`.
+- H3 primary / RTX3090: `0.0.0.0:8188`;
+- H3 secondary / RTX2080: `0.0.0.0:8189`.
 
 При текущем IP VM `192.168.1.244` UI доступны из локальной сети по:
 
@@ -851,8 +849,8 @@ systemd/comfyui-secondary.service
 
 Схема GPU isolation:
 
-- `comfyui.service` -> `CUDA_VISIBLE_DEVICES=0` -> физическая RTX 3090 24 GB -> H3 primary -> port 8188;
-- `comfyui-secondary.service` -> `CUDA_VISIBLE_DEVICES=1` -> физическая RTX 2080 Ti mod 22 GB -> H3 secondary -> port 8189.
+- `comfyui.service` -> `CUDA_VISIBLE_DEVICES=0` -> физическая RTX3090 24 GB -> H3 primary -> port 8188;
+- `comfyui-secondary.service` -> `CUDA_VISIBLE_DEVICES=1` -> физическая RTX2080 mod 22 GB -> H3 secondary -> port 8189.
 
 Оба процесса используют один и тот же installation tree:
 
@@ -864,13 +862,13 @@ systemd/comfyui-secondary.service
 
 ### Current H3 performance experiment: DynamicVRAM headroom
 
-Both H3 services currently use `--vram-headroom 2`. On the RTX 3090 the first uncached saved benchmark improved from `03:36` to `03:18` (~8.3% less wall-clock time, ~9.1% higher throughput). Keep the flag enabled for now and confirm with additional fresh-seed uncached runs. It does not alter H3 model/sampler/steps/seed/quality settings.
+Both H3 services currently use `--vram-headroom 2`. On the RTX3090 the first uncached saved benchmark improved from `03:36` to `03:18` (~8.3% less wall-clock time, ~9.1% higher throughput). Keep the flag enabled for now and confirm with additional fresh-seed uncached runs. It does not alter H3 model/sampler/steps/seed/quality settings.
 
 Important benchmark rule: an identical workflow with the same seed can be served from ComfyUI execution cache in a few seconds. Use a restarted ComfyUI process for an identical-seed A/B comparison, or use a fresh recorded seed for uncached warm tests.
 
 ### H3 performance experiment: Comfy compiler
 
-`--disable-comfy-compiler` was A/B tested on RTX 3090 with the saved H3 benchmark. Result: `03:33` versus stock `03:36` (~1.4%), which is not a meaningful gain. The flag was reverted and should not be kept for performance on the current stack.
+`--disable-comfy-compiler` was A/B tested on RTX3090 with the saved H3 benchmark. Result: `03:33` versus stock `03:36` (~1.4%), which is not a meaningful gain. The flag was reverted and should not be kept for performance on the current stack.
 
 Secondary H3 service:
 
@@ -957,13 +955,13 @@ journalctl -u aivideosite -f
 Текущая схема:
 
 ```text
-RTX 3090 24 GB
+RTX3090 24 GB
   -> comfyui.service
   -> CUDA_VISIBLE_DEVICES=0
   -> 0.0.0.0:8188
   -> H3 primary
 
-RTX 2080 Ti mod 22 GB
+RTX2080 mod 22 GB
   -> comfyui-secondary.service
   -> CUDA_VISIBLE_DEVICES=1
   -> 0.0.0.0:8189
@@ -985,8 +983,8 @@ COMFYUI_SECONDARY_URL=http://127.0.0.1:8189
 
 Правило диспетчеризации генераций:
 
-1. первая свободная H3-задача всегда назначается RTX 3090;
-2. если RTX 3090 уже занята H3-задачей сайта, следующая H3-задача запускается на RTX 2080 Ti;
+1. первая свободная H3-задача всегда назначается RTX3090;
+2. если RTX3090 уже занята H3-задачей сайта, следующая H3-задача запускается на RTX2080;
 3. обе генерации могут идти параллельно;
 4. если обе GPU заняты, следующие H3-задачи остаются queued;
 5. FFmpeg audio/editor jobs имеют отдельную CPU-линию и не блокируют выдачу новой H3-задачи на свободную GPU;
@@ -995,20 +993,20 @@ COMFYUI_SECONDARY_URL=http://127.0.0.1:8189
 В metadata готового ролика сохраняется:
 
 ```text
-gpu_backend = RTX 3090
+gpu_backend = RTX3090
 ```
 
 или:
 
 ```text
-gpu_backend = RTX 2080 Ti
+gpu_backend = RTX2080
 ```
 
 Это позволяет сравнивать фактические результаты и скорость двух GPU.
 
 ### Подтверждённый runtime
 
-До перехода на эту финальную схему пользователь уже подтвердил, что MiniMax H3 успешно работает на RTX 2080 Ti mod 22 GB.
+До перехода на эту финальную схему пользователь уже подтвердил, что MiniMax H3 успешно работает на RTX2080 mod 22 GB.
 
 Воспроизводимый baseline записан в:
 
@@ -1028,17 +1026,17 @@ docs/H3_BENCHMARKS.md
 
 Результаты:
 
-- RTX 3090 24 GB: `00:03:36`;
-- RTX 2080 Ti mod 22 GB: `00:06:15`;
-- RTX 2080 Ti примерно в 1.74 раза медленнее на этом тесте.
+- RTX3090 24 GB: `00:03:36`;
+- RTX2080 mod 22 GB: `00:06:15`;
+- RTX2080 примерно в 1.74 раза медленнее на этом тесте.
 
 Использовать этот exact benchmark для сравнения будущих оптимизаций H3.
 
 Следующий обязательный runtime test после установки новой версии:
 
 - поставить две H3-задачи подряд;
-- убедиться, что первая идёт на RTX 3090;
-- убедиться, что вторая одновременно стартует на RTX 2080 Ti;
+- убедиться, что первая идёт на RTX3090;
+- убедиться, что вторая одновременно стартует на RTX2080;
 - проверить Cancel отдельно для каждой задачи;
 - проверить, что в Library metadata указан правильный GPU.
 
@@ -1064,7 +1062,7 @@ removed legacy video engine признан неподходящим по кач�
 ## 21. Известные ограничения
 
 1. Runtime/визуальные GPU-тесты выполняет пользователь на Ubuntu VM.
-2. RTX 2080 Ti примерно в 2 раза медленнее RTX 3090 в уже проверенном FL2VA baseline.
+2. RTX2080 примерно в 2 раза медленнее RTX3090 в уже проверенном FL2VA baseline.
 3. Приоритет диспетчера учитывает занятость задачами сайта; ручные задания напрямую через ComfyUI UI не являются штатным способом работы сайта.
 4. FL2VA 8-step Turbo остаётся наиболее проверенным режимом. Ref2VA, Ref Turbo, video/audio references, Timeline Guides, Digital Human и ControlNet требуют нового runtime/visual smoke test.
 5. Timeline Guides требуют native `MiniMaxH3AddGuide` (ComfyUI 0.34+); Fun ControlNet Union v1 требует native H3 ControlNet support (ComfyUI 0.35+).
@@ -1073,7 +1071,7 @@ removed legacy video engine признан неподходящим по кач�
 8. 1080p и особенно 21:9 2560×1088 требуют проверки VRAM/performance на обеих GPU.
 9. Browser не восстанавливает binary file inputs после F5; Characters постоянные, direct refs/guides/control media надо выбрать заново для новой задачи.
 10. Ref2VA storyboard/keyframe role — semantic reference guidance. Exact internal-time anchors даёт отдельный Timeline mode; exact endpoints также даёт FL2VA First/Last.
-11. Ref2VA/Timeline/Digital Human 4-step использует отдельную Ref Turbo LoRA; 8/12/16/20 идут через Base.
+11. В новом UI Ref2VA/Timeline/Digital Human используют 6–24 steps через Base; старые 4-step payload по-прежнему могут использовать отдельную Ref Turbo LoRA.
 12. Сайт без HTTPS и рассчитан на LAN.
 13. ComfyUI 8188/8189 доступны в LAN без собственной авторизации — не пробрасывать их в интернет.
 
@@ -1087,13 +1085,13 @@ Site:
 curl -I http://127.0.0.1:8000/
 ```
 
-Primary H3 / RTX 3090:
+Primary H3 / RTX3090:
 
 ```bash
 curl -s http://127.0.0.1:8188/system_stats | head
 ```
 
-Secondary H3 / RTX 2080 Ti:
+Secondary H3 / RTX2080:
 
 ```bash
 curl -s http://127.0.0.1:8189/system_stats | head
@@ -1320,13 +1318,13 @@ Audio retention:
 
 FL2VA:
 
-- steps4/steps8 -> `H3_TURBO_LORA`;
-- steps12/16/20 -> Base.
+- новый UI: ровно 8 steps FL2VA -> `H3_TURBO_LORA`; остальные 6–24 -> Base;
+- legacy payload сохраняют старую маршрутизацию профилей.
 
 Ref2VA/Timeline/Digital Human:
 
-- steps4 -> `H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`;
-- steps8/12/16/20 -> Base.
+- новый UI Ref2VA/Timeline/Digital Human: 6–24 -> Base;
+- legacy 4-step payload -> `H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`.
 
 Не применять FL Turbo к Ref2VA.
 
