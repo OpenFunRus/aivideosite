@@ -136,7 +136,7 @@
     if (continueMeta) continueMeta.textContent = "Размер определяется автоматически";
   };
 
-  const renderContinueSource = ({ url, name, width = 0, height = 0, duration = 0 } = {}) => {
+  const renderContinueSource = ({ url, name, width = 0, height = 0, duration = 0, sizeBytes = 0 } = {}) => {
     if (!url || !continuePreview) {
       clearContinueSourceVisual();
       return;
@@ -160,6 +160,7 @@
         parts.push(Math.round(resolvedWidth) + " × " + Math.round(resolvedHeight) + " (" + ratio + ")");
         inferContinueProfile(resolvedWidth, resolvedHeight);
       }
+      if (Number(sizeBytes) > 0) parts.push(W.formatBytes(sizeBytes));
       if (continueMeta) {
         continueMeta.textContent =
           parts.length ? parts.join("  ·  ") : "Параметры определятся после загрузки";
@@ -195,7 +196,9 @@
           width: item.meta?.width,
           height: item.meta?.height,
           duration: item.duration || item.meta?.seconds,
-        });
+          sizeBytes: item.size_bytes,
+          sizeBytes: item.size_bytes,
+    });
       }
     } else {
       clearContinueSourceVisual();
@@ -223,6 +226,7 @@
       width: item.meta?.width,
       height: item.meta?.height,
       duration: item.duration || item.meta?.seconds,
+      sizeBytes: item.size_bytes,
     });
   });
 
@@ -232,7 +236,7 @@
     if (continueLibrary) continueLibrary.value = "";
     setContinueSourceMode("upload");
     const url = W.setObjectUrl("continue-source", file);
-    renderContinueSource({ url, name: file.name });
+    renderContinueSource({ url, name: file.name, sizeBytes: file.size });
   });
 
   continueReplace?.addEventListener("click", () => {
@@ -468,6 +472,7 @@
       width: item.meta?.width,
       height: item.meta?.height,
       duration: item.duration || item.meta?.seconds,
+      sizeBytes: item.size_bytes,
     });
     api.setView?.("continue");
   });
