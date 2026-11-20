@@ -474,40 +474,45 @@
     resolutionSelect.value = (preferred || sameTier || fallback || presets[0]).value;
   };
 
-  const setRangeState = (input, valueElement, colorForValue) => {
+  const RANGE_COLORS = {
+    blue: "var(--primary)",
+    green: "var(--success)",
+    yellow: "var(--warning)",
+    red: "var(--danger)",
+  };
+
+  const paintRange = (input, valueElement, colorName, suffix = "") => {
     if (!input) return;
     const value = Number(input.value);
     const min = Number(input.min);
     const max = Number(input.max);
     const progress = max > min ? ((value - min) / (max - min)) * 100 : 0;
+    const color = RANGE_COLORS[colorName] || RANGE_COLORS.blue;
     input.style.setProperty("--range-progress", `${Math.max(0, Math.min(100, progress))}%`);
-    input.classList.remove("range-green", "range-yellow", "range-red");
-    const color = colorForValue(value);
-    input.classList.add(`range-${color}`);
+    input.style.setProperty("--range-color", color);
     if (valueElement) {
-      valueElement.textContent = String(value);
-      valueElement.style.setProperty(
-        "--range-value-color",
-        color === "green" ? "var(--success)" : color === "red" ? "var(--danger)" : "var(--warning)"
-      );
+      valueElement.textContent = `${value}${suffix}`;
+      valueElement.style.setProperty("--range-value-color", color);
     }
   };
 
   const updateGeneratorRanges = () => {
-    setRangeState(qs("#steps-range"), qs("#steps-value"), (value) =>
-      value <= 10 ? "green" : value <= 16 ? "yellow" : "red"
+    paintRange(secondsRange, secondsValue, "blue", " сек");
+    const steps = Number(qs("#steps-range")?.value || 8);
+    paintRange(
+      qs("#steps-range"),
+      qs("#steps-value"),
+      steps <= 10 ? "green" : steps <= 16 ? "yellow" : "red"
     );
-    setRangeState(qs("#fps-range"), qs("#fps-value"), (value) => {
-      if (value === 24) return "green";
-      if (value <= 11 || value >= 26) return "red";
-      return "yellow";
-    });
+    const fps = Number(qs("#fps-range")?.value || 24);
+    paintRange(
+      qs("#fps-range"),
+      qs("#fps-value"),
+      fps === 24 ? "green" : fps <= 11 || fps >= 26 ? "red" : "yellow"
+    );
   };
 
   const updateSeconds = () => {
-    if (secondsRange && secondsValue) {
-      secondsValue.textContent = `${secondsRange.value} сек`;
-    }
     updateGeneratorRanges();
   };
 
