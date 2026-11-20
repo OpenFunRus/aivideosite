@@ -7,6 +7,161 @@
   const characterGrid = qs("#v2-character-grid");
   const characterEmpty = qs("#v2-character-empty");
   const characterSearch = qs("#v2-character-search");
+  const createDialog = qs("#v2-character-create-dialog");
+  const createForm = qs("#v2-character-create-form");
+  const createImages = qs("#v2-character-create-images");
+  const createVoice = qs("#v2-character-create-voice");
+  const referenceDrop = qs("#v2-character-reference-drop");
+  const referencePreviews = qs("#v2-character-reference-previews");
+  const referenceCount = qs("#v2-character-reference-count");
+  const voiceName = qs("#v2-character-voice-name");
+  let createImageFiles = [];
+
+
+  const syncCreateImageInput = () => {
+    if (!createImages || typeof DataTransfer === "undefined") return;
+    const transfer = new DataTransfer();
+    createImageFiles.forEach((file) => transfer.items.add(file));
+    createImages.files = transfer.files;
+  };
+
+  const clearCreatePreviewUrls = () => {
+    qsa("[data-character-preview-url]", referencePreviews || document).forEach((node) => {
+      const url = node.dataset.characterPreviewUrl;
+      if (url) URL.revokeObjectURL(url);
+    });
+  };
+
+  const renderCreateImages = () => {
+    if (referenceCount) referenceCount.textContent = createImageFiles.length + " / 4";
+    if (!referencePreviews) return;
+    clearCreatePreviewUrls();
+    referencePreviews.innerHTML = createImageFiles.map((file, index) => {
+      const url = URL.createObjectURL(file);
+      return '<div class="v2-character-reference-preview" data-character-preview-url="' + escapeHtml(url) + '">' +
+        '<img src="' + escapeHtml(url) + '" alt="Референс ' + (index + 1) + '">' +
+        '<button type="button" data-character-image-remove="' + index + '" aria-label="Убрать изображение">' +
+        '<svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button></div>';
+    }).join("");
+    syncCreateImageInput();
+  };
+
+  const setCreateImages = (files, { append = false } = {}) => {
+    const incoming = Array.from(files || []).filter((file) =>
+      file && (file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(file.name))
+    );
+    const next = append ? [...createImageFiles, ...incoming] : incoming;
+    const unique = [];
+    const seen = new Set();
+    next.forEach((file) => {
+      const key = file.name + ":" + file.size + ":" + file.lastModified;
+      if (!seen.has(key) && unique.length < 4) {
+        seen.add(key);
+        unique.push(file);
+      }
+    });
+    createImageFiles = unique;
+    renderCreateImages();
+    if (next.length > 4) showToast("Для персонажа можно сохранить максимум 4 изображения.", "error");
+  };
+
+  const resetCreateForm = () => {
+    createForm?.reset();
+    createImageFiles = [];
+    renderCreateImages();
+    if (voiceName) voiceName.textContent = "Выбрать файл";
+    referenceDrop?.classList.remove("dragover");
+  };
+
+  const openCreateDialog = () => {
+    resetCreateForm();
+    createDialog?.showModal();
+    requestAnimationFrame(() => qs("#v2-character-create-name")?.focus());
+  };
+
+  qs("#v2-character-add")?.addEventListener("click", openCreateDialog);
+  qsa("[data-character-create-close]").forEach((button) => {
+    button.addEventListener("click", () => createDialog?.close());
+  });
+  createDialog?.addEventListener("click", (event) => {
+    if (event.target === createDialog) createDialog.close();
+  });
+  createDialog?.addEventListener("close", () => {
+    clearCreatePreviewUrls();
+    createImageFiles = [];
+  });
+
+  createImages?.addEventListener("change", () => setCreateImages(createImages.files));
+  referencePreviews?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-character-image-remove]");
+    if (!button) return;
+    createImageFiles.splice(Number(button.dataset.characterImageRemove), 1);
+    renderCreateImages();
+  });
+  ["dragenter", "dragover"].forEach((name) => {
+    referenceDrop?.addEventListener(name, (event) => {
+      event.preventDefault();
+      referenceDrop.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((name) => {
+    referenceDrop?.addEventListener(name, (event) => {
+      event.preventDefault();
+      referenceDrop.classList.remove("dragover");
+    });
+  });
+  referenceDrop?.addEventListener("drop", (event) => {
+    setCreateImages(event.dataTransfer?.files, { append: true });
+  });
+
+  createVoice?.addEventListener("change", () => {
+    if (voiceName) voiceName.textContent = createVoice.files?.[0]?.name || "Выбрать файл";
+  });
+
+  createForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = qs("#v2-character-create-name")?.value.trim() || "";
+    if (!name) {
+      showToast("Введите имя персонажа.", "error");
+      qs("#v2-character-create-name")?.focus();
+      return;
+    }
+    if (createImageFiles.length < 1 || createImageFiles.length > 4) {
+      showToast("Добавьте от 1 до 4 изображений персонажа.", "error");
+      return;
+    }
+
+    syncCreateImageInput();
+    const submit = qs("#v2-character-create-submit");
+    if (submit) submit.disabled = true;
+    try {
+      const result = await fetchJson("/api/characters", {
+        method: "POST",
+        body: new FormData(createForm),
+      });
+      createDialog?.close();
+      showToast("Персонаж сохранён.");
+      await refreshCharacters();
+      const id = String(result?.character?.id || "");
+      if (id) {
+        const candidate = new Set(state.selectedCharacterIds);
+        candidate.add(id);
+        const budget = characterBudget(candidate);
+        if (budget.images <= 9 && budget.audios <= 3 && budget.total <= 15) {
+          state.selectedCharacterIds.add(id);
+          state.recentCharacterIds = [id, ...state.recentCharacterIds.filter((value) => value !== id)].slice(0, 30);
+          renderSelectedCharacters();
+          renderCharacterGrid();
+          api.updateCreateCompatibility?.();
+          saveDraft();
+        }
+      }
+    } catch (error) {
+      showToast("Не удалось сохранить персонажа: " + error.message, "error");
+    } finally {
+      if (submit) submit.disabled = false;
+    }
+  });
 
   const selectedCharacters = () =>
     state.characters.filter((character) => state.selectedCharacterIds.has(String(character.id)));
