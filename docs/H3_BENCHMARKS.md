@@ -28,8 +28,8 @@ Last frame: none
 
 | GPU | Exact generation time | Rounded user result | Relative |
 | --- | ---: | ---: | ---: |
-| RTX 3090 24 GB | 00:03:36 | ~3 min | 1.00x |
-| RTX 2080 Ti mod 22 GB | 00:06:15 | ~6 min | 1.74x slower |
+| RTX3090 24 GB | 00:03:36 | ~3 min | 1.00x |
+| RTX2080 mod 22 GB | 00:06:15 | ~6 min | 1.74x slower |
 
 Observed from the site Queue after both completed. The same prompt/settings were used for the comparison.
 
@@ -40,7 +40,7 @@ Observed from the site Queue after both completed. The same prompt/settings were
 
 ## Experiment — disable Comfy compiler
 
-A/B test on RTX 3090 with the exact saved benchmark:
+A/B test on RTX3090 with the exact saved benchmark:
 
 - baseline: `00:03:36`;
 - with `--disable-comfy-compiler`: `00:03:33`;
@@ -61,7 +61,7 @@ Purpose: keep 2 GB of additional VRAM free so DynamicVRAM does not run the H3 sa
 Benchmark rule: do not repeat an identical workflow+seed in the same ComfyUI process, because ComfyUI execution cache can return cached node outputs in a few seconds. For A/B runs either restart ComfyUI between identical-seed tests or use a fresh seed and record it.
 
 
-### RTX 3090 result with 2 GB headroom
+### RTX3090 result with 2 GB headroom
 
 Exact saved benchmark, first uncached run after restart:
 
