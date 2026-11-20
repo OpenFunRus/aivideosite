@@ -158,9 +158,31 @@
     if (allMedia.some((item) => String(item.id) === current)) select.value = current;
   }
 
+  function populateTrackSelect(select, placeholder) {
+    if (!select) return;
+    const current = select.value;
+    const tracks = Array.isArray(snapshot?.tracks) ? snapshot.tracks : [];
+    select.innerHTML =
+      '<option value="">' + escapeHtml(placeholder) + "</option>" +
+      tracks
+        .map(
+          (track) =>
+            '<option value="' +
+            escapeHtml(track.id) +
+            '">' +
+            escapeHtml(track.title || track.id) +
+            (track.duration ? " · " + formatSeconds(track.duration) : "") +
+            "</option>"
+        )
+        .join("");
+    if (tracks.some((track) => String(track.id) === current)) select.value = current;
+  }
+
   function populateMediaSelectors() {
     populateSelect(qs("#v2-continue-library"), "Выберите ролик…");
     populateSelect(qs("#v2-clip-library"), "Выберите ролик…");
+    populateTrackSelect(qs("#v2-audio-track"), "Выберите сохранённый трек…");
+    populateTrackSelect(qs("#v2-clip-track"), "Выберите сохранённый трек…");
   }
 
   function mediaResolution(item) {
@@ -240,6 +262,19 @@
       const select = qs("#v2-clip-library");
       if (select) select.value = item.id;
       applyLibrarySource("clip", item);
+      const trackId = String(item.meta?.v2_context?.track_id || "");
+      const trackSelect = qs("#v2-clip-track");
+      if (trackSelect && trackId) {
+        trackSelect.value = trackId;
+        const upload = qs("#v2-clip-audio");
+        if (upload) upload.value = "";
+        const player = qs("#v2-clip-audio-player");
+        if (player) {
+          player.pause?.();
+          player.hidden = true;
+          player.removeAttribute("src");
+        }
+      }
       const nextStart = Number(item.meta?.v2_context?.audio_end);
       if (Number.isFinite(nextStart) && nextStart >= 0) {
         const input = qs("#v2-clip-audio-start");
@@ -581,9 +616,22 @@
   });
 
   const audioInput = qs("#v2-audio-file");
+  const audioTrackSelect = qs("#v2-audio-track");
+  audioTrackSelect?.addEventListener("change", () => {
+    if (!audioTrackSelect.value) return;
+    if (audioInput) audioInput.value = "";
+    setObjectUrl("audio-driving", null);
+    const player = qs("#v2-audio-player");
+    if (player) {
+      player.pause?.();
+      player.hidden = true;
+      player.removeAttribute("src");
+    }
+  });
   audioInput?.addEventListener("change", () => {
     const file = audioInput.files?.[0];
     const player = qs("#v2-audio-player");
+    if (file && audioTrackSelect) audioTrackSelect.value = "";
     if (!player) return;
     if (!file) {
       player.hidden = true;
@@ -596,13 +644,15 @@
   qs("#v2-audio-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
-    const audio = qs("#v2-audio-file")?.files?.[0];
+    const audio = audioInput?.files?.[0];
+    const trackId = audioTrackSelect?.value || "";
     const prompt = qs("#v2-audio-prompt")?.value.trim() || "";
-    if (!audio) return showToast("Выберите аудиотрек.", "error");
+    if (!audio && !trackId) return showToast("Выберите master track или новый аудиофайл.", "error");
     if (!prompt) return showToast("Опишите сценическое действие.", "error");
     const data = new FormData();
     data.set("prompt", prompt);
-    data.set("audio", audio);
+    data.set("track_id", trackId);
+    if (audio) data.set("audio", audio);
     const visual = qs("#v2-audio-visual")?.files?.[0];
     if (visual) data.set("visual_reference", visual);
     data.set("quality", settingValue("audio-quality", "720"));
@@ -615,9 +665,22 @@
   });
 
   const clipAudio = qs("#v2-clip-audio");
+  const clipTrackSelect = qs("#v2-clip-track");
+  clipTrackSelect?.addEventListener("change", () => {
+    if (!clipTrackSelect.value) return;
+    if (clipAudio) clipAudio.value = "";
+    setObjectUrl("clip-master-audio", null);
+    const player = qs("#v2-clip-audio-player");
+    if (player) {
+      player.pause?.();
+      player.hidden = true;
+      player.removeAttribute("src");
+    }
+  });
   clipAudio?.addEventListener("change", () => {
     const file = clipAudio.files?.[0];
     const player = qs("#v2-clip-audio-player");
+    if (file && clipTrackSelect) clipTrackSelect.value = "";
     if (!player) return;
     if (!file) {
       player.hidden = true;
@@ -639,25 +702,30 @@
     event.preventDefault();
     const form = event.currentTarget;
     const prompt = qs("#v2-clip-prompt")?.value.trim() || "";
-    const audio = qs("#v2-clip-audio")?.files?.[0];
+    const audio = clipAudio?.files?.[0];
+    const trackId = clipTrackSelect?.value || "";
     if (!prompt) return showToast("Опишите следующий фрагмент.", "error");
-    if (!audio) return showToast("Выберите master track.", "error");
+    if (!audio && !trackId) return showToast("Выберите сохранённый master track или новый файл.", "error");
     const data = new FormData();
     data.set("prompt", prompt);
     data.set("source_media_id", qs("#v2-clip-library")?.value || "");
     const upload = qs("#v2-clip-upload")?.files?.[0];
     if (upload) data.set("source_video", upload);
-    data.set("master_audio", audio);
+    data.set("track_id", trackId);
+    if (audio) data.set("master_audio", audio);
     data.set("audio_start", qs("#v2-clip-audio-start")?.value || "0");
     data.set("seconds", settingValue("clip-seconds", "10"));
     data.set("steps", settingValue("clip-steps", "12"));
     data.set("seed", qs("#v2-clip-seed")?.value || "");
     data.set("character_ids", JSON.stringify(selectedCharacterIds()));
     const result = await submitForm(form, "/api/v2/clip", data, qs('button[type="submit"]', form));
-    if (result && Number.isFinite(Number(result.audio_end))) {
-      const input = qs("#v2-clip-audio-start");
-      if (input) input.value = String(result.audio_end);
-      updateClipRange();
+    if (result) {
+      if (clipTrackSelect && result.track_id) clipTrackSelect.value = String(result.track_id);
+      if (Number.isFinite(Number(result.audio_end))) {
+        const input = qs("#v2-clip-audio-start");
+        if (input) input.value = String(result.audio_end);
+        updateClipRange();
+      }
     }
   });
 
@@ -866,7 +934,18 @@
     const valid = new Set(allMedia.map((item) => String(item.id)));
     editorState.clips = editorState.clips.filter((clip) => valid.has(String(clip.media_id)));
     editorState.title = String(editorState.title || "Монтаж V2");
+    editorState.zoom = Math.max(8, Math.min(32, Number(editorState.zoom) || 14));
+    editorState.snap = editorState.snap !== false;
+    const snap = qs("#v2-editor-snap");
+    if (snap) snap.checked = editorState.snap;
+    const zoomLabel = qs("#v2-editor-zoom-label");
+    if (zoomLabel) zoomLabel.textContent = editorState.zoom + " px/s";
     saveEditor();
+  }
+
+  function snapEditorTime(value) {
+    const number = Math.max(0, Number(value) || 0);
+    return editorState.snap ? Math.round(number * 2) / 2 : number;
   }
 
   function saveEditor() {
@@ -933,7 +1012,7 @@
         const item = mediaById(clip.media_id);
         const duration = effectiveClipDuration(clip);
         return (
-          '<div class="v2-timeline-clip' + (index === editorSelected ? " selected" : "") + '" draggable="true" data-editor-index="' + index + '">' +
+          '<div class="v2-timeline-clip' + (index === editorSelected ? " selected" : "") + '" draggable="true" data-editor-index="' + index + '" style="flex-basis:' + Math.max(90, duration * editorState.zoom) + 'px">' +
           "<strong>" + escapeHtml(item?.title || "Клип") + "</strong>" +
           "<small>" + escapeHtml(formatSeconds(duration)) + " · " + Math.round((Number(clip.volume) || 0) * 100) + "%</small>" +
           "</div>"
@@ -1011,13 +1090,24 @@
     "#v2-editor-fade-out": "fade_out",
   };
   Object.entries(editorFields).forEach(([selector, key]) => {
-    qs(selector)?.addEventListener("input", (event) => {
+    const input = qs(selector);
+    input?.addEventListener("input", (event) => {
       const clip = editorState.clips[editorSelected];
       if (!clip) return;
       clip[key] = Math.max(0, Number(event.target.value) || 0);
       if (key === "volume") clip[key] = Math.min(2, clip[key]);
       saveEditor();
       renderEditorTimeline();
+    });
+    input?.addEventListener("change", (event) => {
+      if (!["trim_start", "trim_duration"].includes(key)) return;
+      const clip = editorState.clips[editorSelected];
+      if (!clip) return;
+      clip[key] = snapEditorTime(event.target.value);
+      event.target.value = clip[key];
+      saveEditor();
+      renderEditorTimeline();
+      renderEditorInspector();
     });
   });
 
@@ -1039,7 +1129,9 @@
     const clip = editorState.clips[editorSelected];
     if (!clip) return;
     const duration = effectiveClipDuration(clip);
-    const split = Number(qs("#v2-editor-split-at")?.value) || 0;
+    const splitInput = qs("#v2-editor-split-at");
+    const split = snapEditorTime(splitInput?.value);
+    if (splitInput) splitInput.value = split;
     if (split <= 0.05 || split >= duration - 0.05) {
       return showToast("Точка разреза должна находиться внутри клипа.", "error");
     }
@@ -1052,6 +1144,52 @@
     saveEditor();
     renderEditorTimeline();
     renderEditorInspector();
+  });
+
+  qs("#v2-editor-snap")?.addEventListener("change", (event) => {
+    editorState.snap = Boolean(event.target.checked);
+    saveEditor();
+  });
+
+  function setEditorZoom(nextZoom) {
+    editorState.zoom = Math.max(8, Math.min(32, Number(nextZoom) || 14));
+    const label = qs("#v2-editor-zoom-label");
+    if (label) label.textContent = editorState.zoom + " px/s";
+    saveEditor();
+    renderEditorTimeline();
+  }
+
+  qs("#v2-editor-zoom-out")?.addEventListener("click", () => setEditorZoom(editorState.zoom - 2));
+  qs("#v2-editor-zoom-in")?.addEventListener("click", () => setEditorZoom(editorState.zoom + 2));
+
+  const editorPreview = qs("#v2-editor-preview");
+  function updateEditorTimecode() {
+    const label = qs("#v2-editor-timecode");
+    if (!label || !editorPreview) return;
+    label.textContent =
+      formatSeconds(editorPreview.currentTime || 0) +
+      " / " +
+      formatSeconds(editorPreview.duration || 0);
+  }
+  editorPreview?.addEventListener("timeupdate", updateEditorTimecode);
+  editorPreview?.addEventListener("loadedmetadata", updateEditorTimecode);
+  editorPreview?.addEventListener("durationchange", updateEditorTimecode);
+
+  document.addEventListener("keydown", (event) => {
+    if (api.state.view !== "editor") return;
+    const tag = String(event.target?.tagName || "").toLowerCase();
+    if (["input", "textarea", "select", "button"].includes(tag)) return;
+    if (event.code === "Space" && editorPreview?.src) {
+      event.preventDefault();
+      editorPreview.paused ? editorPreview.play() : editorPreview.pause();
+    } else if ((event.key === "Delete" || event.key === "Backspace") && editorState.clips[editorSelected]) {
+      event.preventDefault();
+      editorState.clips.splice(editorSelected, 1);
+      editorSelected = Math.min(editorSelected, editorState.clips.length - 1);
+      saveEditor();
+      renderEditorTimeline();
+      renderEditorInspector();
+    }
   });
 
   qs("#v2-editor-audio")?.addEventListener("change", (event) => {
@@ -1081,7 +1219,7 @@
 
   /* View lifecycle */
   async function activateView(view) {
-    if (["library", "queue", "continue", "clip", "editor", "system"].includes(view)) {
+    if (["library", "queue", "continue", "audio", "clip", "editor", "system"].includes(view)) {
       await refreshState({ silent: true });
     }
     if (view === "chat") {
