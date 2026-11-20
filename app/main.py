@@ -2244,10 +2244,12 @@ def _ensure_media(media_id: str, owner_id: str) -> dict:
 _system_cache_lock = threading.Lock()
 _system_cache_at = 0.0
 _system_cache: dict = {}
+_cpu_prev_total: int | None = None
+_cpu_prev_idle: int | None = None
 
 
 def get_system_status() -> dict:
-    global _system_cache_at, _system_cache
+    global _system_cache_at, _system_cache, _cpu_prev_total, _cpu_prev_idle
     now = time.monotonic()
 
     with _system_cache_lock:
@@ -2268,6 +2270,8 @@ def get_system_status() -> dict:
             "cpu_load_1m": None,
             "cpu_load_5m": None,
             "cpu_load_15m": None,
+            "cpu_count": __import__("os").cpu_count(),
+            "cpu_utilization": None,
         }
 
         try:
@@ -2289,6 +2293,25 @@ def get_system_status() -> dict:
             status["cpu_load_1m"] = round(float(load_1m), 2)
             status["cpu_load_5m"] = round(float(load_5m), 2)
             status["cpu_load_15m"] = round(float(load_15m), 2)
+        except Exception:
+            pass
+
+        try:
+            cpu_line = Path("/proc/stat").read_text(encoding="utf-8").splitlines()[0]
+            cpu_parts = [int(value) for value in cpu_line.split()[1:]]
+            cpu_total = sum(cpu_parts)
+            cpu_idle = cpu_parts[3] + (cpu_parts[4] if len(cpu_parts) > 4 else 0)
+            if _cpu_prev_total is not None and _cpu_prev_idle is not None:
+                total_delta = cpu_total - _cpu_prev_total
+                idle_delta = cpu_idle - _cpu_prev_idle
+                if total_delta > 0:
+                    utilization = 100.0 * (total_delta - idle_delta) / total_delta
+                    status["cpu_utilization"] = round(
+                        max(0.0, min(100.0, utilization)),
+                        1,
+                    )
+            _cpu_prev_total = cpu_total
+            _cpu_prev_idle = cpu_idle
         except Exception:
             pass
 
