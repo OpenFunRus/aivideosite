@@ -38,3 +38,12 @@
 .v2-library-more{display:flex;justify-content:center;padding:14px 0 2px}
 .v2-editor-thumb{width:58px;height:42px;display:grid;place-items:center;border-radius:6px;background:#10131c;color:#8170c5}
 .v2-editor-thumb .icon{width:20px;height:20px}
+
+.v2-editor-timeline-head{align-items:center;gap:12px}
+.v2-editor-timeline-tools{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.v2-editor-timeline-tools>span{color:#8f96aa;font-size:9px;font-variant-numeric:tabular-nums}
+.v2-editor-timeline-tools button{width:28px;height:28px;border:1px solid #373e54;border-radius:7px;background:#1c202d;color:#dfe2ec;cursor:pointer;font-size:16px;line-height:1}
+.v2-editor-timeline-tools button:hover{background:#282d40;border-color:#5a6485}
+.v2-editor-snap{height:28px;display:flex;align-items:center;gap:5px;padding:0 7px;border:1px solid #343a50;border-radius:7px;background:#171a25;color:#9da4b7;font-size:8px;cursor:pointer}
+.v2-editor-snap input{accent-color:#7657ff}
+.v2-editor-total b{color:#dfe2ec;font-weight:700}
