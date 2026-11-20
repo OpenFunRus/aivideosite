@@ -21,6 +21,7 @@
   let editorSelected = -1;
   let editorDragIndex = -1;
   let editorAudioFile = null;
+  let libraryLimit = 40;
 
   function loadJson(key, fallback) {
     try {
@@ -110,16 +111,18 @@
     });
   });
 
-  async function refreshState({ silent = false } = {}) {
+  async function refreshState({ silent = false, includeMedia = true } = {}) {
     if (refreshing) return refreshing;
     refreshing = (async () => {
       try {
-        const [stateData, mediaData] = await Promise.all([
-          fetchJson("/api/v2/state?media_page=1&jobs_page=1"),
-          fetchJson("/api/editor/media"),
-        ]);
+        const statePromise = fetchJson("/api/v2/state?media_page=1&jobs_page=1");
+        const mediaPromise =
+          includeMedia || !allMedia.length
+            ? fetchJson("/api/editor/media")
+            : Promise.resolve({ items: allMedia });
+        const [stateData, mediaData] = await Promise.all([statePromise, mediaPromise]);
         snapshot = stateData;
-        allMedia = Array.isArray(mediaData.items) ? mediaData.items : [];
+        allMedia = Array.isArray(mediaData.items) ? mediaData.items : allMedia;
         populateMediaSelectors();
         renderLibrary();
         renderQueue();
@@ -180,7 +183,10 @@
     if (!grid) return;
     if (count) count.textContent = allMedia.length + " роликов";
     empty && (empty.hidden = allMedia.length > 0);
-    grid.innerHTML = allMedia
+    const visibleMedia = allMedia.slice(0, libraryLimit);
+    const more = qs("#v2-library-more");
+    if (more) more.hidden = visibleMedia.length >= allMedia.length;
+    grid.innerHTML = visibleMedia
       .map((item) => {
         const meta = item.meta || {};
         const duration = Number(item.duration || meta.seconds || 0);
@@ -207,7 +213,14 @@
       .join("");
   }
 
-  qs("#v2-library-refresh")?.addEventListener("click", () => refreshState());
+  qs("#v2-library-refresh")?.addEventListener("click", () => {
+    libraryLimit = 40;
+    refreshState();
+  });
+  qs("#v2-library-more")?.addEventListener("click", () => {
+    libraryLimit += 40;
+    renderLibrary();
+  });
 
   qs("#v2-library-grid")?.addEventListener("click", async (event) => {
     const actionButton = event.target.closest("[data-library-action]");
@@ -876,7 +889,7 @@
       .map(
         (item) =>
           '<button class="v2-editor-library-item" type="button" data-editor-add="' + escapeHtml(item.id) + '">' +
-          '<video src="/media/' + encodeURIComponent(item.id) + '" preload="metadata" muted></video>' +
+          '<span class="v2-editor-thumb"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>' +
           '<span><strong>' + escapeHtml(item.title || "Видео") + '</strong><small>' + escapeHtml(formatSeconds(item.duration || item.meta?.seconds || 0)) + "</small></span></button>"
       )
       .join("");
@@ -1090,7 +1103,7 @@
 
   setInterval(() => {
     const view = api.state.view;
-    if (["queue", "system"].includes(view)) refreshState({ silent: true });
+    if (["queue", "system"].includes(view)) refreshState({ silent: true, includeMedia: false });
   }, 4000);
 
   window.addEventListener("beforeunload", () => {
