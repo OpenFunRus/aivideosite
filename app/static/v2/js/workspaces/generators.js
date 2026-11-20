@@ -182,6 +182,10 @@
 
   continueLibraryTab?.addEventListener("click", () => {
     setContinueSourceMode("library");
+    if (continueUpload?.files?.length) {
+      continueUpload.value = "";
+      W.setObjectUrl("continue-source", null);
+    }
     if (continueLibrary?.value) {
       const item = W.mediaById(continueLibrary.value);
       if (item) {
