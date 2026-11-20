@@ -145,8 +145,6 @@
     } catch {
       // V2 remains usable when browser storage is disabled.
     }
-    const draftState = qs("#v2-draft-state");
-    if (draftState) draftState.textContent = "Черновик сохранён";
   };
 
   const loadDraft = () => {
@@ -292,7 +290,6 @@
   setupUploadCard("first");
   setupUploadCard("last");
 
-  const characterDialog = qs("#v2-character-dialog");
   const characterGrid = qs("#v2-character-grid");
   const characterEmpty = qs("#v2-character-empty");
   const characterSearch = qs("#v2-character-search");
@@ -319,7 +316,7 @@
     const count = qs("#v2-character-count");
     const tabCount = qs("#v2-selected-tab-count");
     const chosen = selectedCharacters();
-    if (count) count.textContent = "Выбрано: " + chosen.length;
+    if (count) count.textContent = String(chosen.length);
     if (tabCount) tabCount.textContent = String(chosen.length);
     if (!container) return;
 
@@ -442,18 +439,6 @@
       showToast("Не удалось загрузить персонажей: " + error.message, "error");
     }
   };
-
-  qs("#v2-open-characters")?.addEventListener("click", async () => {
-    if (!state.characters.length) await refreshCharacters();
-    renderCharacterGrid();
-    characterDialog?.showModal();
-    setTimeout(() => characterSearch?.focus(), 40);
-  });
-  qs("#v2-close-characters")?.addEventListener("click", () => characterDialog?.close());
-  qs("#v2-character-done")?.addEventListener("click", () => characterDialog?.close());
-  characterDialog?.addEventListener("click", (event) => {
-    if (event.target === characterDialog) characterDialog.close();
-  });
   characterSearch?.addEventListener("input", renderCharacterGrid);
   qsa("[data-character-tab]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -565,19 +550,40 @@
     button?.addEventListener("click", () => copyFullChatGptGuide(button));
   });
 
-  const formatVram = (usedMb, totalMb) => {
-    if (!Number.isFinite(Number(usedMb)) || !Number.isFinite(Number(totalMb))) return "";
-    return (Number(usedMb) / 1024).toFixed(1) + "/" + (Number(totalMb) / 1024).toFixed(0) + "GB";
+  const compactGpuName = (gpu) => {
+    const raw = String(gpu?.name || "");
+    const match = raw.match(/RTX\s*\d+(?:\s*Ti)?/i);
+    return match ? match[0].replace(/RTX\s*/i, "RTX ") : "GPU " + (gpu?.index ?? "");
+  };
+
+  const formatVramPart = (valueMb, digits = 1) => {
+    const value = Number(valueMb);
+    if (!Number.isFinite(value)) return "—";
+    return (value / 1024).toFixed(digits);
   };
 
   const renderGpu = (element, gpu, fallback) => {
     if (!element) return;
-    const label = gpu
-      ? "GPU " + gpu.index + " · " + formatVram(gpu.memory_used_mb, gpu.memory_total_mb) + " · " + gpu.utilization + "%"
-      : fallback;
-    const span = element.querySelector("span:last-child");
-    if (span) span.textContent = label;
-    element.classList.toggle("online", Boolean(gpu));
+    if (!gpu) {
+      element.innerHTML =
+        '<span class="status-dot"></span><span class="v2-gpu-model">' +
+        escapeHtml(fallback) +
+        "</span>";
+      element.classList.remove("online");
+      return;
+    }
+
+    const used = formatVramPart(gpu.memory_used_mb, 1);
+    const total = formatVramPart(gpu.memory_total_mb, 0);
+    const utilization = Number.isFinite(Number(gpu.utilization)) ? Number(gpu.utilization) : 0;
+    element.innerHTML =
+      '<span class="status-dot"></span>' +
+      '<span class="v2-gpu-model">' + escapeHtml(compactGpuName(gpu)) + "</span>" +
+      '<span class="v2-gpu-separator"></span>' +
+      '<span class="v2-gpu-metric"><span>VRAM</span><b>' + used + " / " + total + " GB</b></span>" +
+      '<span class="v2-gpu-separator"></span>' +
+      '<span class="v2-gpu-load">LOAD <b>' + utilization + "%</b></span>";
+    element.classList.add("online");
   };
 
   const refreshSystem = async () => {
@@ -591,6 +597,31 @@
       renderGpu(qs("#v2-gpu-1"), null, "GPU 1 · недоступна");
     }
   };
+
+  const leftRail = qs(".v2-sidebar");
+  const rightRail = qs("#v2-character-rail");
+
+  const bindHoverRail = (element, className) => {
+    if (!element) return;
+    let closeTimer = null;
+    const open = () => {
+      clearTimeout(closeTimer);
+      app.classList.add(className);
+    };
+    const close = () => {
+      clearTimeout(closeTimer);
+      closeTimer = setTimeout(() => app.classList.remove(className), 90);
+    };
+    element.addEventListener("mouseenter", open);
+    element.addEventListener("mouseleave", close);
+    element.addEventListener("focusin", open);
+    element.addEventListener("focusout", (event) => {
+      if (!element.contains(event.relatedTarget)) close();
+    });
+  };
+
+  bindHoverRail(leftRail, "left-open");
+  bindHoverRail(rightRail, "right-open");
 
   const restoreDraftToUi = () => {
     if (prompt) prompt.value = state.draft.prompt;
