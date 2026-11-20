@@ -1,6 +1,6 @@
 # AI Video Site V2 — product / UX / implementation plan
 
-> Status: planning and design approval.
+> Status: design approved; Stage 2 V2 shell implementation started.
 >
 > Repository: `OpenFunRus/aivideosite`
 >
@@ -45,10 +45,22 @@ Primary desktop navigation:
 7. **Монтаж** — modern timeline video editor.
 8. **Чат** — standalone local AI chat.
 9. **Система** — GPUs, VRAM, services, disk, queue/runtime information.
+10. **Инструкция** — обучение по V2 и MiniMax H3, плюс одна кнопка copy-paste полного контекста для ChatGPT.
 
 The first implementation may combine **По аудио** + **Продолжить клип** into one workspace with two obvious modes if that produces a cleaner design. This must be decided during mockup approval, not buried as a technical choice.
 
 Mobile navigation should use a compact bottom bar for the most common sections plus a More drawer.
+
+### Instruction workspace
+
+The V2 Instruction page combines:
+
+- simple human-readable training for every V2 section;
+- practical MiniMax H3 prompting rules without exposing unnecessary backend complexity;
+- explanation of the magic-wand workflow;
+- a **Copy full instruction for ChatGPT** action.
+
+The ChatGPT copy action must concatenate the V2 site operating guide with the current `app/static/h3-prompting-guide-ai.txt` at copy time. Do not maintain a second duplicate H3 guide.
 
 ---
 
@@ -578,6 +590,8 @@ Acceptance:
 - this document approved as the working V2 direction.
 
 ### Stage 1 — design research and mockups
+**Status: approved.**
+
 
 - inspect current high-quality AI video/image creative tools for UX patterns;
 - identify patterns worth borrowing, not copying;
@@ -593,6 +607,8 @@ Acceptance:
 - no implementation before the key generator screen is approved.
 
 ### Stage 2 — V2 shell
+**Status: in progress.**
+
 
 - add authenticated `/v2` route;
 - separate V2 template/CSS/JS;
