@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b0c14">
   <title>AI Video Site V2</title>
   <link rel="stylesheet" href="/static/v2.css?v=6">
-  <link rel="stylesheet" href="/static/v2-workspaces.css?v=2">
+  <link rel="stylesheet" href="/static/v2-workspaces.css?v=3">
 </head>
 <body>
 <div class="v2-app" data-user-id="{{ current_user.id }}">
@@ -233,7 +233,9 @@
         <div class="v2-workspace-grid">
           <section class="v2-tool-card">
             <div class="v2-card-title"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Аудиодорожка</strong></div>
-            <label class="v2-audio-drop"><input id="v2-audio-file" type="file" accept="audio/*"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Выбрать трек</strong><small>WAV, MP3, FLAC, M4A, AAC, OGG</small></label>
+            <label class="v2-field"><span>Сохранённый master track</span><select id="v2-audio-track"><option value="">Выберите сохранённый трек…</option></select></label>
+            <div class="v2-or"><span>или новый файл</span></div>
+            <label class="v2-audio-drop"><input id="v2-audio-file" type="file" accept="audio/*"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Выбрать трек</strong><small>WAV, MP3, FLAC, M4A, AAC, OGG · сохранится для продолжений</small></label>
             <audio id="v2-audio-player" controls hidden></audio>
             <label class="v2-field"><span>Дополнительный визуальный референс</span><input id="v2-audio-visual" type="file" accept="image/png,image/jpeg,image/webp"></label>
           </section>
@@ -267,7 +269,9 @@
           </section>
           <section class="v2-tool-card">
             <div class="v2-card-title"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Master track</strong></div>
-            <label class="v2-audio-drop"><input id="v2-clip-audio" type="file" accept="audio/*"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Выбрать полный трек</strong><small>Сайт вырежет только следующий сегмент</small></label>
+            <label class="v2-field"><span>Сохранённый master track</span><select id="v2-clip-track"><option value="">Выберите сохранённый трек…</option></select></label>
+            <div class="v2-or"><span>или новый файл</span></div>
+            <label class="v2-audio-drop"><input id="v2-clip-audio" type="file" accept="audio/*"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Выбрать полный трек</strong><small>Сайт сохранит track и вырежет только следующий сегмент</small></label>
             <audio id="v2-clip-audio-player" controls hidden></audio>
             <label class="v2-field"><span>Начало следующего сегмента, сек</span><input id="v2-clip-audio-start" type="number" min="0" step="0.1" value="0"></label>
             <div class="v2-track-range" id="v2-clip-range">Будет использован отрезок 0–10 сек</div>
@@ -314,7 +318,17 @@
           <aside class="v2-editor-library"><div class="v2-editor-panel-title">Библиотека</div><div id="v2-editor-media"></div></aside>
           <section class="v2-editor-center">
             <div class="v2-editor-monitor"><video id="v2-editor-preview" controls playsinline></video><div class="v2-editor-monitor-empty" id="v2-editor-monitor-empty">Выбери клип на таймлайне</div></div>
-            <div class="v2-editor-timeline-head"><strong>Video 1</strong><span id="v2-editor-duration">00:00</span></div>
+            <div class="v2-editor-timeline-head">
+              <strong>Video 1</strong>
+              <div class="v2-editor-timeline-tools">
+                <span id="v2-editor-timecode">00:00 / 00:00</span>
+                <label class="v2-editor-snap"><input id="v2-editor-snap" type="checkbox" checked><span>Snap 0.5s</span></label>
+                <button id="v2-editor-zoom-out" type="button" title="Уменьшить масштаб">−</button>
+                <span id="v2-editor-zoom-label">14 px/s</span>
+                <button id="v2-editor-zoom-in" type="button" title="Увеличить масштаб">+</button>
+                <span class="v2-editor-total">Всего <b id="v2-editor-duration">00:00</b></span>
+              </div>
+            </div>
             <div class="v2-editor-timeline" id="v2-editor-timeline"></div>
             <div class="v2-editor-audio-track">
               <div><strong>Music</strong><small>Отдельная аудиодорожка</small></div>
@@ -491,6 +505,6 @@
 </div>
 <dialog class="v2-media-dialog" id="v2-media-dialog"></dialog>
 <script src="/static/v2.js?v=6" defer></script>
-<script src="/static/v2-workspaces.js?v=3" defer></script>
+<script src="/static/v2-workspaces.js?v=4" defer></script>
 </body>
 </html>
