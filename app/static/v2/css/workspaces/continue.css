@@ -4,13 +4,6 @@
 .v2-continue-workspace .v2-workspace-intro{margin-bottom:0}
 .v2-continue-workspace .v2-workspace-intro p{font-size:12px;color:#8c94aa}
 
-.v2-continue-prompt-card{padding:17px 18px 15px}
-.v2-continue-card-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}
-.v2-continue-card-head .v2-card-title{margin:0}
-.v2-continue-counter{color:#7f879d;font-size:10px;font-variant-numeric:tabular-nums}
-.v2-continue-prompt-box textarea{min-height:145px;resize:none;padding-right:66px}
-.v2-continue-prompt-box .v2-inline-wand{top:8px;right:8px;width:42px;height:42px}
-
 .v2-continue-source-card{padding:17px 18px}
 .v2-continue-source-heading .v2-card-title{margin-bottom:12px}
 .v2-continue-source-heading .v2-card-title>span{display:flex;flex-direction:column;gap:2px}
