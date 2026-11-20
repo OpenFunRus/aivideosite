@@ -1,148 +1,273 @@
 # Локальный ИИ-помощник для AI Video Site
 
-Выбранная модель: `w3joe/Qwen3-8B-abliterated`, квант `Q4_K_M`.
+Актуальное состояние на 2026-11-20.
 
-Цель первого этапа — поднять отдельный локальный OpenAI-compatible API на `127.0.0.1:8090`.
-Сайт пока к нему не подключён. Это позволяет сначала проверить модель отдельно, не затрагивая H3.
+Модель:
 
-## Автоматический выбор GPU / CPU
+\`\`\`text
+w3joe/Qwen3-8B-abliterated
+Q4_K_M GGUF
+\`\`\`
 
-`llm-assistant.service` запускает не сам `llama-server`, а локальный менеджер `app/llm_assistant_manager.py`.
+Модель уже встроена в сайт. Это НЕ только отдельный тестовый API.
 
-Приоритет:
+## Архитектура
 
-1. RTX2080, если она свободна;
-2. RTX3090, если RTX2080 занята, а RTX3090 свободна;
+Компоненты:
+
+\`\`\`text
+app/assistant.py
+app/llm_assistant_manager.py
+app/static/assistant.js
+app/static/h3-prompting-guide-ai.txt
+systemd/llm-assistant.service
+\`\`\`
+
+Порты:
+
+- \`127.0.0.1:8090\` — llama.cpp OpenAI-compatible API;
+- \`127.0.0.1:8091\` — local GPU/CPU manager control API.
+
+Site API:
+
+\`\`\`text
+GET  /api/assistant/status
+POST /api/assistant/chat
+POST /api/assistant/control
+\`\`\`
+
+Browser не обращается к 8090 напрямую.
+
+## Dynamic GPU / CPU placement
+
+Приоритет LLM:
+
+1. RTX2080;
+2. RTX3090;
 3. CPU, если обе GPU заняты H3.
 
-Перед запуском H3-задачи worker синхронно резервирует нужную GPU через локальный control API `127.0.0.1:8091`. Если LLM находится на этой карте, менеджер сначала останавливает его и переносит на другую свободную GPU либо CPU. После завершения H3 карта освобождается, и менеджер автоматически возвращает LLM на GPU.
+\`app/worker.py\` резервирует GPU перед H3 generation и освобождает после success/error/cancel.
 
-Менеджер также опрашивает ComfyUI `/queue`, поэтому ручная задача, запущенная непосредственно через ComfyUI, тоже делает соответствующую карту недоступной для LLM.
+Если текущая GPU LLM нужна H3, manager:
 
-## 1. Собрать llama.cpp
+1. останавливает текущий llama-server;
+2. выбирает вторую свободную GPU;
+3. если обе заняты — запускает CPU-only;
+4. после освобождения GPU возвращает LLM на GPU.
 
-```bash
-sudo apt update
-sudo apt install -y git cmake build-essential libopenblas-dev curl
+Менеджер также смотрит \`/queue\` обоих ComfyUI backend.
 
-cd /opt/ai
-if [ ! -d llama.cpp/.git ]; then
-  sudo -u openfun git clone https://github.com/ggml-org/llama.cpp.git
-fi
+## llama.cpp / CUDA build
 
+Нужна CUDA-сборка:
+
+\`\`\`bash
 cd /opt/ai/llama.cpp
-sudo -u openfun git pull --ff-only
-sudo -u openfun cmake -B build \
+
+cmake -B build \
   -DCMAKE_BUILD_TYPE=Release \
   -DGGML_CUDA=ON \
   -DGGML_BLAS=ON \
   -DGGML_BLAS_VENDOR=OpenBLAS \
   -DCMAKE_CUDA_ARCHITECTURES="75;86"
-sudo -u openfun cmake --build build --config Release -j 18 -t llama-server
-```
+
+cmake --build build --config Release -j 18 -t llama-server
+\`\`\`
 
 Проверка:
 
-```bash
-/opt/ai/llama.cpp/build/bin/llama-server --version
-```
+\`\`\`bash
+./build/bin/llama-server --list-devices
+\`\`\`
 
-## 2. Скачать модель
+## Model file
 
-```bash
+\`\`\`text
+/opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf
+\`\`\`
+
+Если модель нужно скачать заново:
+
+\`\`\`bash
 sudo install -d -o openfun -g openfun /opt/ai/models/llm
 
 sudo -u openfun curl -L --fail --retry 5 \
   'https://huggingface.co/w3joe/Qwen3-8B-abliterated/resolve/main/gguf/Qwen3-8B-abliterated-Q4_K_M.gguf?download=true' \
   -o /opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf
+\`\`\`
 
-ls -lh /opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf
-```
+## Context
 
-Ожидаемый размер — примерно 5 GB.
+Service запускает модель с:
 
-> Сервис сам выполняет безопасную очистку старого тестового `llama-server`, запущенного с `--port 8090`, перед стартом менеджера. Это предотвращает ошибку `couldn't bind HTTP server socket` после ручных тестов.
+\`\`\`text
+LLM_CTX_SIZE=32768
+\`\`\`
 
-## 3. Установить systemd service
+То есть context = 32k tokens.
 
-Перед установкой остановите ручной тестовый `llama-server`, чтобы порт 8090 был свободен.
+System prompt состоит из:
 
-После обновления `aivideosite`:
+- H3 operator layer в \`app/assistant.py\`;
+- полного \`app/static/h3-prompting-guide-ai.txt\`;
+- текущего generator state;
+- conversation history.
 
-```bash
-sudo systemctl stop llm-assistant.service 2>/dev/null || true
-pkill -f '/opt/ai/llama.cpp/build/bin/llama-server.*--port 8090' || true
+Текущий full H3 guide ~31k chars (~8k tokens rough estimate). Цель — держать system prompt ниже ~16k tokens, чтобы оставался запас под историю и output.
 
-sudo cp /opt/ai/aivideosite/systemd/llm-assistant.service /etc/systemd/system/llm-assistant.service
+## Thinking
+
+По умолчанию OFF.
+
+Кнопка-мозг в assistant UI:
+
+- OFF -> \`/no_think\`;
+- ON -> \`/think\`.
+
+Thinking действует и в \`Разговор\`, и в \`Управление\`.
+
+Visible output не должен содержать reasoning:
+
+- \`reasoning_content\` игнорируется;
+- \`<think>...</think>\` фильтруется.
+
+## Разговор
+
+Streaming local chat.
+
+При H3-запросах модель получает полный H3 guide и текущую форму.
+
+Жёсткое правило:
+
+- объяснение может быть по-русски;
+- production-ready H3 prompt всегда English;
+- exact dialogue / lyrics / exact on-screen text сохраняются на исходном языке.
+
+## Управление
+
+Модель возвращает JSON, backend валидирует и разрешает менять только allowlisted fields:
+
+- prompt;
+- generation_mode;
+- seconds;
+- fps;
+- steps;
+- seed;
+- generate_audio;
+- resolution_shape/resolution;
+- reference_task;
+- ref_image_size;
+- ControlNet settings;
+- selected Character IDs.
+
+Она не имеет shell-доступа и не должна выдумывать отсутствующие assets.
+
+## H3 knowledge
+
+Главный machine guide:
+
+\`\`\`text
+app/static/h3-prompting-guide-ai.txt
+\`\`\`
+
+В нём описаны:
+
+- FL2VA;
+- Ref2VA;
+- Characters;
+- exact Timeline Guides;
+- Digital Human;
+- H3 Audio;
+- reference roles/retention;
+- video edit/continuation;
+- H3 Fun ControlNet Union;
+- Inpaint;
+- action/camera/dialogue/sound grammar;
+- continuity checklist;
+- templates.
+
+## UI
+
+Плавающая кнопка справа снизу -> assistant panel.
+
+Режимы:
+
+- Разговор;
+- Управление.
+
+Дополнительно:
+
+- Thinking brain-toggle;
+- status target GPU/CPU;
+- per-user localStorage history;
+- streaming;
+- copy response;
+- clear history.
+
+## Clipboard
+
+Копирование не должно зависеть только от Clipboard API.
+
+Общий порядок:
+
+1. \`navigator.clipboard.writeText()\`;
+2. если unavailable/rejected -> hidden textarea;
+3. \`document.execCommand("copy")\`.
+
+Используется для assistant и guide copy buttons.
+
+## UTF-8
+
+SSE от llama.cpp читается как raw bytes и явно декодируется \`utf-8\`.
+
+Это исправляет mojibake вида \`Ð...\`.
+
+Saved assistant history также пытается восстановить типичный UTF-8/Latin-1 mojibake при загрузке.
+
+## systemd install/update
+
+\`\`\`bash
+cd /opt/ai/aivideosite
+git pull origin main
+
+sudo cp systemd/llm-assistant.service /etc/systemd/system/llm-assistant.service
+sudo cp systemd/aivideosite.service /etc/systemd/system/aivideosite.service
+
 sudo systemctl daemon-reload
-sudo systemctl enable --now llm-assistant.service
-```
+sudo systemctl enable llm-assistant.service
+sudo systemctl enable aivideosite.service
 
-Проверить выбранное устройство:
+sudo systemctl restart llm-assistant.service
+sudo systemctl restart aivideosite.service
+\`\`\`
 
-```bash
-curl -sS http://127.0.0.1:8091/status
-```
+\`llm-assistant.service\` очищает старый ручной \`llama-server --port 8090\` через \`ExecStartPre\`, чтобы избежать bind conflict.
 
-Например:
+## Проверка
 
-```json
-{"ok":true,"target":"RTX2080","reserved_gpus":[],"llama_alive":true,"llama_port":8090}
-```
-
-Проверить:
-
-```bash
+\`\`\`bash
 systemctl --no-pager --full status llm-assistant.service
-journalctl -u llm-assistant.service -n 100 --no-pager
-```
+journalctl -u llm-assistant.service -n 150 --no-pager
 
-## 4. Проверить API
-
-Health:
-
-```bash
+curl -sS http://127.0.0.1:8091/status
+echo
 curl -sS http://127.0.0.1:8090/health
-```
 
-Русский/английский chat test:
+watch -n 0.5 nvidia-smi
+\`\`\`
 
-```bash
-curl -sS http://127.0.0.1:8090/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "local-h3-assistant",
-    "temperature": 0.4,
-    "max_tokens": 300,
-    "messages": [
-      {
-        "role": "system",
-        "content": "Отвечай прямо и кратко. Понимай русский и английский. /no_think"
-      },
-      {
-        "role": "user",
-        "content": "Придумай короткую сцену для MiniMax H3: выживший входит в заброшенный магазин. Ответь по-русски."
-      }
-    ]
-  }'
-```
+Ожидаемо при свободной RTX2080:
 
-Для будущего режима «Управление» сайт будет использовать schema-constrained JSON через OpenAI-compatible API llama.cpp, а не парсить свободный текст.
+\`\`\`json
+{"ok":true,"target":"RTX2080","reserved_gpus":[],"llama_alive":true,"llama_port":8090}
+\`\`\`
 
-## Следующий этап сайта
+## Runtime checks, которые делает пользователь
 
-Планируется один плавающий чат справа снизу с двумя режимами:
-
-- **Разговор** — обычный диалог и помощь с H3; может выдать готовый prompt и рекомендации, но сам интерфейс не меняет.
-- **Управление** — модель возвращает строго валидируемый JSON с prompt и настройками H3; сайт показывает, что будет изменено, и применяет разрешённые поля генератора.
-
-Отдельный режим «Промт» не нужен: генерация prompt естественно входит в «Разговор».
-
-
-## Контекст и system prompt
-
-Локальный Qwen3 assistant запускается с контекстом **32768 токенов** (`LLM_CTX_SIZE=32768`).
-System prompt использует полный `app/static/h3-prompting-guide-ai.txt` плюс компактный operator layer.
-Текущий guide около 31k символов (~8k токенов грубой оценки), поэтому system prompt остаётся заметно ниже бюджета ~16k токенов и оставляет примерно половину контекста для истории, текущего состояния генератора и ответа.
-
-Thinking по умолчанию выключен. В UI его можно включить кнопкой-мозг; frontend передаёт `thinking=true`, backend добавляет `/think`. Внутренний reasoning не выводится пользователю.
+1. Brain OFF/ON.
+2. H3 prompt на английском при русском запросе.
+3. Copy в assistant и guide.
+4. Dynamic move RTX2080 -> RTX3090 -> CPU при H3 load.
+5. Возврат LLM на GPU после завершения H3.
+6. Реальный 32k context после установки systemd service.
+7. Desktop/mobile UI.
