@@ -316,7 +316,7 @@
     const count = qs("#v2-character-count");
     const tabCount = qs("#v2-selected-tab-count");
     const chosen = selectedCharacters();
-    if (count) count.textContent = String(chosen.length);
+    if (count) {\n      count.textContent = String(chosen.length);\n      count.hidden = chosen.length === 0;\n    }
     if (tabCount) tabCount.textContent = String(chosen.length);
     if (!container) return;
 
