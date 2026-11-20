@@ -928,46 +928,38 @@ def _semantic_faithfulness_issues(
         return []
 
     verifier_system = (
-        "You are a strict semantic faithfulness auditor for a prompt-rewriting tool. "
-        "Compare SOURCE with CANDIDATE. The candidate may translate to English, add required H3 field labels, "
-        "shot timestamps, speaker tags, and neutral cinematography wording needed to express an explicitly requested "
-        "camera change. It MUST NOT invent new diegetic facts, actions, sounds, weather events, objects, people, "
-        "dialogue, emotions, movement, body actions, environmental events, or change exact numbers/age/count/direction/"
-        "handedness/props. Example: if SOURCE says rain and an unspecified noise behind the man, adding thunder, "
-        "footsteps, traffic, wind, a branch snap, or a named source of the noise is INVALID. "
-        "Return ONLY JSON: {\"valid\":true,\"issues\":[]} or "
-        "{\"valid\":false,\"issues\":[\"short concrete issue\", ...]}. "
-        "Do not rewrite the prompt and do not explain outside JSON."
+        "You are a strict semantic faithfulness auditor. Compare SOURCE with CANDIDATE. "
+        "The candidate may translate to English, add H3 field labels, shot timestamps, speaker tags, "
+        "and neutral wording required to express an explicitly requested camera change. It MUST NOT invent "
+        "new facts, actions, sounds, weather events, objects, people, dialogue, emotions, movement, or change "
+        "exact numbers/age/count/direction/handedness/props. Example: SOURCE has rain and an unspecified noise; "
+        "thunder, footsteps, traffic, wind, branch snap or naming the noise source are unsupported. "
+        "Return exactly one of these forms and nothing else:\nVALID\nor\nINVALID: short issue 1 | short issue 2"
     )
-    review_messages = [
-        {
-            "role": "user",
-            "content": (
-                "SOURCE:\n"
-                + source_text[:12000]
-                + "\n\nCANDIDATE:\n"
-                + candidate_prompt[:16000]
-            ),
-        }
-    ]
     payload = _chat_payload(
-        review_messages,
+        [{
+            "role": "user",
+            "content": "SOURCE:\n" + source_text[:12000] + "\n\nCANDIDATE:\n" + candidate_prompt[:16000],
+        }],
         settings=None,
         system_prompt=verifier_system,
         stream=False,
-        max_tokens=700,
+        max_tokens=500,
         temperature=0.0,
         thinking=False,
     )
-    decoded = _decode_control_json(_request_control_content(payload))
-    if decoded.get("valid") is True:
+    raw = _strip_think_blocks(_request_plain_content(payload)).strip()
+    if re.match(r"^VALID\b", raw, flags=re.IGNORECASE):
         return []
-    raw_issues = decoded.get("issues")
-    if not isinstance(raw_issues, list):
-        return ["semantic faithfulness audit failed"]
-    issues = [str(item).strip()[:500] for item in raw_issues if str(item).strip()]
+    match = re.search(r"INVALID\s*:\s*(.*)", raw, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return ["semantic faithfulness audit could not confirm validity"]
+    issues = [
+        part.strip()[:500]
+        for part in re.split(r"\s*\|\s*|\n+", match.group(1))
+        if part.strip()
+    ]
     return issues or ["candidate prompt is not faithful to the source request"]
-
 
 def sanitize_changes(value: Any, *, valid_character_ids: set[str]) -> dict[str, Any]:
     if not isinstance(value, dict):
