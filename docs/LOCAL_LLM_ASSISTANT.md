@@ -113,7 +113,7 @@ System prompt состоит из:
 - текущего generator state;
 - conversation history.
 
-Текущий full H3 guide ~31k chars (~8k tokens rough estimate). Цель — держать system prompt ниже ~16k tokens, чтобы оставался запас под историю и output.
+Текущий full H3 guide — около 20k chars. Цель — держать system prompt компактным, чтобы в 32k context оставался запас под историю, generator state и output.
 
 ## Thinking
 
@@ -140,8 +140,10 @@ Streaming local chat.
 Жёсткое правило:
 
 - объяснение может быть по-русски;
-- production-ready H3 prompt всегда English;
-- exact dialogue / lyrics / exact on-screen text сохраняются на исходном языке.
+- production-ready H3 instructions всегда English;
+- exact dialogue / lyrics / exact on-screen text сохраняются на исходном языке;
+- обычный V2 prompt и Magic Wand используют три поля: `integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`;
+- в Ref2VA-workspace backend сам добавляет `subject_definitions / summary / retention_analysis` и реальные reference labels, поэтому LLM не должна выдумывать `<Picture N>/<Video N>/<Audio N>`.
 
 ## Управление
 
@@ -184,7 +186,9 @@ app/static/h3-prompting-guide-ai.txt
 - Inpaint;
 - action/camera/dialogue/sound grammar;
 - continuity checklist;
-- templates.
+- templates;
+- canonical three-field V2 prompt contract;
+- automatic three-field → six-field Ref2VA promotion in `app/h3_references.py`.
 
 ## UI
 
