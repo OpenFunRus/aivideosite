@@ -1,6 +1,55 @@
 <section class="v2-view" data-v2-view="system">
-      <div class="v2-workspace">
-        <div class="v2-workspace-toolbar"><p>GPU, локальная LLM, ComfyUI, RAM, CPU и диск.</p><button class="v2-secondary-button" id="v2-system-refresh" type="button">Обновить</button></div>
-        <div class="v2-system-grid" id="v2-system-grid"></div>
+  <div class="v2-workspace v2-system-workspace">
+    <div class="v2-workspace-toolbar v2-system-toolbar">
+      <p>Состояние GPU, локальной LLM, ComfyUI, ресурсов сервера и диска.</p>
+      <div class="v2-head-actions v2-system-toolbar-actions">
+        <button class="v2-secondary-button v2-system-refresh" id="v2-system-refresh" type="button">
+          <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-refresh"></use></svg>
+          Обновить
+        </button>
+        <label class="v2-system-auto">
+          <span>Автообновление</span>
+          <input id="v2-system-auto" type="checkbox" checked>
+          <span class="v2-system-switch" aria-hidden="true"><span></span></span>
+        </label>
+        <select class="v2-system-interval" id="v2-system-interval" aria-label="Интервал автообновления">
+          <option value="5000" selected>5 сек</option>
+          <option value="10000">10 сек</option>
+          <option value="15000">15 сек</option>
+          <option value="30000">30 сек</option>
+        </select>
       </div>
-    </section>
+    </div>
+
+    <div class="v2-system-grid" id="v2-system-grid"></div>
+
+    <div class="v2-system-charts">
+      <article class="v2-system-chart-card">
+        <div class="v2-system-chart-head">
+          <h3>Загрузка GPU</h3>
+          <div class="v2-system-chart-legend">
+            <span><i class="gpu0"></i>RTX 3090</span>
+            <span><i class="gpu1"></i>RTX 2080 Ti</span>
+          </div>
+        </div>
+        <div class="v2-system-chart" id="v2-system-chart-gpu"></div>
+      </article>
+
+      <article class="v2-system-chart-card">
+        <div class="v2-system-chart-head">
+          <h3>Использование RAM</h3>
+          <strong id="v2-system-chart-ram-value">—</strong>
+        </div>
+        <div class="v2-system-chart" id="v2-system-chart-ram"></div>
+      </article>
+
+      <article class="v2-system-chart-card">
+        <div class="v2-system-chart-head">
+          <h3>Загрузка CPU</h3>
+          <strong id="v2-system-chart-cpu-value">—</strong>
+        </div>
+        <div class="v2-system-chart" id="v2-system-chart-cpu"></div>
+      </article>
+    </div>
+  </div>
+</section>
