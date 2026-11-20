@@ -50,7 +50,8 @@ One template per navigation item:
 ### Workspaces
 
 - `js/workspaces/core.js` — shared workspace runtime, media/state refresh and common helpers.
-- `js/workspaces/generators.js` — Continue / Audio / Continue Clip.
+- `js/workspaces/generators.js` — Continue / Continue Clip shared generator flows.
+- `js/workspaces/audio.js` — dedicated Audio workspace: track source selection, waveform decoding/drawing, draggable fragment, preview playback, visual reference and submit.
 - `js/workspaces/library.js`
 - `js/workspaces/queue.js`
 - `js/workspaces/chat.js`
@@ -74,6 +75,7 @@ Cross-workspace actions use small browser events such as `v2:datarefresh`, `v2:u
 
 - `css/workspaces/common.css`
 - `css/workspaces/continue.css` — Continue-specific reference layout
+- `css/workspaces/audio.css` — Audio waveform/timeline and audio-output controls
 - `css/workspaces/library.css`
 - `css/workspaces/queue.css`
 - `css/workspaces/chat.css`
