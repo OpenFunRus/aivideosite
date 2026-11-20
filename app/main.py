@@ -28,10 +28,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import assistant as local_assistant
 from . import db
-from .comfy import ComfyUIClient
 from .config import settings
+from . import assistant as local_assistant
+from .comfy import ComfyUIClient
 from .h3_references import (
     REFERENCE_TASKS,
     build_reference_prompt,
