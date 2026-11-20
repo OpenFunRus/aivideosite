@@ -155,17 +155,58 @@
     const value=label.querySelector(":scope > strong");if(value)label.insertBefore(tip,value);else label.appendChild(tip);
   });
   const revokeModernInputUrls=input=>{(modernUploadUrls.get(input)||[]).forEach(URL.revokeObjectURL);modernUploadUrls.delete(input)};
+  const removeFileFromInput=(input,index)=>{
+    if(!input)return;
+    const files=[...(input.files||[])];
+    if(index<0||index>=files.length)return;
+    if(!input.multiple&&files.length===1){
+      input.value="";
+    }else{
+      const transfer=new DataTransfer();
+      files.forEach((file,fileIndex)=>{if(fileIndex!==index)transfer.items.add(file)});
+      input.files=transfer.files;
+    }
+    input.dispatchEvent(new Event("change",{bubbles:true}));
+  };
   const renderModernFileInput=input=>{
-    if(!input)return;revokeModernInputUrls(input);const files=[...(input.files||[])],urls=[],root=input.closest(".reference-upload, .file-field-enhanced");if(!root)return;
+    if(!input)return;
+    revokeModernInputUrls(input);
+    const files=[...(input.files||[])],urls=[],root=input.closest(".reference-upload, .file-field-enhanced");
+    if(!root)return;
     const previews=qs(".modern-upload-previews",root),count=qs(".modern-upload-count",root),copy=qs(".file-picker-copy small",root);
-    if(count)count.textContent=files.length?(files.length===1?"1 файл выбран":files.length+" файла выбрано"):"Файлы не выбраны";
-    if(copy)copy.textContent=files.length?files.map(f=>f.name).join(", "):(input.multiple?"Можно выбрать несколько файлов":"Выберите один файл");
-    if(previews){previews.innerHTML="";files.slice(0,4).forEach(file=>{const box=document.createElement("span");box.className="modern-upload-preview";
-      if(file.type.startsWith("image/")){const url=URL.createObjectURL(file);urls.push(url);const img=document.createElement("img");img.src=url;img.alt=file.name;box.appendChild(img)}
-      else if(file.type.startsWith("video/")){const url=URL.createObjectURL(file);urls.push(url);const video=document.createElement("video");video.src=url;video.muted=true;video.preload="metadata";box.appendChild(video)}
-      else{box.innerHTML=icon(file.type.startsWith("audio/")?"music":"photo");box.title=file.name}previews.appendChild(box)});
-      if(files.length>4){const more=document.createElement("span");more.className="modern-upload-preview modern-upload-more";more.textContent="+"+(files.length-4);previews.appendChild(more)}
-    }modernUploadUrls.set(input,urls);
+    if(count)count.textContent=files.length?(files.length===1?"1 файл выбран":files.length+" файлов выбрано"):"Файлы не выбраны";
+    if(copy)copy.textContent=files.length?files.map(file=>file.name).join(", "):(input.multiple?"Можно выбрать несколько файлов":"Выберите один файл");
+    if(previews){
+      previews.innerHTML="";
+      files.forEach((file,index)=>{
+        const box=document.createElement("span");
+        box.className="modern-upload-preview";
+        box.title=file.name;
+        if(file.type.startsWith("image/")){
+          const url=URL.createObjectURL(file);urls.push(url);
+          const image=document.createElement("img");image.src=url;image.alt=file.name;box.appendChild(image);
+        }else if(file.type.startsWith("video/")){
+          const url=URL.createObjectURL(file);urls.push(url);
+          const video=document.createElement("video");video.src=url;video.muted=true;video.preload="metadata";box.appendChild(video);
+        }else{
+          box.innerHTML=icon(file.type.startsWith("audio/")?"music":"photo");
+        }
+        const remove=document.createElement("button");
+        remove.type="button";
+        remove.className="modern-upload-remove";
+        remove.setAttribute("aria-label","Убрать "+file.name);
+        remove.title="Убрать файл";
+        remove.innerHTML=icon("x");
+        remove.addEventListener("click",event=>{
+          event.preventDefault();
+          event.stopPropagation();
+          removeFileFromInput(input,index);
+        });
+        box.appendChild(remove);
+        previews.appendChild(box);
+      });
+    }
+    modernUploadUrls.set(input,urls);
   };
   const enhanceModernFileInputs=()=>qsa('input[type="file"]').forEach(input=>{
     if(input.closest(".upload-card")||input.closest(".editor-audio-upload"))return;
@@ -901,8 +942,8 @@
     if (audioHelp) {
       audioHelp.textContent =
         mode === "digital_human"
-          ? "ровно 1 driving audio вместе с Character voice"
-          : "до 3 standalone audio";
+          ? "ровно 1 управляющее аудио с учётом голоса персонажа"
+          : "до 3 отдельных аудиофайлов";
     }
     const taskField = qs("#reference-task-field");
     if (taskField) taskField.hidden = mode === "digital_human" || mode === "multiframe";
@@ -1039,6 +1080,12 @@
     switchView("characters", true);
   });
 
+  const characterCreateDialog=qs("#character-create-dialog");
+  qs("#character-create-open")?.addEventListener("click",()=>characterCreateDialog?.showModal());
+  qsa("[data-close-character-create]").forEach(button=>{
+    button.addEventListener("click",()=>characterCreateDialog?.close());
+  });
+
   qs("#character-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1056,6 +1103,7 @@
       });
       form.reset();
       qsa('input[type="file"]', form).forEach((input) => renderModernFileInput(input));
+      characterCreateDialog?.close();
       showToast("Персонаж сохранён.");
       await refreshCharacters();
     } catch (error) {
