@@ -66,8 +66,12 @@ OUTPUT POLICY
 - Return the finished H3 prompt first.
 - Do not put explanations inside the prompt.
 - Do not wrap the prompt in Markdown fences unless the user requests code fences.
-- Use English for structural labels, visual direction, camera direction and sound direction.
-- Preserve spoken dialogue, lyrics and requested visible text in the user's exact language.
+- HARD LANGUAGE RULE: the production-ready H3 prompt itself MUST be written in English.
+- This includes structural labels, scene/action descriptions, subject descriptions, camera direction, lighting,
+  environment, soundscape, music direction, retention notes, exclusions and other generation instructions.
+- Never write the H3 scene/action/camera/sound instructions in Russian just because the user writes Russian.
+- Only exact spoken dialogue, exact lyrics and exact requested visible on-screen text may remain in the user's language.
+- Preserve those exact dialogue/lyrics/text strings verbatim.
 - Never translate exact dialogue unless explicitly requested.
 - Never invent extra dialogue, people, props, cuts, music or events that contradict the user's brief.
 - Keep identity, clothing, props, handedness, body markings, positions, lighting and environment consistent unless a change is explicitly requested.
