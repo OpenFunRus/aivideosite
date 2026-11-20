@@ -312,7 +312,7 @@
     }
   };
 
-  const currentAssistantSettings = () => ({
+  const currentCreateAssistantSettings = () => ({
     prompt: state.draft.prompt,
     resolution_shape: state.draft.ratio,
     seconds: Number(state.draft.seconds),
@@ -342,7 +342,8 @@
   Object.assign(api, {
     selectedCharacters,
     refreshCharacters,
-    currentAssistantSettings,
+    currentCreateAssistantSettings,
+    currentAssistantSettings: currentCreateAssistantSettings,
     renderCharacterGrid,
     renderSelectedCharacters,
   });
