@@ -1,6 +1,6 @@
 # AI Video Site V2 — product / UX / implementation plan
 
-> Status: Stage 2 shell approved; Stage 3 simplified Create implemented in code.
+> Status: Stages 2–13 implemented in code; full runtime and visual verification pending.
 >
 > Repository: `OpenFunRus/aivideosite`
 >
