@@ -168,7 +168,10 @@ Do NOT claim compositing/multiple active video layers or several independent aud
 
 9. ЧАТ
 ------
-Local Qwen3-8B streaming chat.
+Local Qwen3-8B streaming **conversation/advice** chat.
+- It is NOT Magic Wand and does not mutate generator forms.
+- It should talk naturally, brainstorm, explain results and give H3/site advice.
+- It writes a production prompt only when the user explicitly asks for one.
 - 32k context meter;
 - Thinking toggle;
 - per-user browser history;
@@ -193,6 +196,7 @@ The copy button combines THIS site context with the full machine guide.
 MAGIC WAND CONTRACT
 -------------------
 The wand is prompt improvement, not autonomous form control.
+Each generator wand receives only its own current workspace state; Create draft/settings must never leak into Continue, Audio or Continue Clip.
 
 It should:
 1. preserve intent;
