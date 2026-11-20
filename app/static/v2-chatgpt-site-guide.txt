@@ -115,7 +115,7 @@ The selector uses:
 - selected chips on the main generation page.
 
 A Character may contain several visual reference images and optionally a saved voice.
-The number of saved Characters is not the same thing as the number that can fit into one H3 request.
+The number of saved Characters is not the same thing as the number that can fit into one H3 request. In the current V2 Create pipeline, exact FL2VA first/last frames and Ref2VA Characters are mutually exclusive; the UI blocks mixing them rather than silently ignoring conditioning.
 Respect the actual H3 reference budgets described in the H3 guide.
 
 MAGIC WAND
@@ -146,3 +146,14 @@ When the user asks for a MiniMax H3 prompt:
 
 Below this V2 site guide, the application appends the full current MiniMax H3 machine guide.
 Follow the machine guide as the authoritative technical reference for MiniMax H3 behavior.
+
+
+CURRENT V2 IMPLEMENTATION NOTES
+-------------------------------
+
+- Library, Queue, Continue, Audio, Continue Clip, Chat, System and Editor are implemented V2 workspaces, not placeholders.
+- Continue inherits source video dimensions automatically.
+- Continue Clip trims the requested segment from the uploaded master track automatically.
+- The standalone Chat manages a 32k context budget and drops oldest complete turns from the model request as needed while keeping browser history.
+- The Editor is a sequential Video 1 timeline plus a separate Music track: reorder, trim, split, volume, fade in/out, and FFmpeg export are supported.
+- V1 remains at / and V2 remains at /v2.
