@@ -31,7 +31,6 @@
       '<div class="v2-media-detail-prompt"><span>Prompt</span><p>' + escapeHtml(prompt) + "</p></div>" +
       '<div class="v2-media-actions">' +
       '<button type="button" data-dialog-continue>Продолжить</button>' +
-      '<button type="button" data-dialog-editor>В монтаж</button>' +
       '<button type="button" data-dialog-copy><svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Копировать prompt</button>' +
       '<a href="/media/' + encodeURIComponent(item.id) + '?download=1">Скачать</a>' +
       "</div></div>";
@@ -40,11 +39,6 @@
     qs("[data-dialog-continue]", dialog)?.addEventListener("click", () => {
       dialog.close();
       window.dispatchEvent(new CustomEvent("v2:use-continue", { detail: { mediaId: item.id } }));
-    });
-    qs("[data-dialog-editor]", dialog)?.addEventListener("click", () => {
-      dialog.close();
-      window.dispatchEvent(new CustomEvent("v2:add-editor", { detail: { mediaId: item.id } }));
-      api.setView?.("editor");
     });
     qs("[data-dialog-copy]", dialog)?.addEventListener("click", async () => {
       try {
@@ -125,9 +119,7 @@
         '<a href="/media/' + encodeURIComponent(item.id) + '?download=1">' + icon("download") + '<span>Скачать</span></a>' +
         '<button type="button" data-library-action="continue">' + icon("player-play") + '<span>Продолжить</span></button>' +
         '<button type="button" data-library-action="clip">' + icon("video") + '<span>След. клип</span></button>' +
-        '<details class="v2-media-more"><summary aria-label="Другие действия">' + icon("dots") + '</summary>' +
-        '<div class="v2-media-menu"><button type="button" data-library-action="editor">' + icon("scissors") + 'В монтаж</button>' +
-        '<button class="danger" type="button" data-library-action="delete">' + icon("trash") + 'Удалить</button></div></details>' +
+        '<button class="v2-media-action-delete" type="button" data-library-action="delete" aria-label="Удалить ролик" title="Удалить ролик">' + icon("trash") + '<span>Удалить</span></button>' +
         "</div></div></article>"
       );
     }).join("");
@@ -165,9 +157,6 @@
       window.dispatchEvent(new CustomEvent("v2:use-continue", { detail: { mediaId: item.id } }));
     } else if (action === "clip") {
       window.dispatchEvent(new CustomEvent("v2:use-clip", { detail: { mediaId: item.id } }));
-    } else if (action === "editor") {
-      window.dispatchEvent(new CustomEvent("v2:add-editor", { detail: { mediaId: item.id } }));
-      api.setView?.("editor");
     } else if (action === "delete") {
       if (!confirm("Удалить этот ролик из Библиотеки?")) return;
       actionButton.disabled = true;
