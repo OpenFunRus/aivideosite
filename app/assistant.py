@@ -276,8 +276,11 @@ def _token_count(text: str) -> int:
 def _messages_token_count(messages: list[dict[str, str]]) -> int:
     if not messages:
         return 0
-    # Chat-template overhead is small but non-zero. Add a few tokens per item.
-    return sum(_token_count(item.get("content", "")) + 6 for item in messages) + 8
+    combined = "\n".join(
+        f"{item.get('role', 'message')}: {item.get('content', '')}"
+        for item in messages
+    )
+    return _token_count(combined) + len(messages) * 6 + 8
 
 
 def _trim_history_to_context(
@@ -286,28 +289,20 @@ def _trim_history_to_context(
     *,
     max_tokens: int,
 ) -> tuple[list[dict[str, str]], dict[str, int]]:
-    if not history:
-        return [], {
-            "context_limit": CONTEXT_TOKENS,
-            "estimated_tokens": _messages_token_count(system_messages),
-            "dropped_messages": 0,
-            "sent_messages": 0,
-        }
-
+    system_tokens = _messages_token_count(system_messages)
     budget = max(
         1024,
-        CONTEXT_TOKENS - int(max_tokens) - CONTEXT_SAFETY_TOKENS,
+        CONTEXT_TOKENS - int(max_tokens) - CONTEXT_SAFETY_TOKENS - system_tokens,
     )
     kept = list(history)
-
-    def combined_tokens() -> int:
-        return _messages_token_count(system_messages + kept)
-
-    current = combined_tokens()
+    token_counts = [
+        _token_count(f"{item.get('role', 'message')}: {item.get('content', '')}") + 6
+        for item in kept
+    ]
+    current_history_tokens = sum(token_counts)
     dropped = 0
-    while current > budget and len(kept) > 1:
-        # Drop the oldest complete user+assistant turn. The newest user request
-        # is never removed.
+
+    while current_history_tokens > budget and len(kept) > 1:
         remove_count = 1
         if (
             len(kept) >= 3
@@ -315,17 +310,22 @@ def _trim_history_to_context(
             and kept[1].get("role") == "assistant"
         ):
             remove_count = 2
+        current_history_tokens -= sum(token_counts[:remove_count])
         del kept[:remove_count]
+        del token_counts[:remove_count]
         dropped += remove_count
-        while kept and kept[0].get("role") == "assistant" and len(kept) > 1:
-            kept.pop(0)
-            dropped += 1
-        current = combined_tokens()
 
+        while kept and kept[0].get("role") == "assistant" and len(kept) > 1:
+            current_history_tokens -= token_counts[0]
+            kept.pop(0)
+            token_counts.pop(0)
+            dropped += 1
+
+    input_tokens = system_tokens + max(0, current_history_tokens)
     return kept, {
         "context_limit": CONTEXT_TOKENS,
-        "estimated_tokens": current + int(max_tokens),
-        "input_tokens": current,
+        "estimated_tokens": input_tokens + int(max_tokens),
+        "input_tokens": input_tokens,
         "reserved_output_tokens": int(max_tokens),
         "dropped_messages": dropped,
         "sent_messages": len(kept),
