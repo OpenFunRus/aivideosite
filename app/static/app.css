@@ -1353,7 +1353,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 }
 .generation-mode-switch label { min-width: 0; cursor: pointer; }
 .generation-mode-switch input { position: absolute; opacity: 0; pointer-events: none; }
-.generation-mode-switch span {
+.generation-mode-switch label > span {
   min-height: 64px;
   display: grid;
   align-content: center;
@@ -1670,3 +1670,105 @@ input[type="number"]{-moz-appearance:textfield}
 input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .generation-mode-switch label>span{position:relative;padding-right:36px}
 .generation-mode-switch .mode-help-tip{position:absolute;top:8px;right:8px}
+
+
+/* UX pass: readable help, removable previews, character creation dialog */
+.help-tip{
+  z-index:40;
+  width:20px;
+  height:20px;
+  font-size:12px;
+}
+.help-tip::after{
+  width:min(440px,82vw);
+  padding:14px 16px;
+  font:500 17px/1.5 system-ui,sans-serif;
+  border-radius:11px;
+}
+.generation-mode-switch label > span{
+  overflow:visible;
+}
+.generation-mode-switch .mode-help-tip{
+  width:20px;
+  height:20px;
+  min-height:20px;
+  padding:0;
+  display:inline-grid;
+  place-items:center;
+  border-radius:50%;
+  background:rgba(79,140,255,.12);
+}
+.modern-upload-previews{
+  position:relative;
+  z-index:8;
+  flex-wrap:wrap;
+  pointer-events:auto;
+}
+.modern-upload-preview{
+  position:relative;
+}
+.modern-upload-remove{
+  position:absolute;
+  top:2px;
+  right:2px;
+  z-index:3;
+  width:19px;
+  height:19px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  color:#fff;
+  background:rgba(5,8,14,.86);
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:6px;
+  box-shadow:0 3px 10px rgba(0,0,0,.28);
+  cursor:pointer;
+}
+.modern-upload-remove:hover{
+  background:rgba(232,89,95,.94);
+  border-color:rgba(255,180,184,.5);
+}
+.modern-upload-remove .icon{
+  width:12px;
+  height:12px;
+}
+.reference-upload .modern-upload-previews{
+  max-height:104px;
+  overflow:auto;
+  padding:2px 1px 2px 0;
+}
+.file-picker-surface .modern-upload-previews{
+  max-height:112px;
+  overflow:auto;
+}
+.character-create-dialog{
+  width:min(720px,calc(100vw - 24px));
+  max-height:min(90dvh,900px);
+  overflow:auto;
+}
+.character-create-dialog .character-form{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:16px;
+  align-items:stretch;
+  padding:22px;
+}
+.character-create-dialog .character-form .field,
+.character-create-dialog .character-form .field + .field{
+  margin:0;
+}
+.character-create-dialog .character-form textarea{
+  min-height:120px;
+}
+.character-create-dialog .dialog-header{
+  margin-bottom:2px;
+}
+.character-create-dialog .dialog-actions{
+  margin-top:2px;
+}
+@media(max-width:760px){
+  .help-tip::after{
+    width:min(360px,82vw);
+    font-size:16px;
+  }
+}
