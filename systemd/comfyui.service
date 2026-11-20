@@ -1,5 +1,5 @@
 [Unit]
-Description=ComfyUI MiniMax H3 primary on RTX 3090
+Description=ComfyUI MiniMax H3 primary on RTX3090
 After=network-online.target
 Wants=network-online.target
 
