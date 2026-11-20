@@ -292,21 +292,27 @@ class ComfyUIClient:
         staged_guides: list[dict[str, Any]] | None = None,
         staged_control: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        profile = str(payload.get("profile") or "steps8").lower()
-        profiles = {
-            "steps4": {"steps": 4, "turbo": True},
-            "steps8": {"steps": 8, "turbo": True},
-            "steps12": {"steps": 12, "turbo": False},
-            "steps16": {"steps": 16, "turbo": False},
-            "steps20": {"steps": 20, "turbo": False},
-            # Legacy aliases keep old queued/retried jobs working, but 30-step
-            # generation is intentionally retired.
-            "fast": {"steps": 8, "turbo": True},
-            "quality": {"steps": 20, "turbo": False},
-            "max": {"steps": 20, "turbo": False},
-        }
-        profile_config = profiles.get(profile, profiles["steps8"])
-        steps = int(profile_config["steps"])
+        direct_steps = payload.get("steps")
+        profile_config: dict[str, Any] | None = None
+        if direct_steps is not None:
+            steps = int(direct_steps)
+            if steps < 6 or steps > 24 or steps % 2:
+                raise ComfyUIError("Steps must be an even value from 6 to 24.")
+        else:
+            # Compatibility for jobs created before the free steps slider.
+            profile = str(payload.get("profile") or "steps8").lower()
+            profiles = {
+                "steps4": {"steps": 4, "turbo": True},
+                "steps8": {"steps": 8, "turbo": True},
+                "steps12": {"steps": 12, "turbo": False},
+                "steps16": {"steps": 16, "turbo": False},
+                "steps20": {"steps": 20, "turbo": False},
+                "fast": {"steps": 8, "turbo": True},
+                "quality": {"steps": 20, "turbo": False},
+                "max": {"steps": 20, "turbo": False},
+            }
+            profile_config = profiles.get(profile, profiles["steps8"])
+            steps = int(profile_config["steps"])
         generation_mode = str(payload.get("generation_mode") or "frames")
         easy_mode = {
             "frames": "image",
@@ -319,11 +325,18 @@ class ComfyUIClient:
             if easy_mode == "image"
             else settings.h3_ref_turbo_lora
         )
-        use_turbo = (
-            bool(profile_config["turbo"])
-            and str(turbo_lora).strip().lower() not in {"", "none"}
-            and (easy_mode == "image" or steps == 4)
-        )
+        turbo_available = str(turbo_lora).strip().lower() not in {"", "none"}
+        if direct_steps is not None:
+            # New slider: only use a LoRA at the step count it was trained for.
+            # FL2VA has an 8-step LoRA; Ref2VA's installed LoRA is 4-step and
+            # therefore intentionally stays off for the 6..24 slider.
+            use_turbo = bool(turbo_available and easy_mode == "image" and steps == 8)
+        else:
+            use_turbo = (
+                bool(profile_config and profile_config["turbo"])
+                and turbo_available
+                and (easy_mode == "image" or steps == 4)
+            )
         if easy_mode != "image" and str(settings.h3_ref2va_model).strip().lower() in {"", "none"}:
             raise ComfyUIError(
                 "Ref2VA mode is not configured. Set H3_REF2VA_MODEL to a Ref2VA checkpoint."
