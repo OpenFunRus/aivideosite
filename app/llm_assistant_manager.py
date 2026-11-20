@@ -21,7 +21,7 @@ HOST = os.getenv("LLM_HOST", "127.0.0.1")
 PORT = int(os.getenv("LLM_PORT", "8090"))
 CONTROL_HOST = os.getenv("LLM_CONTROL_HOST", "127.0.0.1")
 CONTROL_PORT = int(os.getenv("LLM_CONTROL_PORT", "8091"))
-CTX_SIZE = int(os.getenv("LLM_CTX_SIZE", "8192"))
+CTX_SIZE = int(os.getenv("LLM_CTX_SIZE", "32768"))
 THREADS = int(os.getenv("LLM_THREADS", "18"))
 POLL_SECONDS = float(os.getenv("LLM_GPU_POLL_SECONDS", "2.0"))
 
