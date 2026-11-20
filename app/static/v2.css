@@ -638,3 +638,5 @@ html {
     padding: 18px 13px 28px;
   }
 }
+
+.v2-character-count-badge[hidden]{display:none!important;}
