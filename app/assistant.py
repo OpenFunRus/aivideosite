@@ -152,7 +152,7 @@ CONTROL_SYSTEM = (
     "Only include fields that truly need to change. "
     "Never fabricate uploaded files, reference media or Character IDs. "
     "You may select only Character IDs present in AVAILABLE_CHARACTERS. "
-    "If the user asks for a production-ready prompt for a V2 prompt field, put it in changes.prompt using the canonical three fields integrated_multimodal_description / overall_soundscape / non_diegetic_music in that exact order. Write it in ENGLISH only, except exact dialogue/lyrics/on-screen text. Do not invent low-level Ref2VA labels or ordinals; the backend maps real references. "
+    "If the user asks for a production-ready prompt for a V2 prompt field, put it in changes.prompt using the canonical three fields integrated_multimodal_description / overall_soundscape / non_diegetic_music in that exact order. All THREE fields are mandatory, even when one or both sound fields are N/A. Write it in ENGLISH only, except exact dialogue/lyrics/on-screen text. Preserve every concrete user fact exactly: numeric age, count, direction, handedness, props, weather, requested actions and exact dialogue. Do not generalize 35 to early 30s. Do not invent thunder, footsteps, extra actions, music, people or environmental events that the user did not request. If the described camera changes to a new framing via a cut/switch, represent it as a new [Shot N] with an exact increasing timestamp. Do not invent low-level Ref2VA labels or ordinals; the backend maps real references. "
     "If no form change is required, return an empty changes object.\n\n"
     + H3_EXPERT_GUIDE
     + r"""
@@ -667,6 +667,142 @@ def _float(value: Any, minimum: float, maximum: float) -> float | None:
     return max(minimum, min(maximum, number))
 
 
+
+_V2_PROMPT_LABELS = (
+    "integrated_multimodal_description:",
+    "overall_soundscape:",
+    "non_diegetic_music:",
+)
+
+
+def _v2_prompt_validation_issues(prompt: str, settings: dict[str, Any]) -> list[str]:
+    text = str(prompt or "").strip()
+    lowered = text.lower()
+    issues: list[str] = []
+
+    positions = [lowered.find(label) for label in _V2_PROMPT_LABELS]
+    if any(position < 0 for position in positions):
+        missing = [
+            label[:-1]
+            for label, position in zip(_V2_PROMPT_LABELS, positions)
+            if position < 0
+        ]
+        issues.append("missing mandatory field(s): " + ", ".join(missing))
+    elif positions != sorted(positions):
+        issues.append("the three mandatory fields are not in canonical order")
+
+    for label in _V2_PROMPT_LABELS:
+        if lowered.count(label) != 1:
+            issues.append(f"{label[:-1]} must appear exactly once")
+
+    if "[shot 1]" not in lowered:
+        issues.append("integrated_multimodal_description must contain [Shot 1]")
+
+    shot_matches = list(re.finditer(r"\[shot\s+(\d+)\]", text, flags=re.IGNORECASE))
+    previous_time = -1.0
+    selected_seconds = _float(settings.get("seconds"), 1.0, 30.0) or 0.0
+    for index, match in enumerate(shot_matches):
+        shot_number = int(match.group(1))
+        if index == 0 and shot_number != 1:
+            issues.append("the first shot must be [Shot 1]")
+        if shot_number >= 2:
+            segment_end = shot_matches[index + 1].start() if index + 1 < len(shot_matches) else len(text)
+            segment = text[match.end():segment_end]
+            timestamp = re.search(
+                r"\bat\s+(\d{2}):(\d{2})(?:\.(\d{1,3}))?",
+                segment,
+                flags=re.IGNORECASE,
+            )
+            if not timestamp:
+                issues.append(f"[Shot {shot_number}] requires an exact 'At 00:SS.mmm' timestamp")
+                continue
+            minutes = int(timestamp.group(1))
+            seconds = int(timestamp.group(2))
+            millis = int((timestamp.group(3) or "0").ljust(3, "0")[:3])
+            moment = minutes * 60 + seconds + millis / 1000.0
+            if moment <= previous_time:
+                issues.append("shot timestamps must be strictly increasing")
+            if selected_seconds and moment >= selected_seconds:
+                issues.append(
+                    f"shot timestamp {moment:.3f}s must be inside the selected {selected_seconds:g}s duration"
+                )
+            previous_time = moment
+
+    if len(shot_matches) <= 1 and re.search(
+        r"\b(?:camera\s+cuts?|cuts?\s+to|camera\s+switches?|switches?\s+to\s+(?:a|an|the)\s+(?:close|medium|wide|long|extreme))\b",
+        lowered,
+    ):
+        issues.append("a described camera cut/switch must start a new timed [Shot N]")
+
+    forbidden_ref2va = (
+        "subject_definitions:",
+        "summary:",
+        "retention_analysis:",
+        "detailed_description:",
+    )
+    if any(label in lowered for label in forbidden_ref2va):
+        issues.append("normal V2 Magic Wand output must not contain low-level Ref2VA wrapper fields")
+
+    if settings.get("generate_audio") is False:
+        sound_match = re.search(
+            r"overall_soundscape:\s*(.*?)(?=\n\s*non_diegetic_music:|\Z)",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        music_match = re.search(
+            r"non_diegetic_music:\s*(.*)\Z",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not sound_match or sound_match.group(1).strip().upper() != "N/A":
+            issues.append("generate_audio is off, so overall_soundscape must be exactly N/A")
+        if not music_match or music_match.group(1).strip().upper() != "N/A":
+            issues.append("generate_audio is off, so non_diegetic_music must be exactly N/A")
+
+    return issues
+
+
+def _decode_control_json(content: str) -> dict[str, Any]:
+    try:
+        return _extract_json(content)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise AssistantUnavailable("LLM вернула некорректный JSON управления.") from exc
+
+
+def _repair_control_prompt(
+    original_messages: Any,
+    *,
+    settings_payload: dict[str, Any],
+    bad_prompt: str,
+    issues: list[str],
+    thinking: bool,
+) -> dict[str, Any]:
+    normalized = normalize_messages(original_messages)
+    correction = (
+        "Your previous changes.prompt failed server validation. Correct it; do not explain. "
+        "Return ONLY the CONTROL JSON object with a corrected changes.prompt and a very short message. "
+        "Preserve the user's concrete facts exactly and REMOVE any invented details. "
+        "Do not change numeric ages/counts/directions/props/dialogue. "
+        "All three canonical fields are mandatory. "
+        "If a camera cut/switch is described, use a new timed [Shot N].\n\n"
+        "VALIDATION ERRORS:\n- "
+        + "\n- ".join(issues)
+        + "\n\nPREVIOUS INVALID PROMPT:\n"
+        + bad_prompt[:16000]
+    )
+    repair_messages = normalized + [{"role": "user", "content": correction}]
+    payload = _chat_payload(
+        repair_messages,
+        settings=settings_payload,
+        system_prompt=CONTROL_SYSTEM,
+        stream=False,
+        max_tokens=2600 if thinking else 1600,
+        temperature=0.05,
+        thinking=thinking,
+    )
+    return _decode_control_json(_request_control_content(payload))
+
+
 def sanitize_changes(value: Any, *, valid_character_ids: set[str]) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
@@ -766,11 +902,32 @@ def control(
         thinking=thinking,
     )
     content = _request_control_content(payload)
-    try:
-        decoded = _extract_json(content)
-    except (json.JSONDecodeError, TypeError, ValueError) as exc:
-        raise AssistantUnavailable("LLM вернула некорректный JSON управления.") from exc
-
-    message = str(decoded.get("message") or "Настройки обновлены.").strip()[:4000]
+    decoded = _decode_control_json(content)
     changes = sanitize_changes(decoded.get("changes"), valid_character_ids=valid_ids)
+
+    prompt = changes.get("prompt")
+    if isinstance(prompt, str) and prompt:
+        issues = _v2_prompt_validation_issues(prompt, settings_payload)
+        if issues:
+            decoded = _repair_control_prompt(
+                messages,
+                settings_payload=settings_payload,
+                bad_prompt=prompt,
+                issues=issues,
+                thinking=thinking,
+            )
+            changes = sanitize_changes(decoded.get("changes"), valid_character_ids=valid_ids)
+            repaired_prompt = changes.get("prompt")
+            repaired_issues = (
+                _v2_prompt_validation_issues(repaired_prompt, settings_payload)
+                if isinstance(repaired_prompt, str) and repaired_prompt
+                else ["corrective retry did not return changes.prompt"]
+            )
+            if repaired_issues:
+                raise AssistantUnavailable(
+                    "Локальная LLM дважды нарушила формат H3: "
+                    + "; ".join(repaired_issues[:4])
+                )
+
+    message = str(decoded.get("message") or "Промт подготовлен.").strip()[:4000]
     return {"message": message, "changes": changes}
