@@ -1094,7 +1094,6 @@
   }
 
   window.addEventListener("v2:viewchange", (event) => activateView(event.detail?.view || "create"));
-  qs("#v2-queue-refresh")?.addEventListener("click", () => refreshState());
   updateClipRange();
   renderChat();
   updateChatContext();
