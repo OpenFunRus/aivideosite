@@ -153,6 +153,19 @@ async def dashboard(request: Request):
     )
 
 
+@app.get("/v2", response_class=HTMLResponse)
+@app.get("/v2/", response_class=HTMLResponse)
+async def dashboard_v2(request: Request):
+    if not _is_authenticated(request):
+        return RedirectResponse("/login", status_code=303)
+    user = _current_user(request)
+    return templates.TemplateResponse(
+        request=request,
+        name="v2.html",
+        context={"current_user": user},
+    )
+
+
 @app.get("/api/state")
 async def api_state(
     media_page: int = Query(1, ge=1),
