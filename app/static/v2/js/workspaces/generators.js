@@ -335,56 +335,6 @@
     await W.submitForm("/api/v2/continue", data, qs('button[type="submit"]', form));
   });
 
-  const audioInput = qs("#v2-audio-file");
-  const audioTrackSelect = qs("#v2-audio-track");
-  audioTrackSelect?.addEventListener("change", () => {
-    if (!audioTrackSelect.value) return;
-    if (audioInput) audioInput.value = "";
-    W.setObjectUrl("audio-driving", null);
-    const player = qs("#v2-audio-player");
-    if (player) {
-      player.pause?.();
-      player.hidden = true;
-      player.removeAttribute("src");
-    }
-  });
-  audioInput?.addEventListener("change", () => {
-    const file = audioInput.files?.[0];
-    const player = qs("#v2-audio-player");
-    if (file && audioTrackSelect) audioTrackSelect.value = "";
-    if (!player) return;
-    if (!file) {
-      player.hidden = true;
-      return;
-    }
-    player.src = W.setObjectUrl("audio-driving", file);
-    player.hidden = false;
-  });
-
-  qs("#v2-audio-form")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const audio = audioInput?.files?.[0];
-    const trackId = audioTrackSelect?.value || "";
-    const prompt = qs("#v2-audio-prompt")?.value.trim() || "";
-    if (!audio && !trackId) return showToast("Выберите master track или новый аудиофайл.", "error");
-    if (!prompt) return showToast("Опишите сценическое действие.", "error");
-
-    const data = new FormData();
-    data.set("prompt", prompt);
-    data.set("track_id", trackId);
-    if (audio) data.set("audio", audio);
-    const visual = qs("#v2-audio-visual")?.files?.[0];
-    if (visual) data.set("visual_reference", visual);
-    data.set("quality", W.settingValue("audio-quality", "720"));
-    data.set("ratio", W.settingValue("audio-ratio", "16:9"));
-    data.set("seconds", W.settingValue("audio-seconds", "10"));
-    data.set("steps", W.settingValue("audio-steps", "12"));
-    data.set("seed", qs("#v2-audio-seed")?.value || "");
-    data.set("character_ids", JSON.stringify(W.selectedCharacterIds()));
-    await W.submitForm("/api/v2/audio", data, qs('button[type="submit"]', form));
-  });
-
   const clipAudio = qs("#v2-clip-audio");
   const clipTrackSelect = qs("#v2-clip-track");
   clipTrackSelect?.addEventListener("change", () => {
