@@ -257,20 +257,56 @@
       continue: {
         target: "#v2-continue-prompt",
         instruction:
-          "Rewrite this as a production-ready MiniMax H3 video continuation prompt. Preserve end-state continuity, movement direction, pose, camera direction, lighting and scene geography. Return only changes.prompt.",
-        settings: { generation_mode: "reference", reference_task: "video_continuation" },
+          "Перепиши запрос для V2 «Продолжить» в канонические три H3-поля. " +
+          "Это Ref2VA video continuation: backend сам добавит subject_definitions/summary/retention_analysis и реальный <Video N>. " +
+          "Не придумывай reference labels. В [Shot 1] начинай ровно из конечного состояния source video: поза, направление движения, momentum, camera direction, свет и география сцены сохраняются. " +
+          "Дальше опиши только новое действие. Тайминг shots обязан укладываться в выбранную duration. " +
+          "Если звук включён — физические звуки/атмосфера в overall_soundscape; если выключен — N/A. Музыку не добавляй без просьбы. Return only changes.prompt.",
+        settings: () => ({
+          workspace: "continue",
+          generation_mode: "reference",
+          reference_task: "video_continuation",
+          seconds: Number(W.settingValue("continue-seconds", "10")),
+          steps: Number(W.settingValue("continue-steps", "12")),
+          generate_audio: Boolean(qs("#v2-continue-audio")?.checked),
+        }),
       },
       audio: {
         target: "#v2-audio-prompt",
         instruction:
-          "Rewrite this as a production-ready MiniMax H3 Digital Human/audio-driven performance prompt. Synchronize visible performance and mouth/body motion to the driving audio. Return only changes.prompt.",
-        settings: { generation_mode: "digital_human", reference_task: "audio_reference" },
+          "Перепиши запрос для V2 «По аудио» в канонические три H3-поля. " +
+          "Это Digital Human: master track уже является driving audio, поэтому НЕ описывай его как музыку, которую H3 должен сочинить, и ставь non_diegetic_music: N/A. " +
+          "Синхронизируй видимое исполнение, артикуляцию, жесты и body motion с driving audio, но не выдумывай lyrics, если пользователь их не дал. " +
+          "Если «Фоновые звуки H3» выключены — overall_soundscape: N/A; если включены — только физические/фоновые звуки сцены, без дублирования master track. " +
+          "Backend сам добавит реальные reference labels. Тайминг shots обязан укладываться в выбранную duration. Return only changes.prompt.",
+        settings: () => ({
+          workspace: "audio",
+          generation_mode: "digital_human",
+          reference_task: "audio_reference",
+          seconds: Number(W.settingValue("audio-seconds", "10")),
+          steps: Number(W.settingValue("audio-steps", "12")),
+          embed_track: Boolean(qs("#v2-audio-embed-track")?.checked),
+          generate_scene_audio: Boolean(qs("#v2-audio-scene-sound")?.checked),
+        }),
       },
       clip: {
         target: "#v2-clip-prompt",
         instruction:
-          "Rewrite this as a production-ready MiniMax H3 next music-video segment prompt. Preserve previous-video continuity and synchronize action to the supplied master-track segment. Return only changes.prompt.",
-        settings: { generation_mode: "reference", reference_task: "video_continuation" },
+          "Перепиши запрос для V2 «Продолжить клип» в канонические три H3-поля. " +
+          "Это следующий video-continuation segment поверх следующего отрезка того же master track. " +
+          "Начинай из точного end-state предыдущего ролика, сохраняй identity, pose, screen direction, momentum, camera motion, lighting и scene geography. " +
+          "Master track уже внешний: non_diegetic_music: N/A. Если «Фоновые звуки H3» выключены — overall_soundscape: N/A; если включены — только дополнительные звуки сцены. " +
+          "Backend сам добавит реальные reference labels. Тайминг shots обязан укладываться в выбранную duration. Return only changes.prompt.",
+        settings: () => ({
+          workspace: "clip",
+          generation_mode: "reference",
+          reference_task: "video_continuation",
+          seconds: Number(W.settingValue("clip-seconds", "10")),
+          steps: Number(W.settingValue("clip-steps", "12")),
+          embed_track: Boolean(qs("#v2-clip-embed-track")?.checked),
+          generate_scene_audio: Boolean(qs("#v2-clip-scene-sound")?.checked),
+          audio_start: Number(qs("#v2-clip-audio-start")?.value || 0),
+        }),
       },
     }[kind];
     if (!config) return;
@@ -292,7 +328,7 @@
           messages: [{ role: "user", content: config.instruction + "\n\n" + source }],
           settings: {
             ...(api.currentAssistantSettings?.() || {}),
-            ...config.settings,
+            ...(typeof config.settings === "function" ? config.settings() : config.settings),
             selected_character_ids: W.selectedCharacterIds(),
           },
           thinking: false,
