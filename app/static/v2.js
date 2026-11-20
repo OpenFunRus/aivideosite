@@ -362,6 +362,7 @@
         state.selectedCharacterIds.delete(chip.dataset.characterChip);
         renderSelectedCharacters();
         renderCharacterGrid();
+        updateCreateCompatibility?.();
         saveDraft();
       });
     });
@@ -409,6 +410,7 @@
     }
     renderSelectedCharacters();
     renderCharacterGrid();
+    updateCreateCompatibility?.();
     saveDraft();
   };
 
@@ -526,8 +528,97 @@
     }
   });
 
-  qs("#v2-generate")?.addEventListener("click", () => {
-    showToast("Экран V2 уже готов. Подключение simplified V2 → H3 generation будет следующим этапом после визуальной проверки этого shell.");
+  const createForm = qs("#v2-create-form");
+  const generateButton = qs("#v2-generate");
+  const generateLabel = qs(".v2-generate-label", generateButton || document);
+  const createWarning = qs("#v2-create-warning");
+  const firstFrameInput = qs("#v2-first-frame");
+  const lastFrameInput = qs("#v2-last-frame");
+
+  const createHasFrames = () =>
+    Boolean(firstFrameInput?.files?.length || lastFrameInput?.files?.length);
+
+  const updateCreateCompatibility = () => {
+    const conflict = state.selectedCharacterIds.size > 0 && createHasFrames();
+    if (createWarning) {
+      createWarning.hidden = !conflict;
+      createWarning.textContent = conflict
+        ? "Точные начальный/конечный кадры и Characters используют разные H3 pipelines. Для одной генерации оставьте либо кадры, либо персонажей."
+        : "";
+    }
+    if (generateButton && !generateButton.classList.contains("is-loading")) {
+      generateButton.disabled = conflict;
+    }
+    return !conflict;
+  };
+
+  firstFrameInput?.addEventListener("change", updateCreateCompatibility);
+  lastFrameInput?.addEventListener("change", updateCreateCompatibility);
+
+  createForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    if (!updateCreateCompatibility()) {
+      showToast("Нельзя одновременно использовать точные кадры и Characters.", "error");
+      return;
+    }
+
+    const sourcePrompt = prompt?.value.trim() || "";
+    if (!sourcePrompt) {
+      showToast("Сначала напишите prompt.", "error");
+      prompt?.focus();
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("prompt", sourcePrompt);
+    formData.set("quality", state.draft.quality);
+    formData.set("ratio", state.draft.ratio);
+    formData.set("seconds", state.draft.seconds);
+    formData.set("steps", state.draft.steps);
+    formData.set("seed", state.draft.seed.trim());
+    formData.set("generate_audio", state.draft.audio ? "true" : "false");
+    formData.set("character_ids", JSON.stringify(Array.from(state.selectedCharacterIds)));
+
+    if (firstFrameInput?.files?.[0]) {
+      formData.set("first_frame", firstFrameInput.files[0]);
+    }
+    if (lastFrameInput?.files?.[0]) {
+      formData.set("last_frame", lastFrameInput.files[0]);
+    }
+
+    if (generateButton) {
+      generateButton.disabled = true;
+      generateButton.classList.add("is-loading");
+    }
+    if (generateLabel) generateLabel.textContent = "Добавляем в очередь…";
+
+    try {
+      const result = await fetchJson("/api/v2/generate", {
+        method: "POST",
+        body: formData,
+      });
+      const shortId = String(result?.job_id || "").slice(0, 8);
+      const resolved = result?.v2;
+      const resolutionText =
+        resolved?.width && resolved?.height
+          ? " · " + resolved.width + "×" + resolved.height
+          : "";
+      showToast(
+        "Задача добавлена в очередь" +
+          (shortId ? " · " + shortId : "") +
+          resolutionText
+      );
+      setTimeout(refreshSystem, 700);
+    } catch (error) {
+      showToast("Не удалось запустить генерацию: " + error.message, "error");
+    } finally {
+      if (generateButton) {
+        generateButton.classList.remove("is-loading");
+      }
+      if (generateLabel) generateLabel.textContent = "Сгенерировать видео";
+      updateCreateCompatibility();
+    }
   });
 
   const copyFullChatGptGuide = async (button) => {
