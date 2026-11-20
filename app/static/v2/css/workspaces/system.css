@@ -23,7 +23,7 @@
 .v2-system-state.offline{background:#3b1d27;color:#ff8e9c}
 .v2-system-card-body{margin-top:14px}
 .v2-system-gpu-body{display:grid;grid-template-columns:112px minmax(0,1fr);align-items:center;gap:14px}
-.v2-system-ring{--p:0;position:relative;width:104px;height:104px;border-radius:50%;background:conic-gradient(#825dff calc(var(--p)*1%),#293044 0)}
+.v2-system-ring{--ring:0%;position:relative;width:104px;height:104px;border-radius:50%;background:conic-gradient(#825dff var(--ring),#293044 0)}
 .v2-system-ring:after{content:"";position:absolute;inset:9px;border-radius:50%;background:#151925}
 .v2-system-ring>div{position:absolute;z-index:1;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .v2-system-ring strong{font-size:23px;line-height:1}
