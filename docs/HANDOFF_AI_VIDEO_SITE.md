@@ -18,7 +18,8 @@
 
 - V1 остаётся на `/`.
 - V2 открывается на `/v2`.
-- V2 имеет отдельные template/CSS/JS: `v2.html`, `v2.css`, `v2-workspaces.css`, `v2.js`, `v2-workspaces.js`.
+- V2 frontend структурирован по папкам: `app/templates/v2/layout/`, `app/templates/v2/components/`, `app/templates/v2/views/`, `app/static/v2/css/` и `app/static/v2/js/`. `v2.html` теперь только собирает partials и подключает модули; старые монолитные `v2.js`, `v2-workspaces.js`, `v2.css`, `v2-workspaces.css` удалены.
+- Верхняя page header — единственный заголовок рабочего раздела; дублирующие kicker/h2 внутри Continue/Audio/Clip/Library/Queue/Editor/Chat/System удалены.
 - Desktop: постоянные компактные левая навигация и правая Characters-панель по 238 px. Справа один Character на строку.
 - Mobile: fixed top bar, hamburger для основного drawer и отдельная кнопка Characters; page title/GPU status центрированы.
 - Скроллы стилизованы под интерфейс; старый видимый статус черновика удалён.
