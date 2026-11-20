@@ -117,7 +117,7 @@
             </div>
 
             <label class="field">
-              <span class="field-label">Prompt</span>
+              <span class="field-label">Промт</span>
               <textarea
                 name="prompt"
                 id="prompt"
@@ -188,23 +188,23 @@
                 <label class="field" id="reference-task-field">
                   <span class="field-label">Задача референсов</span>
                   <select name="reference_task" id="reference-task">
-                    <option value="reference_generation">Reference generation</option>
-                    <option value="keyframe_completion">Storyboard / keyframe completion</option>
-                    <option value="timeline_guides">Exact timeline guides</option>
-                    <option value="video_editing">Video editing</option>
-                    <option value="video_continuation">Video continuation</option>
-                    <option value="audio_reuse">Audio reuse</option>
-                    <option value="audio_reference">Audio / voice reference</option>
+                    <option value="reference_generation">Генерация по референсу</option>
+                    <option value="keyframe_completion">Раскадровка / дополнение ключевых кадров</option>
+                    <option value="timeline_guides">Точные кадры таймлайна</option>
+                    <option value="video_editing">Редактирование видео</option>
+                    <option value="video_continuation">Продолжение видео</option>
+                    <option value="audio_reuse">Повторное использование аудио</option>
+                    <option value="audio_reference">Референс аудио / голоса</option>
                   </select>
                 </label>
                 <label class="field">
-                  <span class="field-label">Размер image reference</span>
+                  <span class="field-label">Размер референс-изображения</span>
                   <select name="ref_image_size" id="ref-image-size">
-                    <option value="match" selected>Match output</option>
+                    <option value="match" selected>Под размер результата</option>
                     <option value="1k">1K</option>
                     <option value="1.5k">1.5K</option>
                     <option value="2k">2K</option>
-                    <option value="original">Original / grid crop</option>
+                    <option value="original">Оригинал / обрезка по сетке</option>
                   </select>
                 </label>
               </div>
@@ -255,14 +255,14 @@
               <div class="reference-section timeline-guide-section" id="timeline-guide-section" hidden>
                 <div class="reference-section-head">
                   <div>
-                    <strong>Exact Timeline Guides</strong>
+                    <strong>Точные кадры таймлайна</strong>
                     <small>Native MiniMaxH3AddGuide · точные кадры на выбранных секундах</small>
                   </div>
                   <span class="badge badge-blue">ComfyUI 0.34+</span>
                 </div>
                 <label class="reference-upload timeline-guide-upload">
                   <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg></span>
-                  <strong>Guide images</strong>
+                  <strong>Кадры таймлайна</strong>
                   <small>до 16 · каждый кадр получает точное время на выходном таймлайне</small>
                   <input id="guide-images" type="file" name="guide_images" multiple accept="image/png,image/jpeg,image/webp">
                 </label>
@@ -277,7 +277,7 @@
             <div class="controlnet-section">
               <div class="reference-section-head">
                 <div>
-                  <strong>Fun ControlNet Union</strong>
+                  <strong>Управление движением · H3 Fun ControlNet</strong>
                   <small>Pose / Depth / Canny / HED / MLSD · video inpainting</small>
                 </div>
                 <span class="badge badge-blue">ComfyUI 0.35+</span>
@@ -285,20 +285,20 @@
 
               <div class="reference-options-grid control-options-grid">
                 <label class="field">
-                  <span class="field-label">Control mode</span>
+                  <span class="field-label">Режим управления</span>
                   <select name="control_mode" id="control-mode">
                     <option value="none" selected>Выключен</option>
-                    <option value="canny_auto">Canny · построить из raw video</option>
-                    <option value="canny">Canny · готовое control video</option>
-                    <option value="pose">Pose · готовое control video</option>
-                    <option value="depth">Depth · готовое control video</option>
-                    <option value="hed">HED · готовое control video</option>
-                    <option value="mlsd">MLSD · готовое control video</option>
-                    <option value="inpaint">Video inpainting · source + mask</option>
+                    <option value="canny_auto">Canny · автоматически из обычного видео</option>
+                    <option value="canny">Canny · подготовленное управляющее видео</option>
+                    <option value="pose">Pose · подготовленное управляющее видео</option>
+                    <option value="depth">Depth · подготовленное управляющее видео</option>
+                    <option value="hed">HED · подготовленное управляющее видео</option>
+                    <option value="mlsd">MLSD · подготовленное управляющее видео</option>
+                    <option value="inpaint">Инпейнтинг видео · исходник + маска</option>
                   </select>
                 </label>
                 <label class="field">
-                  <span class="field-label">Strength</span>
+                  <span class="field-label">Сила влияния</span>
                   <input name="control_strength" id="control-strength" type="number" min="0" max="10" step="0.05" value="1">
                 </label>
               </div>
@@ -313,13 +313,13 @@
                   </label>
                   <label class="reference-upload" id="control-source-field" hidden>
                     <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
-                    <strong>Source video</strong>
+                    <strong>Исходное видео</strong>
                     <small>Исходник, который останется за маской.</small>
                     <input id="control-source-video" type="file" name="control_source_video" accept="video/mp4,video/quicktime,video/webm,.mkv,.m4v">
                   </label>
                   <label class="reference-upload" id="control-mask-field" hidden>
                     <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
-                    <strong>Mask video</strong>
+                    <strong>Видео-маска</strong>
                     <small>Чёрно-белое видео: белое = regenerate.</small>
                     <input id="control-mask-video" type="file" name="control_mask_video" accept="video/mp4,video/quicktime,video/webm,.mkv,.m4v">
                   </label>
@@ -327,19 +327,19 @@
 
                 <div class="control-range-grid">
                   <label class="field">
-                    <span class="field-label">Start %</span>
+                    <span class="field-label">Начало влияния</span>
                     <input name="control_start_percent" id="control-start" type="number" min="0" max="1" step="0.01" value="0">
                   </label>
                   <label class="field">
-                    <span class="field-label">End %</span>
+                    <span class="field-label">Конец влияния</span>
                     <input name="control_end_percent" id="control-end" type="number" min="0" max="1" step="0.01" value="1">
                   </label>
                   <label class="field canny-threshold-field" hidden>
-                    <span class="field-label">Canny low</span>
+                    <span class="field-label">Нижний порог Canny</span>
                     <input name="control_canny_low" id="control-canny-low" type="number" min="0.01" max="0.99" step="0.01" value="0.4">
                   </label>
                   <label class="field canny-threshold-field" hidden>
-                    <span class="field-label">Canny high</span>
+                    <span class="field-label">Верхний порог Canny</span>
                     <input name="control_canny_high" id="control-canny-high" type="number" min="0.01" max="0.99" step="0.01" value="0.8">
                   </label>
                 </div>
@@ -351,7 +351,7 @@
           <aside class="panel generator-settings">
             <div class="panel-header">
               <div>
-                <span class="panel-kicker">OUTPUT</span>
+                <span class="panel-kicker">ВЫВОД</span>
                 <h3>Настройки</h3>
               </div>
               <button class="btn btn-secondary btn-compact" id="reset-settings" type="button" title="Сбросить сохранённые настройки">
@@ -364,13 +364,13 @@
               <span class="field-label">Формат и размер</span>
               <select name="resolution_shape" id="resolution-shape" aria-label="Соотношение сторон">
                 <option value="1:1">1:1 · квадрат</option>
-                <option value="2:3">2:3 · фото portrait</option>
-                <option value="3:2">3:2 · фото landscape</option>
-                <option value="3:4">3:4 · portrait standard</option>
-                <option value="4:3">4:3 · standard</option>
-                <option value="9:16">9:16 · vertical</option>
-                <option value="16:9" selected>16:9 · widescreen</option>
-                <option value="21:9">21:9 · ultrawide</option>
+                <option value="2:3">2:3 · вертикальное фото</option>
+                <option value="3:2">3:2 · горизонтальное фото</option>
+                <option value="3:4">3:4 · вертикальный стандарт</option>
+                <option value="4:3">4:3 · стандарт</option>
+                <option value="9:16">9:16 · вертикальное</option>
+                <option value="16:9" selected>16:9 · широкоформатное</option>
+                <option value="21:9">21:9 · сверхширокое</option>
               </select>
               <select name="resolution" id="resolution" aria-label="Размер видео"></select>
               <span class="field-help">Все локально поддерживаемые H3 ratio. 360p / 480p / 720p / 1080p округляются вверх до сетки ×32; 1:1 дополнительно имеет 256×256 test.</span>
@@ -512,7 +512,7 @@
         <section class="panel character-create-panel">
           <div class="panel-header">
             <div>
-              <span class="panel-kicker">REUSABLE SUBJECT</span>
+              <span class="panel-kicker">ПОСТОЯННЫЙ РЕФЕРЕНС</span>
               <h3>Новый персонаж</h3>
             </div>
           </div>
@@ -526,12 +526,12 @@
               <textarea name="description" rows="3" maxlength="2000" placeholder="Лицо, шерсть/волосы, одежда, пропорции, постоянные аксессуары..."></textarea>
             </label>
             <label class="field">
-              <span class="field-label">Reference images</span>
+              <span class="field-label">Референс-изображения</span>
               <input name="images" type="file" multiple required accept="image/png,image/jpeg,image/webp">
               <span class="field-help">1–4 картинки. Они считаются в общем лимите Ref2VA 9 images.</span>
             </label>
             <label class="field">
-              <span class="field-label">Voice reference · необязательно</span>
+              <span class="field-label">Референс голоса · необязательно</span>
               <input name="voice" type="file" accept="audio/*,.flac,.m4a,.aac,.ogg,.opus">
               <span class="field-help">Голос хранится вместе с персонажем и при выборе добавляется как Audio reference.</span>
             </label>
@@ -1188,6 +1188,36 @@ ControlNet:
   </div>
 </dialog>
 
+<dialog class="action-dialog confirm-dialog" id="confirm-dialog">
+  <form method="dialog" class="dialog-body">
+    <div class="dialog-header">
+      <div><span class="panel-kicker">ПОДТВЕРЖДЕНИЕ</span><h3 id="confirm-dialog-title">Подтверждение</h3></div>
+      <button class="icon-btn" type="submit" value="cancel" aria-label="Закрыть"><svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button>
+    </div>
+    <p class="dialog-message" id="confirm-dialog-message"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="submit" value="cancel">Отмена</button>
+      <button class="btn btn-primary" id="confirm-dialog-submit" type="submit" value="confirm">Продолжить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="action-dialog character-edit-dialog" id="character-edit-dialog">
+  <form id="character-edit-form">
+    <div class="dialog-header">
+      <div><span class="panel-kicker">ПЕРСОНАЖ</span><h3>Редактировать персонажа</h3></div>
+      <button class="icon-btn" type="button" data-close-character-edit aria-label="Закрыть"><svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button>
+    </div>
+    <input type="hidden" name="character_id" id="character-edit-id">
+    <label class="field"><span class="field-label">Имя</span><input name="name" id="character-edit-name" maxlength="80" required></label>
+    <label class="field"><span class="field-label">Неизменяемые особенности</span><textarea name="description" id="character-edit-description" rows="5" maxlength="2000"></textarea></label>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="button" data-close-character-edit>Отмена</button>
+      <button class="btn btn-primary" id="character-edit-submit" type="submit">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="action-dialog" id="action-dialog">
   <form id="action-form" method="dialog">
     <div class="dialog-header">
@@ -1225,7 +1255,7 @@ ControlNet:
   <div class="info-dialog-body">
     <div class="dialog-header">
       <div>
-        <span class="panel-kicker">GENERATION INFO</span>
+        <span class="panel-kicker">ПАРАМЕТРЫ ГЕНЕРАЦИИ</span>
         <h3>Промт и параметры</h3>
       </div>
       <button class="icon-btn" type="button" data-close-info-dialog aria-label="Закрыть">
@@ -1235,7 +1265,7 @@ ControlNet:
 
     <label class="field">
       <span class="field-label field-label-row">
-        <span>Prompt</span>
+        <span>Промт</span>
         <button class="copy-link" type="button" data-copy-target="media-info-prompt">
           <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
           Копировать
@@ -1246,7 +1276,7 @@ ControlNet:
 
     <label class="field">
       <span class="field-label field-label-row">
-        <span>Seed</span>
+        <span>Сид</span>
         <button class="copy-link" type="button" data-copy-target="media-info-seed">
           <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
           Копировать
