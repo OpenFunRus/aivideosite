@@ -91,7 +91,7 @@
     createImageFiles = [];
   });
 
-  createImages?.addEventListener("change", () => setCreateImages(createImages.files));
+  createImages?.addEventListener("change", () => setCreateImages(createImages.files, { append: true }));
   referencePreviews?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-character-image-remove]");
     if (!button) return;
