@@ -66,39 +66,87 @@ _data_dir = _path("DATA_DIR", ROOT_DIR / "data")
 _data_dir.mkdir(parents=True, exist_ok=True)
 
 
-def _site_users() -> tuple[SiteUser, ...]:
-    labels = (
-        os.getenv("SITE_USER1_NAME", "Пользователь 1").strip() or "Пользователь 1",
-        os.getenv("SITE_USER2_NAME", "Пользователь 2").strip() or "Пользователь 2",
-        os.getenv("SITE_USER3_NAME", "Пользователь 3").strip() or "Пользователь 3",
-    )
-    configured = tuple(
-        os.getenv(f"SITE_USER{index}_PASSWORD", "").strip()
-        for index in range(1, 4)
-    )
+def _valid_site_users(payload: object) -> tuple[SiteUser, ...]:
+    entries: list[tuple[str, object]] = []
+    if isinstance(payload, dict):
+        entries = [(str(key), value) for key, value in payload.items()]
+    elif isinstance(payload, list):
+        entries = [
+            (str(item.get("id") or f"user{index}"), item)
+            for index, item in enumerate(payload, start=1)
+            if isinstance(item, dict)
+        ]
 
-    if all(configured) and len(set(configured)) == 3:
-        return tuple(
-            SiteUser(id=f"user{index}", label=labels[index - 1], password=password)
-            for index, password in enumerate(configured, start=1)
+    users: list[SiteUser] = []
+    seen_ids: set[str] = set()
+    seen_passwords: set[str] = set()
+    for fallback_id, raw in entries:
+        if not isinstance(raw, dict):
+            continue
+        user_id = str(raw.get("id") or fallback_id).strip()
+        label = str(raw.get("label") or raw.get("name") or user_id).strip()
+        password = str(raw.get("password") or "").strip()
+        enabled = raw.get("enabled", True)
+        if enabled is False:
+            continue
+        if (
+            not user_id
+            or len(user_id) > 64
+            or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in user_id)
+            or not label
+            or len(label) > 80
+            or not password
+            or user_id in seen_ids
+            or password in seen_passwords
+        ):
+            continue
+        seen_ids.add(user_id)
+        seen_passwords.add(password)
+        users.append(SiteUser(id=user_id, label=label, password=password))
+    return tuple(users)
+
+
+def _site_users() -> tuple[SiteUser, ...]:
+    configured_json = os.getenv("SITE_USERS_JSON", "").strip()
+    if configured_json:
+        try:
+            users = _valid_site_users(json.loads(configured_json))
+        except json.JSONDecodeError:
+            users = ()
+        if users:
+            return users
+
+    # Backward-compatible numbered env config. Adding SITE_USER4_PASSWORD,
+    # SITE_USER5_PASSWORD, ... now requires no source-code changes.
+    numbered_payload: dict[str, dict[str, str]] = {}
+    for index in range(1, 101):
+        password = os.getenv(f"SITE_USER{index}_PASSWORD", "").strip()
+        if not password:
+            continue
+        user_id = os.getenv(f"SITE_USER{index}_ID", f"user{index}").strip() or f"user{index}"
+        label = (
+            os.getenv(f"SITE_USER{index}_NAME", f"Пользователь {index}").strip()
+            or f"Пользователь {index}"
         )
+        numbered_payload[user_id] = {
+            "id": user_id,
+            "label": label,
+            "password": password,
+        }
+    users = _valid_site_users(numbered_payload)
+    if users:
+        return users
 
     users_file = _data_dir / ".site_users.json"
     try:
-        payload = json.loads(users_file.read_text(encoding="utf-8"))
-        passwords = tuple(str(payload[f"user{index}"]["password"]) for index in range(1, 4))
-        if all(passwords) and len(set(passwords)) == 3:
-            return tuple(
-                SiteUser(
-                    id=f"user{index}",
-                    label=str(payload[f"user{index}"].get("label") or labels[index - 1]),
-                    password=passwords[index - 1],
-                )
-                for index in range(1, 4)
-            )
-    except (FileNotFoundError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        users = _valid_site_users(json.loads(users_file.read_text(encoding="utf-8")))
+        if users:
+            return users
+    except (FileNotFoundError, TypeError, ValueError, json.JSONDecodeError):
         pass
 
+    # First-run compatibility: create the same three local profiles as before,
+    # but store them in the new arbitrary-user format.
     passwords: list[str] = []
     while len(passwords) < 3:
         password = str(100000 + secrets.randbelow(900000))
@@ -107,8 +155,10 @@ def _site_users() -> tuple[SiteUser, ...]:
 
     payload = {
         f"user{index}": {
-            "label": labels[index - 1],
+            "id": f"user{index}",
+            "label": f"Пользователь {index}",
             "password": passwords[index - 1],
+            "enabled": True,
         }
         for index in range(1, 4)
     }
@@ -121,14 +171,7 @@ def _site_users() -> tuple[SiteUser, ...]:
     except OSError:
         pass
 
-    return tuple(
-        SiteUser(
-            id=f"user{index}",
-            label=labels[index - 1],
-            password=passwords[index - 1],
-        )
-        for index in range(1, 4)
-    )
+    return _valid_site_users(payload)
 
 
 def _session_secret() -> str:
