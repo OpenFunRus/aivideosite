@@ -154,6 +154,8 @@ CURRENT V2 IMPLEMENTATION NOTES
 - Library, Queue, Continue, Audio, Continue Clip, Chat, System and Editor are implemented V2 workspaces, not placeholders.
 - Continue inherits source video dimensions automatically.
 - Master tracks are stored per user. Continue Clip reuses the saved track ID and trims only the requested time segment automatically.
+- In the Audio workspace, the chosen track fragment is always a Digital Human driving reference. The final soundtrack is controlled separately: "Вклеить трек в видео" muxes the original fragment, while "Фоновые звуки H3" enables model-generated scene audio. If both are enabled, the worker mixes them after H3 generation.
+- Audio fragment position is selected by dragging one fixed-size block on the waveform. Block size follows the global 5/10/15-second generation duration; backend extracts one additional second as reserve for slightly over-length H3 outputs.
 - The standalone Chat manages a 32k context budget and drops oldest complete turns from the model request as needed while keeping browser history.
 - The Editor is a sequential Video 1 timeline plus a separate Music track: reorder, timeline zoom, 0.5s snap, timecode, trim, split, volume, fade in/out, keyboard playback/delete, and FFmpeg export are supported.
 - V1 remains at / and V2 remains at /v2.
