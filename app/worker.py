@@ -252,6 +252,99 @@ class JobWorker(threading.Thread):
             )
             self._check_cancel(job_id)
 
+            final_audio = (
+                payload.get("final_audio")
+                if isinstance(payload.get("final_audio"), dict)
+                else {}
+            )
+            if bool(final_audio.get("embed_track")):
+                track_path = Path(str(final_audio.get("path") or ""))
+                if not track_path.is_file():
+                    raise RuntimeError("Selected V2 audio fragment is missing.")
+
+                mixed_path = output_path.with_name(f"{media_id}_audio_mix.mp4")
+                has_scene_audio = (
+                    bool(final_audio.get("mix_scene_audio"))
+                    and probe_has_audio(output_path)
+                )
+                db.update_job(
+                    job_id,
+                    progress=96,
+                    stage=(
+                        "FFmpeg: сведение трека и звуков сцены"
+                        if has_scene_audio
+                        else "FFmpeg: вклеивание выбранного трека"
+                    ),
+                )
+
+                if has_scene_audio:
+                    scene_volume = max(
+                        0.0,
+                        min(2.0, float(final_audio.get("scene_volume") or 0.45)),
+                    )
+                    track_volume = max(
+                        0.0,
+                        min(2.0, float(final_audio.get("track_volume") or 1.0)),
+                    )
+                    command = [
+                        str(settings.ffmpeg_bin),
+                        "-y",
+                        "-i",
+                        str(output_path),
+                        "-i",
+                        str(track_path),
+                        "-filter_complex",
+                        (
+                            f"[0:a:0]volume={scene_volume:.4f}[scene];"
+                            f"[1:a:0]volume={track_volume:.4f}[track];"
+                            "[scene][track]amix=inputs=2:duration=longest:"
+                            "dropout_transition=0:normalize=0[aout]"
+                        ),
+                        "-map",
+                        "0:v:0",
+                        "-map",
+                        "[aout]",
+                        "-c:v",
+                        "copy",
+                        "-c:a",
+                        "aac",
+                        "-b:a",
+                        "192k",
+                        "-shortest",
+                        str(mixed_path),
+                    ]
+                else:
+                    command = [
+                        str(settings.ffmpeg_bin),
+                        "-y",
+                        "-i",
+                        str(output_path),
+                        "-i",
+                        str(track_path),
+                        "-map",
+                        "0:v:0",
+                        "-map",
+                        "1:a:0",
+                        "-c:v",
+                        "copy",
+                        "-c:a",
+                        "aac",
+                        "-b:a",
+                        "192k",
+                        "-shortest",
+                        str(mixed_path),
+                    ]
+
+                try:
+                    run_command(
+                        command,
+                        should_cancel=should_cancel,
+                        timeout=600,
+                    )
+                    os.replace(mixed_path, output_path)
+                finally:
+                    mixed_path.unlink(missing_ok=True)
+
             duration = probe_duration(output_path)
             title = _prompt_title(
                 payload.get("user_prompt") or payload.get("prompt") or "H3 video"
@@ -298,6 +391,12 @@ class JobWorker(threading.Thread):
                 "comfy_prompt_id": result.get("prompt_id"),
                 "gpu_backend": gpu_label,
                 "v2_context": payload.get("v2_context") or {},
+                "final_audio": {
+                    "embed_track": bool(final_audio.get("embed_track")),
+                    "mix_scene_audio": bool(final_audio.get("mix_scene_audio")),
+                    "track_volume": final_audio.get("track_volume"),
+                    "scene_volume": final_audio.get("scene_volume"),
+                },
             }
 
             db.insert_media(
