@@ -131,12 +131,20 @@
   };
 
   W.gpuJob = (index) => {
-    const label = index === 0 ? "RTX3090" : index === 1 ? "RTX2080" : "GPU " + index;
-    return (W.snapshot?.active_global || []).find(
-      (job) =>
-        job.status === "running" &&
-        String(job.stage || "").toLowerCase().includes(label.toLowerCase())
-    );
+    const needles = index === 0
+      ? ["rtx3090", "rtx 3090", "3090"]
+      : index === 1
+        ? ["rtx2080", "rtx 2080", "2080"]
+        : ["gpu " + index, "gpu" + index];
+    return (W.snapshot?.active_global || []).find((job) => {
+      if (job.status !== "running") return false;
+      const haystack = [
+        job.gpu_backend,
+        job.stage,
+        job.worker,
+      ].map((value) => String(value || "").toLowerCase()).join(" ");
+      return needles.some((needle) => haystack.includes(needle));
+    });
   };
 
   W.refreshState = async ({ silent = false, includeMedia = true } = {}) => {
