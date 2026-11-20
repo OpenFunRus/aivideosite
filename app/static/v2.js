@@ -516,7 +516,6 @@
   });
 
   const copyFullChatGptGuide = async (button) => {
-    const original = button?.textContent || "";
     if (button) button.disabled = true;
     try {
       const [siteResponse, h3Response] = await Promise.all([
@@ -538,10 +537,7 @@
     } catch {
       showToast("Не удалось скопировать инструкцию.", "error");
     } finally {
-      if (button) {
-        button.disabled = false;
-        if (original) button.textContent = original;
-      }
+      if (button) button.disabled = false;
     }
   };
 
