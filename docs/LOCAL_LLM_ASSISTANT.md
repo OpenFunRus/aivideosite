@@ -286,3 +286,13 @@ watch -n 0.5 nvidia-smi
 5. Возврат LLM на GPU после завершения H3.
 6. Реальный 32k context после установки systemd service.
 7. Desktop/mobile UI.
+
+
+## Валидация Magic Wand
+
+- `/api/assistant/control` не доверяет первому `changes.prompt` вслепую.
+- Для production prompt сервер проверяет наличие и порядок трёх обязательных полей, `[Shot 1]`, timestamp у последующих Shot и отсутствие low-level Ref2VA wrapper в обычном V2 output.
+- Если в одном Shot написан явный camera cut/switch без нового timed Shot, результат считается некорректным.
+- При `generate_audio=false` оба sound-поля обязаны быть ровно `N/A`.
+- При первой ошибке сервер делает один corrective retry с перечислением нарушений и требованием сохранить конкретные факты пользователя без выдуманных деталей.
+- Если повторный ответ тоже не проходит проверку, textarea не заменяется плохим prompt: API возвращает ошибку пользователю.
