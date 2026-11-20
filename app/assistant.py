@@ -727,6 +727,11 @@ def _v2_wand_system() -> str:
         "timestamp that fits CURRENT_GENERATOR_STATE.seconds. If music was not requested, non_diegetic_music: N/A. "
         "If CURRENT_GENERATOR_STATE.generate_audio is false, both sound fields are exactly N/A. "
         "Never output subject_definitions, summary, retention_analysis or detailed_description; the backend owns Ref2VA mapping. "
+        "Three common mistakes to avoid: "
+        "BAD: source says age 35 -> output says early 30s. GOOD: output says 35-year-old or a man of 35. "
+        "BAD: write dialogue once as plain quoted text and then repeat it inside <d>. GOOD: write the spoken words exactly once, only as (S1) <d>[Russian] exact words</d>. "
+        "BAD: source mentions rain -> invent thunder, footsteps, wind, traffic, branch snaps or other ambience. GOOD: soundscape contains only rain and any other sound explicitly stated by the user. "
+        "Do not embellish sparse input; sparse but faithful output is preferred. "
         "Follow the workspace-specific user instruction and the H3 reference guide below.\n\n"
         + H3_EXPERT_GUIDE
     )
