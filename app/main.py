@@ -1575,6 +1575,13 @@ async def api_v2_audio(
             }
         )
 
+        # The extra second is only a technical source-audio reserve for H3/mux.
+        # It must NOT advance the logical music-video timeline, otherwise the next
+        # 10-second clip would start at 11s and silently skip one second of the song.
+        timeline_audio_end = audio_start + float(seconds)
+        if track_duration is not None:
+            timeline_audio_end = min(float(track_duration), timeline_audio_end)
+
         h3_prompt = prompt
         if generate_scene_audio and embed_track:
             h3_prompt = (
@@ -1600,7 +1607,8 @@ async def api_v2_audio(
                 "workspace": "audio",
                 "track_id": track["id"],
                 "audio_start": float(audio_start),
-                "audio_end": float(segment_end),
+                "audio_end": float(timeline_audio_end),
+                "audio_source_end": float(segment_end),
                 "audio_reserve": audio_reserve,
                 "embed_track": bool(embed_track),
                 "generate_scene_audio": bool(generate_scene_audio),
@@ -1620,7 +1628,8 @@ async def api_v2_audio(
             "height": height,
             "track_id": track["id"],
             "audio_start": float(audio_start),
-            "audio_end": float(segment_end),
+            "audio_end": float(timeline_audio_end),
+            "audio_source_end": float(segment_end),
             "audio_reserve": audio_reserve,
             "embed_track": bool(embed_track),
             "generate_scene_audio": bool(generate_scene_audio),
