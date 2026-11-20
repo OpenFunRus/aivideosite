@@ -128,12 +128,28 @@
           messages: [{
             role: "user",
             content:
-              "Перепиши только этот пользовательский запрос в production-ready MiniMax H3 prompt для текущего состояния V2. " +
-              "Не меняй настройки формы. Верни только changes.prompt; message сделай очень коротким. " +
-              "H3 prompt должен быть на английском, но точные реплики, lyrics и visible text сохрани на исходном языке.\n\n" +
+              "Перепиши только этот запрос для поля prompt раздела «Создать». " +
+              "Верни changes.prompt в каноническом формате MiniMax H3 из трёх полей: " +
+              "integrated_multimodal_description, overall_soundscape, non_diegetic_music. " +
+              "Соблюдай выбранную длительность: [Shot 1] без времени, каждый следующий cut с точным временем. " +
+              "Один основной camera move на shot. Точные реплики оформляй как (S1) и <d>[Language] ...</d> без перевода. " +
+              "Если музыки не просили — non_diegetic_music: N/A. " +
+              "Если есть first/last frame, добавь перед тремя полями правильную alignment line из H3 guide. " +
+              "Если выбраны Characters, не придумывай Picture/Subject ordinals и не пиши шесть Ref2VA-полей: backend добавит их сам. " +
+              "Не меняй настройки формы и не добавляй события, которых пользователь не просил. " +
+              "Верни только changes.prompt; message сделай очень коротким.\n\n" +
               source,
           }],
-          settings: api.currentAssistantSettings?.() || {},
+          settings: {
+            ...(api.currentAssistantSettings?.() || {}),
+            workspace: "create",
+            generation_mode:
+              (qs("#v2-first-frame")?.files?.[0] || qs("#v2-last-frame")?.files?.[0])
+                ? "frames"
+                : (api.selectedCharacters?.()?.length ? "reference" : "frames"),
+            has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
+            has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
+          },
           thinking: false,
         }),
       });
