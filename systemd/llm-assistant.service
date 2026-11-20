@@ -18,6 +18,9 @@ Environment=LLM_CONTROL_PORT=8091
 Environment=LLM_CTX_SIZE=8192
 Environment=LLM_THREADS=18
 Environment=LLM_GPU_POLL_SECONDS=2
+# The manager owns localhost:8090. Clean up a leftover manual/legacy
+# llama-server before it starts so an old test process cannot block binding.
+ExecStartPre=-/usr/bin/pkill -f llama-server.*--port[[:space:]]+8090
 ExecStart=/usr/bin/python3 /opt/ai/aivideosite/app/llm_assistant_manager.py
 Restart=always
 RestartSec=3
