@@ -1,5 +1,5 @@
 <section class="v2-view active" data-v2-view="create">
-      <form class="v2-create" id="v2-create-form">
+      <form class="v2-create v2-generator-form" id="v2-create-form">
         <div class="v2-workspace-intro">
           <p>Создай новое видео с нуля — опиши сцену, при необходимости добавь кадры и выбери персонажей.</p>
         </div>
@@ -7,7 +7,7 @@
         <section class="v2-tool-card v2-prompt-panel">
           <div class="v2-prompt-panel-head">
             <label class="v2-card-title" for="v2-prompt">
-              <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+              <span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></span>
               <strong>Что должно происходить в видео?</strong>
             </label>
             <span class="v2-prompt-counter" id="v2-prompt-count">0 / 16 000</span>
@@ -24,7 +24,7 @@
         <div class="v2-media-grid">
           <label class="v2-upload-card" data-v2-upload="first">
             <input type="file" id="v2-first-frame" accept="image/png,image/jpeg,image/webp">
-            <span class="v2-upload-title"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Начальный кадр</span>
+            <span class="v2-upload-title"><span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg></span>Начальный кадр</span>
             <span class="v2-upload-body">
               <img class="v2-upload-preview" alt="Начальный кадр" hidden>
               <span class="v2-upload-placeholder">
@@ -40,7 +40,7 @@
 
           <label class="v2-upload-card" data-v2-upload="last">
             <input type="file" id="v2-last-frame" accept="image/png,image/jpeg,image/webp">
-            <span class="v2-upload-title"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Конечный кадр</span>
+            <span class="v2-upload-title"><span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg></span>Конечный кадр</span>
             <span class="v2-upload-body">
               <img class="v2-upload-preview" alt="Конечный кадр" hidden>
               <span class="v2-upload-placeholder">
@@ -55,9 +55,9 @@
           </label>
         </div>
 
-        <section class="v2-settings-card">
+        <section class="v2-settings-card v2-generator-settings">
           <div class="v2-setting-group">
-            <span class="v2-setting-label">Качество</span>
+            <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-adjustments"></use></svg>Качество</span>
             <div class="v2-segmented" data-setting="quality">
               <button type="button" data-value="480">480p</button>
               <button class="active" type="button" data-value="720">720p</button>
@@ -65,7 +65,7 @@
             </div>
           </div>
           <div class="v2-setting-group">
-            <span class="v2-setting-label">Формат</span>
+            <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Формат</span>
             <div class="v2-segmented" data-setting="ratio">
               <button type="button" data-value="1:1">1:1</button>
               <button class="active" type="button" data-value="16:9">16:9</button>
@@ -73,7 +73,7 @@
             </div>
           </div>
           <div class="v2-setting-group">
-            <span class="v2-setting-label">Длительность</span>
+            <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Длительность</span>
             <div class="v2-segmented" data-setting="seconds">
               <button type="button" data-value="5">5 сек</button>
               <button class="active" type="button" data-value="10">10 сек</button>
@@ -81,7 +81,7 @@
             </div>
           </div>
           <div class="v2-setting-group">
-            <span class="v2-setting-label">Шаги</span>
+            <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>Шаги</span>
             <div class="v2-segmented" data-setting="steps">
               <button type="button" data-value="8">8</button>
               <button class="active" type="button" data-value="12">12</button>

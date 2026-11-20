@@ -1,5 +1,5 @@
 <section class="v2-view" data-v2-view="audio">
-  <form class="v2-workspace v2-audio-workspace" id="v2-audio-form">
+  <form class="v2-workspace v2-audio-workspace v2-generator-form" id="v2-audio-form">
     <div class="v2-workspace-intro">
       <p>Создай видео под готовую музыку, вокал или звуковую дорожку — выбери фрагмент, опиши сцену и получи синхронизированный клип.</p>
     </div>
@@ -7,7 +7,7 @@
     <section class="v2-tool-card v2-prompt-panel">
       <div class="v2-prompt-panel-head">
         <label class="v2-card-title" for="v2-audio-prompt">
-          <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+          <span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></span>
           <strong>Сценическое действие</strong>
         </label>
         <span class="v2-prompt-counter" id="v2-audio-prompt-count">0 / 16 000</span>
@@ -23,7 +23,7 @@
 
     <section class="v2-tool-card v2-audio-track-card">
       <div class="v2-audio-card-heading">
-        <span class="v2-audio-card-icon">
+        <span class="v2-audio-card-icon v2-heading-icon">
           <svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg>
         </span>
         <span>
@@ -32,7 +32,7 @@
         </span>
       </div>
 
-      <div class="v2-audio-source-tabs">
+      <div class="v2-audio-source-tabs v2-source-actions">
         <button class="active" id="v2-audio-library-tab" type="button" data-audio-source-mode="library">
           <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
           <span>Из библиотеки</span>
@@ -99,7 +99,7 @@
 
     <section class="v2-tool-card v2-audio-visual-card">
       <div class="v2-audio-card-heading">
-        <span class="v2-audio-card-icon">
+        <span class="v2-audio-card-icon v2-heading-icon">
           <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
         </span>
         <span>
@@ -127,35 +127,35 @@
       </div>
     </section>
 
-    <section class="v2-audio-settings">
-      <div class="v2-audio-settings-primary">
-        <div class="v2-audio-setting">
-          <span>Качество</span>
-          <div class="v2-mini-segment" data-v2-setting="audio-quality">
+    <section class="v2-audio-settings v2-generator-settings">
+      <div class="v2-audio-settings-primary v2-generator-settings-primary">
+        <div class="v2-audio-setting v2-generator-setting">
+          <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-adjustments"></use></svg>Качество</span>
+          <div class="v2-mini-segment v2-segmented" data-v2-setting="audio-quality">
             <button type="button" data-value="480">480p</button>
             <button class="active" type="button" data-value="720">720p</button>
             <button type="button" data-value="1080">1080p</button>
           </div>
         </div>
-        <div class="v2-audio-setting">
-          <span>Формат</span>
-          <div class="v2-mini-segment" data-v2-setting="audio-ratio">
+        <div class="v2-audio-setting v2-generator-setting">
+          <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Формат</span>
+          <div class="v2-mini-segment v2-segmented" data-v2-setting="audio-ratio">
             <button type="button" data-value="1:1">1:1</button>
             <button class="active" type="button" data-value="16:9">16:9</button>
             <button type="button" data-value="9:16">9:16</button>
           </div>
         </div>
-        <div class="v2-audio-setting">
-          <span>Длительность</span>
-          <div class="v2-mini-segment" data-v2-setting="audio-seconds">
+        <div class="v2-audio-setting v2-generator-setting">
+          <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Длительность</span>
+          <div class="v2-mini-segment v2-segmented" data-v2-setting="audio-seconds">
             <button type="button" data-value="5">5 сек</button>
             <button class="active" type="button" data-value="10">10 сек</button>
             <button type="button" data-value="15">15 сек</button>
           </div>
         </div>
-        <div class="v2-audio-setting">
-          <span>Шаги</span>
-          <div class="v2-mini-segment" data-v2-setting="audio-steps">
+        <div class="v2-audio-setting v2-generator-setting">
+          <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>Шаги</span>
+          <div class="v2-mini-segment v2-segmented" data-v2-setting="audio-steps">
             <button type="button" data-value="8">8</button>
             <button class="active" type="button" data-value="12">12</button>
             <button type="button" data-value="16">16</button>
@@ -163,7 +163,7 @@
         </div>
       </div>
 
-      <div class="v2-audio-settings-secondary">
+      <div class="v2-audio-settings-secondary v2-generator-settings-secondary">
         <label class="v2-field v2-audio-seed">
           <span>Seed</span>
           <input id="v2-audio-seed" type="number" placeholder="Auto (-1)">

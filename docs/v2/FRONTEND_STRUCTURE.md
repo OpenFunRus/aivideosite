@@ -76,6 +76,7 @@ Cross-workspace actions use small browser events such as `v2:datarefresh`, `v2:u
 - `css/workspaces/common.css`
 - `css/workspaces/continue.css` — Continue-specific reference layout
 - `css/workspaces/audio.css` — Audio waveform/timeline and audio-output controls
+- `css/workspaces/generator-design.css` — canonical shared visual components for Create / Continue / Audio; see `docs/v2/DESIGN_SYSTEM.md`
 - `css/workspaces/library.css`
 - `css/workspaces/queue.css`
 - `css/workspaces/chat.css`

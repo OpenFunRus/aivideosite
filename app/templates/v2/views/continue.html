@@ -1,5 +1,5 @@
 <section class="v2-view" data-v2-view="continue">
-  <form class="v2-workspace v2-continue-workspace" id="v2-continue-form">
+  <form class="v2-workspace v2-continue-workspace v2-generator-form" id="v2-continue-form">
     <div class="v2-workspace-intro">
       <p>Продолжи существующий ролик — сохрани стиль, персонажей и плавность движения.</p>
     </div>
@@ -7,7 +7,7 @@
     <section class="v2-tool-card v2-prompt-panel">
       <div class="v2-prompt-panel-head">
         <div class="v2-card-title">
-          <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+          <span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></span>
           <strong>Что должно происходить дальше?</strong>
         </div>
         <span class="v2-prompt-counter" id="v2-continue-prompt-count">0 / 16 000</span>
@@ -24,7 +24,7 @@
     <section class="v2-tool-card v2-continue-source-card">
       <div class="v2-continue-source-heading">
         <div class="v2-card-title">
-          <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
+          <span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
           <span>
             <strong>Исходный ролик</strong>
             <small>Выбери готовый ролик из библиотеки или загрузи свой.</small>
@@ -32,7 +32,7 @@
         </div>
       </div>
 
-      <div class="v2-continue-source-tabs">
+      <div class="v2-continue-source-tabs v2-source-actions">
         <button class="active" id="v2-continue-library-tab" type="button" data-continue-source-mode="library">
           <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
           <span>Из библиотеки</span>
@@ -71,35 +71,35 @@
       </div>
     </section>
 
-    <section class="v2-continue-settings">
-      <div class="v2-continue-settings-primary">
-        <div class="v2-continue-setting">
-          <span>Качество</span>
-          <div class="v2-mini-segment" data-v2-setting="continue-quality">
+    <section class="v2-continue-settings v2-generator-settings">
+      <div class="v2-continue-settings-primary v2-generator-settings-primary">
+        <div class="v2-continue-setting v2-generator-setting">
+          <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-adjustments"></use></svg>Качество</span>
+          <div class="v2-mini-segment v2-segmented" data-v2-setting="continue-quality">
             <button type="button" data-value="480">480p</button>
             <button class="active" type="button" data-value="720">720p</button>
             <button type="button" data-value="1080">1080p</button>
           </div>
         </div>
-        <div class="v2-continue-setting">
-          <span>Формат</span>
-          <div class="v2-mini-segment" data-v2-setting="continue-ratio">
+        <div class="v2-continue-setting v2-generator-setting">
+          <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Формат</span>
+          <div class="v2-mini-segment v2-segmented" data-v2-setting="continue-ratio">
             <button type="button" data-value="1:1">1:1</button>
             <button class="active" type="button" data-value="16:9">16:9</button>
             <button type="button" data-value="9:16">9:16</button>
           </div>
         </div>
-        <div class="v2-continue-setting">
-          <span>Длительность</span>
-          <div class="v2-mini-segment" data-v2-setting="continue-seconds">
+        <div class="v2-continue-setting v2-generator-setting">
+          <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Длительность</span>
+          <div class="v2-mini-segment v2-segmented" data-v2-setting="continue-seconds">
             <button type="button" data-value="5">5 сек</button>
             <button class="active" type="button" data-value="10">10 сек</button>
             <button type="button" data-value="15">15 сек</button>
           </div>
         </div>
-        <div class="v2-continue-setting">
-          <span>Шаги</span>
-          <div class="v2-mini-segment" data-v2-setting="continue-steps">
+        <div class="v2-continue-setting v2-generator-setting">
+          <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>Шаги</span>
+          <div class="v2-mini-segment v2-segmented" data-v2-setting="continue-steps">
             <button type="button" data-value="8">8</button>
             <button class="active" type="button" data-value="12">12</button>
             <button type="button" data-value="16">16</button>
@@ -107,7 +107,7 @@
         </div>
       </div>
 
-      <div class="v2-continue-settings-secondary">
+      <div class="v2-continue-settings-secondary v2-generator-settings-secondary">
         <label class="v2-field v2-continue-seed">
           <span>Seed</span>
           <input id="v2-continue-seed" type="number" placeholder="Auto (-1)">
