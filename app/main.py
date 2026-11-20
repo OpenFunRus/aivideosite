@@ -1363,6 +1363,8 @@ async def api_assistant_context(
 async def api_v2_continue(
     prompt: Annotated[str, Form()],
     source_media_id: Annotated[str, Form()] = "",
+    quality: Annotated[str, Form()] = "720",
+    ratio: Annotated[str, Form()] = "16:9",
     seconds: Annotated[int, Form()] = 10,
     steps: Annotated[int, Form()] = 12,
     seed: Annotated[str, Form()] = "",
@@ -1375,11 +1377,12 @@ async def api_v2_continue(
     selected = _v2_character_ids(character_ids)
     temporary_paths: list[Path] = []
     try:
-        source_item, width, height = await _v2_source_video(
+        source_item, source_width, source_height = await _v2_source_video(
             source_media_id=source_media_id,
             source_video=source_video,
             user_id=user_id,
         )
+        width, height = _v2_resolution(quality, ratio)
         if source_item.get("temporary"):
             temporary_paths.append(Path(str(source_item["path"])))
         items = _v2_character_references(
@@ -1403,13 +1406,21 @@ async def api_v2_continue(
             v2_context={
                 "workspace": "continue",
                 "source_media_id": str(source_media_id or "") or None,
+                "quality": str(quality),
+                "ratio": str(ratio),
+                "source_width": source_width,
+                "source_height": source_height,
             },
         )
         return {
             "ok": True,
             "job_id": job_id,
+            "quality": str(quality),
+            "ratio": str(ratio),
             "width": width,
             "height": height,
+            "source_width": source_width,
+            "source_height": source_height,
         }
     except Exception:
         for path in temporary_paths:
