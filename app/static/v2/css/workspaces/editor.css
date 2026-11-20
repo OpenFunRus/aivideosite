@@ -104,7 +104,14 @@
 .v2-editor-lane-label{position:sticky;left:0;z-index:5;display:flex;align-items:center;justify-content:center;gap:7px;border-right:1px solid #30374a;background:#151925;color:#8e98ae;font-size:9px}
 .v2-editor-lane-label strong{padding:6px 8px;border-radius:6px;background:#202638;color:#d6dae4}
 .v2-editor-lane-content{position:relative;min-width:0;background:repeating-linear-gradient(90deg,transparent 0,transparent 69px,rgba(255,255,255,.025) 70px)}
-.v2-timeline-clip{position:absolute;top:10px;height:70px;overflow:hidden;border:1px solid #493b75;border-radius:7px;background:linear-gradient(180deg,#272044,#1a192d);color:#f0eef9;cursor:pointer}
+.v2-timeline-clip{position:absolute;top:10px;height:70px;overflow:hidden;border:1px solid #493b75;border-radius:7px;background:linear-gradient(180deg,#272044,#1a192d);color:#f0eef9;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;will-change:transform}
+.v2-timeline-clip *{user-select:none;-webkit-user-select:none}
+.v2-timeline-clip:focus-visible{outline:2px solid #b49cff;outline-offset:2px}
+.v2-timeline-clip.dragging{z-index:20;cursor:grabbing;opacity:.92;box-shadow:0 12px 28px rgba(0,0,0,.42),0 0 0 2px rgba(155,104,255,.35)}
+.v2-timeline-delete{position:absolute;z-index:5;top:5px;right:5px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;padding:0;border:1px solid #783544;border-radius:6px;background:rgba(52,17,27,.9);color:#ff7183;opacity:0;cursor:pointer;transition:opacity .12s,background .12s}
+.v2-timeline-delete .icon{width:13px;height:13px}
+.v2-timeline-clip:hover .v2-timeline-delete,.v2-timeline-clip.selected .v2-timeline-delete,.v2-timeline-delete:focus-visible{opacity:1}
+.v2-timeline-delete:hover{background:#4a1923}
 .v2-timeline-clip.selected{border-color:#ae92ff;box-shadow:0 0 0 2px rgba(116,84,245,.23)}
 .v2-timeline-thumb{position:absolute;inset:0;opacity:.38;width:100%;height:100%;object-fit:cover;pointer-events:none}
 .v2-timeline-clip-copy{position:absolute;z-index:2;left:7px;right:7px;bottom:6px;padding:4px 5px;border-radius:5px;background:rgba(13,14,22,.72)}
