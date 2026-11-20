@@ -138,11 +138,11 @@
               </label>
               <label>
                 <input type="radio" name="generation_mode" value="multiframe">
-                <span><strong>Таймлайн</strong><small>точные Guide frames по времени</small></span>
+                <span><strong>Таймлайн</strong><small>точные кадры по времени</small></span>
               </label>
               <label>
                 <input type="radio" name="generation_mode" value="digital_human">
-                <span><strong>Digital Human</strong><small>визуал + driving audio</small></span>
+                <span><strong>Digital Human</strong><small>визуал + управляющее аудио</small></span>
               </label>
             </div>
 
@@ -227,19 +227,19 @@
                 <label class="reference-upload">
                   <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg></span>
                   <strong>Изображения</strong>
-                  <small>до 9 вместе с Character images</small>
+                  <small>до 9 вместе с изображениями персонажей</small>
                   <input id="reference-images" type="file" name="reference_images" multiple accept="image/png,image/jpeg,image/webp">
                 </label>
                 <label class="reference-upload">
                   <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
                   <strong>Видео</strong>
-                  <small>до 3 · soundtrack учитывается автоматически</small>
+                  <small>до 3 · звуковая дорожка учитывается автоматически</small>
                   <input id="reference-videos" type="file" name="reference_videos" multiple accept="video/mp4,video/quicktime,video/webm,.mkv,.m4v">
                 </label>
                 <label class="reference-upload">
                   <span class="upload-icon"><svg class="icon"><use href="/static/icons.svg#icon-microphone"></use></svg></span>
                   <strong id="reference-audio-title">Аудио / голос</strong>
-                  <small id="reference-audio-help">до 3 standalone audio</small>
+                  <small id="reference-audio-help">до 3 отдельных аудиофайлов</small>
                   <input id="reference-audios" type="file" name="reference_audios" multiple accept="audio/*,.flac,.m4a,.aac,.ogg,.opus">
                 </label>
               </div>
@@ -507,43 +507,17 @@
             <h2>Персонажи</h2>
             <p>Личная библиотека постоянных H3-референсов. Каждый пользователь видит только своих персонажей.</p>
           </div>
+          <button class="btn btn-primary" id="character-create-open" type="button">
+            <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+            Добавить персонажа
+          </button>
         </div>
-
-        <section class="panel character-create-panel">
-          <div class="panel-header">
-            <div>
-              <span class="panel-kicker">ПОСТОЯННЫЙ РЕФЕРЕНС</span>
-              <h3>Новый персонаж</h3>
-            </div>
-          </div>
-          <form id="character-form" class="character-form">
-            <label class="field">
-              <span class="field-label">Имя</span>
-              <input name="name" maxlength="80" required placeholder="Например: Лиса">
-            </label>
-            <label class="field character-description-field">
-              <span class="field-label">Неизменяемые особенности</span>
-              <textarea name="description" rows="3" maxlength="2000" placeholder="Лицо, шерсть/волосы, одежда, пропорции, постоянные аксессуары..."></textarea>
-            </label>
-            <label class="field">
-              <span class="field-label">Референс-изображения</span>
-              <input name="images" type="file" multiple required accept="image/png,image/jpeg,image/webp">
-              <span class="field-help">1–4 картинки. Они считаются в общем лимите Ref2VA 9 images.</span>
-            </label>
-            <label class="field">
-              <span class="field-label">Референс голоса · необязательно</span>
-              <input name="voice" type="file" accept="audio/*,.flac,.m4a,.aac,.ogg,.opus">
-              <span class="field-help">Голос хранится вместе с персонажем и при выборе добавляется как Audio reference.</span>
-            </label>
-            <button class="btn btn-primary" id="character-create" type="submit">Сохранить персонажа</button>
-          </form>
-        </section>
 
         <div class="character-grid" id="character-grid"></div>
         <div class="empty-state" id="character-empty">
           <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
           <h3>Персонажей пока нет</h3>
-          <p>Создайте постоянный набор внешности и голоса для повторных генераций.</p>
+          <p>Нажмите «Добавить персонажа», чтобы создать постоянный набор внешности и голоса.</p>
         </div>
       </section>
 
@@ -1198,6 +1172,47 @@ ControlNet:
     <div class="dialog-actions">
       <button class="btn btn-secondary" type="submit" value="cancel">Отмена</button>
       <button class="btn btn-primary" id="confirm-dialog-submit" type="submit" value="confirm">Продолжить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="action-dialog character-create-dialog" id="character-create-dialog">
+  <form id="character-form" class="character-form">
+    <div class="dialog-header">
+      <div>
+        <span class="panel-kicker">ПОСТОЯННЫЙ РЕФЕРЕНС</span>
+        <h3>Новый персонаж</h3>
+      </div>
+      <button class="icon-btn" type="button" data-close-character-create aria-label="Закрыть">
+        <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+      </button>
+    </div>
+
+    <label class="field">
+      <span class="field-label">Имя</span>
+      <input name="name" maxlength="80" required placeholder="Например: Лиса">
+    </label>
+
+    <label class="field">
+      <span class="field-label">Неизменяемые особенности</span>
+      <textarea name="description" rows="4" maxlength="2000" placeholder="Лицо, шерсть/волосы, одежда, пропорции, постоянные аксессуары..."></textarea>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Референс-изображения</span>
+      <input name="images" type="file" multiple required accept="image/png,image/jpeg,image/webp">
+      <span class="field-help">1–4 изображения. Они входят в общий лимит Ref2VA: 9 изображений.</span>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Референс голоса · необязательно</span>
+      <input name="voice" type="file" accept="audio/*,.flac,.m4a,.aac,.ogg,.opus">
+      <span class="field-help">Голос хранится вместе с персонажем и при выборе добавляется как аудио-референс.</span>
+    </label>
+
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="button" data-close-character-create>Отмена</button>
+      <button class="btn btn-primary" id="character-create" type="submit">Сохранить персонажа</button>
     </div>
   </form>
 </dialog>
