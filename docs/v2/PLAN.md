@@ -49,7 +49,7 @@ Primary desktop navigation:
 
 The first implementation may combine **По аудио** + **Продолжить клип** into one workspace with two obvious modes if that produces a cleaner design. This must be decided during mockup approval, not buried as a technical choice.
 
-Mobile navigation should use a compact bottom bar for the most common sections plus a More drawer.
+Mobile navigation uses a fixed top bar: hamburger opens the main drawer, the Character button opens the Character drawer, and the page/GPU header is centered below it.
 
 ### Instruction workspace
 
