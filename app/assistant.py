@@ -890,7 +890,7 @@ def _repair_control_prompt(
     repair_user = (
         "SOURCE USER REQUEST:\n"
         + source_text[:12000]
-        + "\n\nVALIDATION / FAITHFULNESS ERRORS:\n- "
+        + "\n\nDETERMINISTIC VALIDATION ERRORS:\n- "
         + "\n- ".join(issues[:12])
         + "\n\nINVALID H3 PROMPT:\n"
         + bad_prompt[:16000]
