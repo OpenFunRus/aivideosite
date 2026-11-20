@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import math
@@ -22,11 +23,12 @@ from fastapi import (
     UploadFile,
     Query,
 )
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
+from . import assistant as local_assistant
 from . import db
 from .comfy import ComfyUIClient
 from .config import settings
@@ -174,6 +176,70 @@ async def api_state(
         "user": {"id": user_id, "label": _user_label(user_id)},
         "system": get_system_status(),
     }
+
+
+@app.get("/api/assistant/status")
+async def api_assistant_status(user_id: str = Depends(require_user)):
+    del user_id
+    return await asyncio.to_thread(local_assistant.status)
+
+
+@app.post("/api/assistant/chat")
+async def api_assistant_chat(
+    request: Request,
+    user_id: str = Depends(require_user),
+):
+    del user_id
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(400, "Некорректный запрос чата.") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "Некорректный запрос чата.")
+
+    try:
+        await asyncio.to_thread(local_assistant.ensure_available)
+    except local_assistant.AssistantUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(
+        local_assistant.stream_chat(
+            payload.get("messages"),
+            settings=payload.get("settings"),
+        ),
+        media_type="text/plain; charset=utf-8",
+        headers=headers,
+    )
+
+
+@app.post("/api/assistant/control")
+async def api_assistant_control(
+    request: Request,
+    user_id: str = Depends(require_user),
+):
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(400, "Некорректный запрос управления.") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "Некорректный запрос управления.")
+
+    characters = [_character_public(item) for item in db.list_characters(user_id)]
+    try:
+        return await asyncio.to_thread(
+            local_assistant.control,
+            payload.get("messages"),
+            settings=payload.get("settings"),
+            characters=characters,
+        )
+    except local_assistant.AssistantUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/characters")
