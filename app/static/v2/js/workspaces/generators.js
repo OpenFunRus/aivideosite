@@ -197,8 +197,7 @@
           height: item.meta?.height,
           duration: item.duration || item.meta?.seconds,
           sizeBytes: item.size_bytes,
-          sizeBytes: item.size_bytes,
-    });
+        });
       }
     } else {
       clearContinueSourceVisual();
