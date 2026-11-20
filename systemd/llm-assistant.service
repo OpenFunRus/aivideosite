@@ -1,26 +1,28 @@
 [Unit]
-Description=Local Qwen3 assistant for AI Video Site
-After=network-online.target
+Description=Dynamic local Qwen3 assistant for AI Video Site
+After=network-online.target comfyui.service comfyui-secondary.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=openfun
 Group=openfun
-WorkingDirectory=/opt/ai/llama.cpp
-ExecStart=/opt/ai/llama.cpp/build/bin/llama-server \
-  --model /opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf \
-  --host 127.0.0.1 \
-  --port 8090 \
-  --ctx-size 32768 \
-  --threads 18 \
-  --threads-batch 18 \
-  --n-gpu-layers 0 \
-  --parallel 1 \
-  --jinja
+WorkingDirectory=/opt/ai/aivideosite
+Environment=PYTHONUNBUFFERED=1
+Environment=LLM_SERVER_BIN=/opt/ai/llama.cpp/build/bin/llama-server
+Environment=LLM_MODEL=/opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf
+Environment=LLM_HOST=127.0.0.1
+Environment=LLM_PORT=8090
+Environment=LLM_CONTROL_HOST=127.0.0.1
+Environment=LLM_CONTROL_PORT=8091
+Environment=LLM_CTX_SIZE=8192
+Environment=LLM_THREADS=18
+Environment=LLM_GPU_POLL_SECONDS=2
+ExecStart=/usr/bin/python3 /opt/ai/aivideosite/app/llm_assistant_manager.py
 Restart=always
-RestartSec=5
-TimeoutStopSec=30
+RestartSec=3
+TimeoutStopSec=20
+KillMode=control-group
 
 [Install]
 WantedBy=multi-user.target
