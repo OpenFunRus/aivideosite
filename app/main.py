@@ -1006,7 +1006,7 @@ def _v2_fit_video_size(width: int, height: int) -> tuple[int, int]:
     height = int(round(height * scale))
 
     def grid(value: int) -> int:
-        return max(256, min(3072, int(round(value / 32.0) * 32)))
+        return max(256, min(3072, int(math.ceil(value / 32.0) * 32)))
 
     return grid(width), grid(height)
 
