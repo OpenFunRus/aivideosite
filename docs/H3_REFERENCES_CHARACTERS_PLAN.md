@@ -70,9 +70,11 @@ Status: **implemented; runtime verification pending**.
 - `COMFYUI_INPUT_DIR=/opt/ai/ComfyUI/input` is used only when a job actually needs staged media.
 - Ref2VA model names are never passed to FL2VA workflows, so missing new model files do not make old FL2VA jobs invalid.
 
-Turbo rules:
-- FL2VA: 4/8 steps use FL Turbo; 12/16/20 use Base.
-- Ref2VA / Timeline / Digital Human: 4 steps use Ref Turbo; 8/12/16/20 use Base.
+Step rules:
+- New UI/API: 6–24 steps in increments of 2.
+- FL2VA: exactly 8 steps use the installed FL Turbo LoRA; other new values use Base.
+- Ref2VA / Timeline / Digital Human: new 6–24 values use Base because the installed Ref Turbo LoRA targets 4 steps.
+- Legacy queued payloads keep their old profile routing for retry compatibility.
 
 ## Stage 2 — Ref2VA API
 
@@ -390,8 +392,8 @@ After installing the new model files and updating ComfyUI:
    - ControlNet together with Timeline Guides.
 
 7. Dispatcher:
-   - first job on RTX 3090;
-   - second concurrent job on RTX 2080 Ti;
+   - first job on RTX3090;
+   - second concurrent job on RTX2080;
    - Cancel on each backend;
    - correct GPU metadata.
 
