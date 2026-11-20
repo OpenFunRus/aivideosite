@@ -636,31 +636,6 @@
     if (window.innerWidth > 820) closeMobileDrawers();
   });
 
-  const leftRail = qs(".v2-sidebar");
-  const rightRail = qs("#v2-character-rail");
-
-  const bindHoverRail = (element, className) => {
-    if (!element) return;
-    let closeTimer = null;
-    const open = () => {
-      clearTimeout(closeTimer);
-      app.classList.add(className);
-    };
-    const close = () => {
-      clearTimeout(closeTimer);
-      closeTimer = setTimeout(() => app.classList.remove(className), 90);
-    };
-    element.addEventListener("mouseenter", open);
-    element.addEventListener("mouseleave", close);
-    element.addEventListener("focusin", open);
-    element.addEventListener("focusout", (event) => {
-      if (!element.contains(event.relatedTarget)) close();
-    });
-  };
-
-  bindHoverRail(leftRail, "left-open");
-  bindHoverRail(rightRail, "right-open");
-
   const restoreDraftToUi = () => {
     if (prompt) prompt.value = state.draft.prompt;
     if (seed) seed.value = state.draft.seed;
