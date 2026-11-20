@@ -1248,3 +1248,34 @@ html {
     display: none;
   }
 }
+
+
+/* Stage 3: V2 Create generation states */
+.v2-create-warning {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border: 1px solid #745134;
+  border-radius: 11px;
+  background: rgba(122, 76, 31, .16);
+  color: #e7bd91;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.v2-create-warning[hidden] {
+  display: none !important;
+}
+.v2-primary-button:disabled,
+.v2-wand-button:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+  filter: none;
+}
+.v2-primary-button.is-loading {
+  box-shadow: none;
+}
+.v2-primary-button.is-loading .icon {
+  animation: v2-generate-pulse .85s ease-in-out infinite alternate;
+}
+@keyframes v2-generate-pulse {
+  to { opacity: .35; transform: scale(.9); }
+}
