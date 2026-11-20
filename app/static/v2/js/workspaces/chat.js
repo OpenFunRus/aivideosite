@@ -62,10 +62,12 @@
 
   const send = async () => {
     const input = qs("#v2-chat-input");
+    const submit = qs("#v2-chat-form button[type='submit']");
     const text = input?.value.trim();
     if (!text || busy) return;
 
     busy = true;
+    if (submit) submit.disabled = true;
     input.value = "";
     messages.push({ role: "user", content: text });
     save();
@@ -125,11 +127,18 @@
       showToast("Чат: " + error.message, "error");
     } finally {
       busy = false;
+      if (submit) submit.disabled = false;
       await updateContext();
     }
   };
 
   qs("#v2-chat-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    send();
+  });
+
+  qs("#v2-chat-input")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
     event.preventDefault();
     send();
   });
