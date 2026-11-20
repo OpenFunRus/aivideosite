@@ -1,0 +1,26 @@
+[Unit]
+Description=Local Qwen3 assistant for AI Video Site
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openfun
+Group=openfun
+WorkingDirectory=/opt/ai/llama.cpp
+ExecStart=/opt/ai/llama.cpp/build/bin/llama-server \
+  --model /opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf \
+  --host 127.0.0.1 \
+  --port 8090 \
+  --ctx-size 32768 \
+  --threads 18 \
+  --threads-batch 18 \
+  --n-gpu-layers 0 \
+  --parallel 1 \
+  --jinja
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
