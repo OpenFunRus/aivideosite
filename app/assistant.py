@@ -12,8 +12,8 @@ import requests
 LLM_URL = os.getenv("LLM_ASSISTANT_URL", "http://127.0.0.1:8090").rstrip("/")
 LLM_MANAGER_URL = os.getenv("LLM_MANAGER_URL", "http://127.0.0.1:8091").rstrip("/")
 MODEL_NAME = os.getenv("LLM_ASSISTANT_MODEL", "local-h3-assistant")
-MAX_HISTORY_MESSAGES = 18
-MAX_HISTORY_CHARS = 24000
+MAX_HISTORY_MESSAGES = 12
+MAX_HISTORY_CHARS = 10000
 
 H3_RULES = r"""
 You are embedded in a local MiniMax H3 video studio. You speak Russian and English naturally.
@@ -195,7 +195,6 @@ def _settings_context(settings: Any) -> str:
     safe = {
         key: settings.get(key)
         for key in (
-            "prompt",
             "resolution",
             "resolution_shape",
             "seconds",
@@ -216,17 +215,19 @@ def _settings_context(settings: Any) -> str:
         )
         if key in settings
     }
+    if "prompt" in settings:
+        safe["prompt"] = str(settings.get("prompt") or "")[:5000]
     available = settings.get("available_characters")
     if isinstance(available, list):
         safe["available_characters"] = [
             {
                 "id": str(item.get("id") or ""),
                 "name": str(item.get("name") or ""),
-                "description": str(item.get("description") or "")[:500],
+                "description": str(item.get("description") or "")[:240],
                 "voice": bool(item.get("voice")),
                 "image_count": int(item.get("image_count") or 0),
             }
-            for item in available[:50]
+            for item in available[:20]
             if isinstance(item, dict) and item.get("id")
         ]
     return json.dumps(safe, ensure_ascii=False, separators=(",", ":"))
@@ -269,7 +270,7 @@ def stream_chat(messages: Any, *, settings: Any = None) -> Iterator[bytes]:
         messages,
         settings=settings,
         stream=True,
-        max_tokens=1400,
+        max_tokens=1000,
         temperature=0.45,
     )
     try:
@@ -461,7 +462,7 @@ def control(
         settings=settings_payload,
         system_prompt=CONTROL_SYSTEM,
         stream=False,
-        max_tokens=1800,
+        max_tokens=1200,
         temperature=0.15,
     )
     content = _request_control_content(payload)
