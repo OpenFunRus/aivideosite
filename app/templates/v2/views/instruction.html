@@ -1,0 +1,87 @@
+<section class="v2-view" data-v2-view="instruction">
+      <div class="v2-instruction">
+        <div class="v2-instruction-hero">
+          <div>
+            <span class="v2-kicker">AI VIDEO SITE V2 · ОБУЧЕНИЕ</span>
+            <h2>Инструкция</h2>
+            <p>Здесь собрана логика самого сайта и практические правила MiniMax H3. Ниже есть готовая полная инструкция для ChatGPT — одной кнопкой копируется V2-контекст вместе с актуальным H3 machine guide.</p>
+          </div>
+          <button class="v2-primary-button" id="v2-copy-chatgpt" type="button">
+            <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+            Скопировать инструкцию для ChatGPT
+          </button>
+        </div>
+
+        <div class="v2-guide-grid">
+          <article class="v2-guide-card">
+            <span class="v2-guide-number">01</span>
+            <h3>Создать</h3>
+            <p>Обычная генерация: напишите сцену, при необходимости выберите персонажей и добавьте начальный/конечный кадр. Качество, формат, длительность и шаги выбираются только кнопками.</p>
+          </article>
+          <article class="v2-guide-card">
+            <span class="v2-guide-number">02</span>
+            <h3>Продолжить</h3>
+            <p>Для продолжения используется предыдущий ролик. V2 должен сам прочитать его формат и продолжить движение, камеру, направление и состояние сцены без ручной настройки размеров.</p>
+          </article>
+          <article class="v2-guide-card">
+            <span class="v2-guide-number">03</span>
+            <h3>По аудио</h3>
+            <p>Режим для клипов: загружается трек, выбирается герой/визуальный референс и описывается действие — танец, исполнение, мимика, движение ртом и камера.</p>
+          </article>
+          <article class="v2-guide-card">
+            <span class="v2-guide-number">04</span>
+            <h3>Персонажи</h3>
+            <p>Персонажи выбираются по имени через поиск. На основном экране остаются только выбранные. Список может содержать десятки героев; лимиты конкретной H3-задачи проверяются отдельно.</p>
+          </article>
+        </div>
+
+        <article class="v2-guide-wide">
+          <div class="v2-guide-heading">
+            <span><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></span>
+            <div><h3>Как пользоваться волшебной палочкой</h3><p>Пишите человеческим языком — не пытайтесь самостоятельно воспроизводить внутренний формат H3.</p></div>
+          </div>
+          <div class="v2-guide-columns">
+            <div>
+              <strong>До</strong>
+              <p>«Лиса сначала машет рукой, потом хитро улыбается, камера медленно приближается. 10 секунд.»</p>
+            </div>
+            <div>
+              <strong>После</strong>
+              <p>Локальный ИИ превращает запрос в структурированный английский H3 prompt, сохраняет точные русские реплики и учитывает выбранные медиа/персонажей.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="v2-guide-wide">
+          <div class="v2-guide-heading">
+            <span><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
+            <div><h3>MiniMax H3 — главное без перегруза</h3><p>V2 скрывает большую часть терминологии, но эти принципы полезно знать.</p></div>
+          </div>
+          <div class="v2-rule-list">
+            <div><strong>Пишите действия по порядку.</strong><span>Что герой делает сначала, что затем и в каком состоянии заканчивает сцену.</span></div>
+            <div><strong>Камера — конкретно.</strong><span>Один главный тип движения на кадр: static, push in, tracking, pan и т.п.</span></div>
+            <div><strong>Начальный/конечный кадр.</strong><span>Это точные визуальные опорные состояния FL2VA, а не просто «похожие картинки».</span></div>
+            <div><strong>Персонажи и референсы.</strong><span>Нужны для идентичности, внешности, одежды, голоса и других сохраняемых признаков.</span></div>
+            <div><strong>Продолжение видео.</strong><span>Важно сохранять направление движения, позу, скорость, камеру, освещение и географию сцены.</span></div>
+            <div><strong>Звук.</strong><span>Диалог, шум действия, постоянная атмосфера и музыка — разные слои. Для слышимого native H3 audio должен быть включён звук.</span></div>
+            <div><strong>Точные реплики.</strong><span>Русский текст реплик остаётся русским; техническая часть production prompt пишется на английском.</span></div>
+            <div><strong>Не перегружайте.</strong><span>Лучше короткая физически выполнимая сцена, чем десяток действий и движений камеры за 5 секунд.</span></div>
+          </div>
+        </article>
+
+        <article class="v2-chatgpt-card">
+          <div>
+            <span class="v2-kicker">ДЛЯ ВНЕШНЕГО CHATGPT</span>
+            <h3>Полный copy-paste контекст</h3>
+            <p>Кнопка объединяет описание V2, правила работы с разделами сайта, доступные упрощённые настройки и полный актуальный <code>h3-prompting-guide-ai.txt</code>. В ChatGPT можно вставить всё одним сообщением и дальше просить промты под конкретную сцену.</p>
+          </div>
+          <div class="v2-chatgpt-actions">
+            <button class="v2-primary-button" id="v2-copy-chatgpt-bottom" type="button">
+              <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+              Скопировать всё
+            </button>
+            <a class="v2-secondary-button" href="/static/h3-prompting-guide-ai.txt" target="_blank" rel="noopener">Открыть H3 machine guide</a>
+          </div>
+        </article>
+      </div>
+    </section>
