@@ -1893,3 +1893,9 @@ input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-ou
   .topbar-status .status-pill:first-child{display:inline-flex}
   .gpu-status-pill{min-width:76px;padding:0 8px;font-size:11px}
 }
+
+@media(max-width:900px){
+  .gpu-mini-stack{display:none}
+}
+.character-card-body .media-actions{min-height:38px;overflow:visible}
+.character-card-body .media-actions button{height:36px}
