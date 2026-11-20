@@ -153,7 +153,7 @@ CURRENT V2 IMPLEMENTATION NOTES
 
 - Library, Queue, Continue, Audio, Continue Clip, Chat, System and Editor are implemented V2 workspaces, not placeholders.
 - Continue inherits source video dimensions automatically.
-- Continue Clip trims the requested segment from the uploaded master track automatically.
+- Master tracks are stored per user. Continue Clip reuses the saved track ID and trims only the requested time segment automatically.
 - The standalone Chat manages a 32k context budget and drops oldest complete turns from the model request as needed while keeping browser history.
-- The Editor is a sequential Video 1 timeline plus a separate Music track: reorder, trim, split, volume, fade in/out, and FFmpeg export are supported.
+- The Editor is a sequential Video 1 timeline plus a separate Music track: reorder, timeline zoom, 0.5s snap, timecode, trim, split, volume, fade in/out, keyboard playback/delete, and FFmpeg export are supported.
 - V1 remains at / and V2 remains at /v2.
