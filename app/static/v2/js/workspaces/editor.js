@@ -142,6 +142,17 @@
   const projectDuration = () =>
     state.clips.reduce((sum, clip) => sum + effectiveDuration(clip), 0);
 
+  const musicDuration = () => {
+    const available = Math.max(0, state.audio.source_duration - state.audio.trim_start);
+    const fallback = Math.max(0, projectDuration() - state.audio.offset);
+    return state.audio.trim_duration > 0
+      ? Math.min(state.audio.trim_duration, available || state.audio.trim_duration)
+      : (available || fallback);
+  };
+
+  const timelineSpan = () =>
+    Math.max(projectDuration(), state.audio.offset + musicDuration());
+
   const formatTime = (value) => {
     const seconds = Math.max(0, Number(value) || 0);
     const minutes = Math.floor(seconds / 60);
@@ -201,13 +212,13 @@
     showToast("Клип добавлен на таймлайн.");
   };
 
-  const timelineWidth = () => Math.max(900, Math.ceil(projectDuration() * state.zoom) + 80);
+  const timelineWidth = () => Math.max(900, Math.ceil(timelineSpan() * state.zoom) + 80);
 
   const renderRuler = () => {
     const ruler = qs("#v2-editor-ruler");
     const canvas = qs("#v2-editor-timeline-canvas");
     if (!ruler || !canvas) return;
-    const duration = Math.max(projectDuration(), 15);
+    const duration = Math.max(timelineSpan(), 15);
     const width = timelineWidth();
     canvas.style.width = (72 + width) + "px";
     const step = state.zoom >= 24 ? 1 : state.zoom >= 14 ? 2 : 5;
@@ -277,11 +288,7 @@
       root.innerHTML = "";
       return;
     }
-    const available = Math.max(0, state.audio.source_duration - state.audio.trim_start);
-    const fallbackLength = Math.max(0, projectDuration() - state.audio.offset);
-    const duration = state.audio.trim_duration > 0
-      ? Math.min(state.audio.trim_duration, available || state.audio.trim_duration)
-      : (available || fallbackLength);
+    const duration = musicDuration();
     const left = state.audio.offset * state.zoom;
     const width = Math.max(70, duration * state.zoom);
     root.innerHTML = '<div class="v2-editor-music-block" style="left:' + left + 'px;width:' + width +
@@ -323,7 +330,7 @@
       preview.dataset.mediaId = mediaId;
       preview.src = "/media/" + encodeURIComponent(mediaId);
       preview.load?.();
-      pendingSeek = 0;
+      if (pendingSeek === null) pendingSeek = 0;
     }
     if (empty) empty.hidden = true;
     if (preview.readyState >= 1 && pendingSeek !== null) {
