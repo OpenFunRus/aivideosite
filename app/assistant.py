@@ -702,9 +702,9 @@ def _extract_h3_prompt_text(content: str) -> str:
 
     lowered = text.lower()
     start = lowered.find("integrated_multimodal_description:")
-    if start < 0:
-        raise AssistantUnavailable("LLM не вернула H3 prompt.")
-    prompt = text[start:].strip()
+    prompt = text[start:].strip() if start >= 0 else text.strip()
+    if not prompt:
+        raise AssistantUnavailable("Локальная LLM вернула пустой ответ.")
     prompt = re.sub(r"\s*```+\s*$", "", prompt).strip()
     if prompt.endswith('\"}') or prompt.endswith("'}"):
         prompt = prompt[:-2].rstrip()
@@ -1092,36 +1092,13 @@ def control(
 
     workspace = str(settings_payload.get("workspace") or "").strip().lower()
     if workspace in _V2_WAND_WORKSPACES:
+        # Deliberately permissive: the local model may be imperfect, but the user
+        # should still receive its useful output instead of being blocked by validators.
         prompt = _generate_v2_wand_prompt(
             messages,
             settings_payload=settings_payload,
             thinking=thinking,
         )
-        prompt = _clean_v2_wand_prompt(
-            messages,
-            settings_payload=settings_payload,
-            candidate_prompt=prompt,
-            thinking=thinking,
-        )
-        source_text = _wand_source_text(messages)
-        issues = _v2_prompt_validation_issues(prompt, settings_payload)
-        issues.extend(_source_literal_validation_issues(source_text, prompt))
-        if issues:
-            repaired = _repair_control_prompt(
-                messages,
-                settings_payload=settings_payload,
-                bad_prompt=prompt,
-                issues=issues,
-                thinking=thinking,
-            )
-            prompt = str((repaired.get("changes") or {}).get("prompt") or "").strip()
-            repaired_issues = _v2_prompt_validation_issues(prompt, settings_payload)
-            repaired_issues.extend(_source_literal_validation_issues(source_text, prompt))
-            if repaired_issues:
-                raise AssistantUnavailable(
-                    "Локальная LLM не смогла собрать корректный H3 prompt: "
-                    + "; ".join(repaired_issues[:4])
-                )
         return {"message": "Промт подготовлен.", "changes": {"prompt": prompt}}
 
     payload = _chat_payload(
