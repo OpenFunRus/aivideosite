@@ -1969,7 +1969,34 @@ def get_system_status() -> dict:
             "gpus": [],
             "disk_free": disk.free,
             "disk_total": disk.total,
+            "ram_total": None,
+            "ram_available": None,
+            "cpu_load_1m": None,
+            "cpu_load_5m": None,
+            "cpu_load_15m": None,
         }
+
+        try:
+            meminfo: dict[str, int] = {}
+            for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+                if ":" not in line:
+                    continue
+                key, value = line.split(":", 1)
+                parts = value.strip().split()
+                if parts and parts[0].isdigit():
+                    meminfo[key] = int(parts[0]) * 1024
+            status["ram_total"] = meminfo.get("MemTotal")
+            status["ram_available"] = meminfo.get("MemAvailable")
+        except Exception:
+            pass
+
+        try:
+            load_1m, load_5m, load_15m = __import__("os").getloadavg()
+            status["cpu_load_1m"] = round(float(load_1m), 2)
+            status["cpu_load_5m"] = round(float(load_5m), 2)
+            status["cpu_load_15m"] = round(float(load_15m), 2)
+        except Exception:
+            pass
 
         try:
             result = subprocess.run(
