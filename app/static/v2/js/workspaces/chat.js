@@ -48,10 +48,28 @@
     return svg;
   };
 
+  const makeUserIcon = () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "icon");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("viewBox", "0 0 24 24");
+
+    const head = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    head.setAttribute("cx", "12");
+    head.setAttribute("cy", "8");
+    head.setAttribute("r", "4");
+    svg.appendChild(head);
+
+    const shoulders = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    shoulders.setAttribute("d", "M4 21v-2a8 8 0 0 1 16 0v2");
+    svg.appendChild(shoulders);
+    return svg;
+  };
+
   const makeAvatar = (role) => {
     const avatar = document.createElement("div");
     avatar.className = "v2-chat-avatar " + role;
-    avatar.appendChild(makeIcon(role === "user" ? "icon-users" : "icon-player-play"));
+    avatar.appendChild(role === "user" ? makeUserIcon() : makeIcon("icon-player-play"));
     return avatar;
   };
 
