@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import json
 import math
+import mimetypes
 import shutil
 import subprocess
 import threading
@@ -1086,6 +1087,7 @@ def _v2_enqueue_reference_job(
     reference_task: str,
     items: list[dict],
     v2_context: dict | None = None,
+    final_audio: dict | None = None,
 ) -> str:
     compact_prompt = " ".join(prompt.split()) if "\n" not in prompt else prompt.strip()
     if not compact_prompt:
@@ -1132,6 +1134,7 @@ def _v2_enqueue_reference_job(
             "guides": [],
             "control": {"mode": "none"},
             "v2_context": v2_context or {},
+            "final_audio": final_audio or {},
         },
         owner_id=user_id,
     )
@@ -1186,11 +1189,22 @@ def _v2_list_tracks(user_id: str) -> list[dict]:
             audio_path.relative_to(root.resolve())
             if not audio_path.is_file():
                 continue
+            size_bytes = audio_path.stat().st_size
+            duration = data.get("duration")
+            bitrate_kbps = None
+            if duration:
+                try:
+                    bitrate_kbps = round(size_bytes * 8 / float(duration) / 1000)
+                except (TypeError, ValueError, ZeroDivisionError):
+                    bitrate_kbps = None
             result.append(
                 {
                     "id": track_id,
                     "title": str(data.get("title") or stored_filename),
-                    "duration": data.get("duration"),
+                    "duration": duration,
+                    "size_bytes": size_bytes,
+                    "bitrate_kbps": bitrate_kbps,
+                    "extension": audio_path.suffix.lower().lstrip("."),
                     "created_at": data.get("created_at"),
                 }
             )
@@ -1218,6 +1232,7 @@ async def _v2_store_master_track(upload: UploadFile, user_id: str) -> dict:
             "title": original_name,
             "stored_filename": destination.name,
             "duration": duration,
+            "size_bytes": destination.stat().st_size,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
         (root / f"{track_id}.json").write_text(
@@ -1285,6 +1300,17 @@ async def _v2_audio_segment(
     if not destination.is_file():
         raise HTTPException(400, "Не удалось подготовить сегмент аудиотрека.")
     return destination
+
+
+@app.get("/api/v2/tracks/{track_id}/audio")
+async def api_v2_track_audio(
+    track_id: str,
+    user_id: str = Depends(require_user),
+):
+    track = _v2_track_info(track_id, user_id)
+    path = Path(str(track["path"]))
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=media_type)
 
 
 @app.get("/api/v2/state")
@@ -1438,11 +1464,17 @@ async def api_v2_audio(
     seed: Annotated[str, Form()] = "",
     character_ids: Annotated[str, Form()] = "[]",
     track_id: Annotated[str, Form()] = "",
+    audio_start: Annotated[float, Form()] = 0.0,
+    embed_track: Annotated[bool, Form()] = True,
+    generate_scene_audio: Annotated[bool, Form()] = False,
     audio: UploadFile | None = File(None),
     visual_reference: UploadFile | None = File(None),
     user_id: str = Depends(require_user),
 ):
     _v2_validate_simple_settings(seconds, steps)
+    if not math.isfinite(audio_start) or audio_start < 0 or audio_start > 86400:
+        raise HTTPException(400, "Начало аудиофрагмента должно быть неотрицательным.")
+
     width, height = _v2_resolution(quality, ratio)
     selected = _v2_character_ids(character_ids)
     has_upload = audio is not None and bool(audio.filename)
@@ -1460,26 +1492,38 @@ async def api_v2_audio(
             user_id,
             include_voice=False,
         )
+
         if visual_reference is not None and visual_reference.filename:
-            image_path = await save_upload(
+            suffix = Path(visual_reference.filename).suffix.lower()
+            video_exts = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
+            visual_type = "video" if suffix in video_exts else "image"
+            visual_path = await save_upload(
                 visual_reference,
-                kind="image",
-                max_bytes=settings.max_image_upload_bytes,
+                kind=visual_type,
+                max_bytes=(
+                    settings.max_video_upload_bytes
+                    if visual_type == "video"
+                    else settings.max_image_upload_bytes
+                ),
             )
-            temporary_paths.append(image_path)
+            temporary_paths.append(visual_path)
             items.append(
                 {
-                    "type": "image",
-                    "path": str(image_path),
+                    "type": visual_type,
+                    "path": str(visual_path),
                     "temporary": True,
                     "source_name": Path(visual_reference.filename).name,
                     "role": "character",
-                    "retention": "fully_preserved",
+                    "retention": (
+                        "partially_preserved"
+                        if visual_type == "video"
+                        else "fully_preserved"
+                    ),
                     "note": "Primary visual reference for the audio-driven performance.",
                 }
             )
 
-        if not any(item.get("type") == "image" for item in items):
+        if not any(item.get("type") in {"image", "video"} for item in items):
             raise HTTPException(
                 400,
                 "Для генерации по аудио выберите Character или добавьте визуальный референс.",
@@ -1492,41 +1536,81 @@ async def api_v2_audio(
         else:
             track = _v2_track_info(track_id, user_id)
 
+        track_duration = track.get("duration")
+        if track_duration is not None and audio_start >= float(track_duration):
+            raise HTTPException(
+                400,
+                "Начальная позиция находится за пределами master track.",
+            )
+
+        # H3 sometimes returns a few tenths longer than the requested video.
+        # Keep one extra second of source audio so the final mux never ends early.
+        audio_reserve = 1.0
+        requested_audio_duration = float(seconds) + audio_reserve
+        segment_end = audio_start + requested_audio_duration
+        if track_duration is not None:
+            segment_end = min(float(track_duration), segment_end)
+
         segment = await _v2_audio_segment(
             Path(str(track["path"])),
-            start_seconds=0.0,
-            duration=float(seconds),
+            start_seconds=audio_start,
+            duration=requested_audio_duration,
         )
         temporary_paths.append(segment)
+
         items.append(
             {
                 "type": "audio",
                 "path": str(segment),
                 "temporary": True,
-                "source_name": f"{track['title']} [0-{seconds}s]",
+                "source_name": (
+                    f"{track['title']} [{audio_start:g}-{segment_end:g}s]"
+                ),
                 "role": "audio",
-                "retention": "fully_copy",
-                "note": "Driving performance audio. Synchronize visible performance to this audio.",
+                "retention": "reference",
+                "note": (
+                    "Driving performance audio. Synchronize mouth/body motion and rhythm "
+                    "to this clip. The original track is muxed separately when requested."
+                ),
             }
         )
 
+        h3_prompt = prompt
+        if generate_scene_audio and embed_track:
+            h3_prompt = (
+                prompt.rstrip()
+                + "\n\nAudio instruction: generate only diegetic environmental and foley "
+                "sounds for the visible scene. Do not reproduce, sing, hum, or recreate the "
+                "driving music/vocals; the original track will be mixed separately."
+            )
+
         job_id = _v2_enqueue_reference_job(
             user_id=user_id,
-            prompt=prompt,
+            prompt=h3_prompt,
             width=width,
             height=height,
             seconds=seconds,
             steps=steps,
             seed=_v2_seed(seed),
-            generate_audio=True,
+            generate_audio=generate_scene_audio,
             generation_mode="digital_human",
             reference_task="audio_reference",
             items=items,
             v2_context={
                 "workspace": "audio",
                 "track_id": track["id"],
-                "audio_start": 0.0,
-                "audio_end": float(seconds),
+                "audio_start": float(audio_start),
+                "audio_end": float(segment_end),
+                "audio_reserve": audio_reserve,
+                "embed_track": bool(embed_track),
+                "generate_scene_audio": bool(generate_scene_audio),
+            },
+            final_audio={
+                "path": str(segment),
+                "embed_track": bool(embed_track),
+                "mix_scene_audio": bool(generate_scene_audio),
+                "track_volume": 1.0,
+                "scene_volume": 0.45,
             },
         )
         return {
@@ -1535,8 +1619,11 @@ async def api_v2_audio(
             "width": width,
             "height": height,
             "track_id": track["id"],
-            "audio_start": 0.0,
-            "audio_end": float(seconds),
+            "audio_start": float(audio_start),
+            "audio_end": float(segment_end),
+            "audio_reserve": audio_reserve,
+            "embed_track": bool(embed_track),
+            "generate_scene_audio": bool(generate_scene_audio),
         }
     except Exception:
         for path in temporary_paths:
