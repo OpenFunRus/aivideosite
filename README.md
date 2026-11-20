@@ -4,7 +4,7 @@
 
 ## Что уже реализовано
 
-- три независимых password-only профиля: у каждого своя библиотека, очередь/история и browser-настройки;
+- произвольное количество password-only профилей из config: у каждого своя библиотека, очередь/история, Characters, V2 chat/editor drafts и browser-настройки;
 - тёмный адаптивный интерфейс без внешних CDN;
 - локальные SVG-иконки Tabler;
 - четыре H3-режима: FL2VA «Кадры», Ref2VA «Референсы», native «Таймлайн» с exact guide frames и Digital Human;
@@ -33,6 +33,29 @@
 - экспорт таймлайна через FFmpeg в единый MP4 с автоматическим скачиванием и сохранением результата в библиотеке;
 - два независимых H3 ComfyUI backend: primary RTX3090 и secondary RTX2080, плюс сайт;
 - мобильная навигация и responsive layout.
+
+
+## V2 — упрощённый task-first интерфейс
+
+Старый интерфейс сохранён на `/`. Новый V2 доступен на:
+
+```text
+http://IP_ВМ:8000/v2
+```
+
+V2 уже содержит отдельные рабочие пространства:
+
+- **Создать** — 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 сек, 8/12/16 steps, seed, sound, first/last frames, Characters и magic wand;
+- **Продолжить** — Library/upload source, автоматическое наследование размера и Ref2VA video continuation;
+- **По аудио** — Digital Human с driving audio и Character/visual reference;
+- **Продолжить клип** — previous video + master track, автоматическая нарезка следующего аудиосегмента;
+- **Библиотека** и **Очередь** — V2-native просмотр результатов, jobs и занятость обеих GPU;
+- **Монтаж** — последовательный Video 1 timeline, reorder, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
+- **Чат** — streaming Qwen3-8B с Thinking и управлением реальным 32k context budget;
+- **Система** — GPU/VRAM/load/temp, Qwen, ComfyUI, RAM/CPU/disk;
+- **Инструкция** — обучение по сайту/H3 и полный copy-paste context для ChatGPT.
+
+Подробный статус и ограничения: [docs/v2/PLAN.md](docs/v2/PLAN.md).
 
 ## Опциональный локальный ИИ-помощник
 
@@ -76,19 +99,35 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-При первом запуске, если `SITE_USER1_PASSWORD` / `SITE_USER2_PASSWORD` / `SITE_USER3_PASSWORD` не заданы, приложение создаёт три уникальных шестизначных числовых пароля и сохраняет их в:
+Пользователи конфигурируются без жёсткого лимита «три профиля».
 
-```text
-data/.site_users.json
-```
+Поддерживаются:
 
-Файл получает права `0600` и не коммитится, потому что весь `data/` находится в `.gitignore`. Посмотреть текущие локальные пароли:
+- `SITE_USERS_JSON` с произвольным list/dict пользователей;
+- `SITE_USER<N>_PASSWORD` + optional `SITE_USER<N>_ID` / `SITE_USER<N>_NAME` (N=1..100);
+- локальный `data/.site_users.json`, включая старый формат `user1/user2/user3`.
+
+Если ничего не настроено и файла ещё нет, первый запуск по-прежнему создаёт три уникальных шестизначных профиля. Файл получает права `0600`.
 
 ```bash
 cat /opt/ai/aivideosite/data/.site_users.json
 ```
 
-Можно задать свои значения через `.env`, но тогда необходимо указать все три уникальных пароля. Старый `SITE_PASSWORD` больше не используется.
+Пример добавления четвёртого пользователя без изменения кода:
+
+```dotenv
+SITE_USER4_ID=editor
+SITE_USER4_NAME=Editor
+SITE_USER4_PASSWORD=451923
+```
+
+Либо одной переменной:
+
+```dotenv
+SITE_USERS_JSON=[{"id":"openfun","label":"OpenFun","password":"123456"},{"id":"editor","label":"Editor","password":"451923"}]
+```
+
+Пароли должны быть уникальны. Старый `SITE_PASSWORD` больше не используется.
 
 При `SESSION_SECRET=auto` приложение само создаёт случайный постоянный ключ в `data/.session_secret`. Проект рассчитан на локальную сеть и HTTP по IP:port.
 
