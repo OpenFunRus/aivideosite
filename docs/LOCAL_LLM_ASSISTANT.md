@@ -5,12 +5,19 @@
 Цель первого этапа — поднять отдельный локальный OpenAI-compatible API на `127.0.0.1:8090`.
 Сайт пока к нему не подключён. Это позволяет сначала проверить модель отдельно, не затрагивая H3.
 
-## Почему CPU-only
+## Автоматический выбор GPU / CPU
 
-Сервис намеренно запускается с `--n-gpu-layers 0`.
+`llm-assistant.service` запускает не сам `llama-server`, а локальный менеджер `app/llm_assistant_manager.py`.
 
-Так RTX3090 и RTX2080 полностью остаются двум ComfyUI/H3 backend. Модель занимает RAM, а не VRAM.
-Для текущего сервера Q4_K_M выбран как компромисс между скоростью и качеством.
+Приоритет:
+
+1. RTX2080, если она свободна;
+2. RTX3090, если RTX2080 занята, а RTX3090 свободна;
+3. CPU, если обе GPU заняты H3.
+
+Перед запуском H3-задачи worker синхронно резервирует нужную GPU через локальный control API `127.0.0.1:8091`. Если LLM находится на этой карте, менеджер сначала останавливает его и переносит на другую свободную GPU либо CPU. После завершения H3 карта освобождается, и менеджер автоматически возвращает LLM на GPU.
+
+Менеджер также опрашивает ComfyUI `/queue`, поэтому ручная задача, запущенная непосредственно через ComfyUI, тоже делает соответствующую карту недоступной для LLM.
 
 ## 1. Собрать llama.cpp
 
@@ -27,8 +34,10 @@ cd /opt/ai/llama.cpp
 sudo -u openfun git pull --ff-only
 sudo -u openfun cmake -B build \
   -DCMAKE_BUILD_TYPE=Release \
+  -DGGML_CUDA=ON \
   -DGGML_BLAS=ON \
-  -DGGML_BLAS_VENDOR=OpenBLAS
+  -DGGML_BLAS_VENDOR=OpenBLAS \
+  -DCMAKE_CUDA_ARCHITECTURES="75;86"
 sudo -u openfun cmake --build build --config Release -j 18 -t llama-server
 ```
 
@@ -54,12 +63,29 @@ ls -lh /opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf
 
 ## 3. Установить systemd service
 
+Перед установкой остановите ручной тестовый `llama-server`, чтобы порт 8090 был свободен.
+
 После обновления `aivideosite`:
 
 ```bash
+sudo systemctl stop llm-assistant.service 2>/dev/null || true
+pkill -f '/opt/ai/llama.cpp/build/bin/llama-server.*--port 8090' || true
+
 sudo cp /opt/ai/aivideosite/systemd/llm-assistant.service /etc/systemd/system/llm-assistant.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now llm-assistant.service
+```
+
+Проверить выбранное устройство:
+
+```bash
+curl -sS http://127.0.0.1:8091/status
+```
+
+Например:
+
+```json
+{"ok":true,"target":"RTX2080","reserved_gpus":[],"llama_alive":true,"llama_port":8090}
 ```
 
 Проверить:
