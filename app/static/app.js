@@ -124,7 +124,7 @@
     "Длительность":"Продолжительность ролика. Чем длиннее видео, тем выше расход времени и риск дрейфа персонажей.",
     "FPS":"Количество кадров в секунду. 24 FPS — основной безопасный вариант; больше FPS означает больше генерируемых кадров.",
     "Шаги":"4/8 — быстрые Turbo-профили, 12/16/20 — Base-модель. Для Ref2VA Turbo используется только 4 шага.",
-    "Seed":"Сид генерации. -1 создаёт новый случайный сид; конкретное число помогает повторять близкий результат.",
+    "Сид":"Сид генерации. -1 создаёт новый случайный сид; конкретное число помогает повторять близкий результат.",
     "Имя":"Короткое имя сохранённого персонажа для выбора в генераторе.",
     "Неизменяемые особенности":"Постоянные черты: лицо, волосы/шерсть, одежда, пропорции и характерные аксессуары.",
     "Референс-изображения":"Добавьте 1–4 изображения одного персонажа. Лучше использовать разные понятные ракурсы без сильных перекрытий.",
@@ -136,6 +136,17 @@
     "Аудиодорожка":"Загрузите внешний аудиофайл, который будет добавлен к выбранному ролику.",
     "Начало дорожки, сек":"На какой секунде видео должна начаться добавляемая аудиодорожка."
   };
+  const MODE_HELP={
+    "Кадры":"FL2VA: генерация без референса, по первому кадру, последнему кадру или по паре Первый → Последний.",
+    "Референсы":"Ref2VA: используйте изображения, видео, аудио и сохранённых персонажей как смысловые референсы.",
+    "Таймлайн":"Точные кадры через MiniMaxH3AddGuide: каждому guide-изображению задаётся конкретная секунда ролика.",
+    "Digital Human":"Режим цифрового персонажа: нужен визуальный референс и ровно одна управляющая аудиодорожка."
+  };
+  const enhanceModeHelpTips=()=>qsa(".generation-mode-switch label > span").forEach(card=>{
+    if(qs(".mode-help-tip",card))return;const key=qs("strong",card)?.textContent.trim(),help=MODE_HELP[key];if(!help)return;
+    const tip=document.createElement("span");tip.className="help-tip mode-help-tip";tip.tabIndex=0;tip.setAttribute("role","button");tip.setAttribute("aria-label","Подсказка: "+key);tip.dataset.tip=help;tip.textContent="?";
+    tip.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();tip.focus()});card.appendChild(tip);
+  });
   const enhanceHelpTips=()=>qsa(".field-label").forEach(label=>{
     if(qs(".help-tip",label))return;
     const key=label.textContent.replace(/\s+/g," ").trim(),help=FIELD_HELP[key];if(!help)return;
@@ -159,7 +170,7 @@
   const enhanceModernFileInputs=()=>qsa('input[type="file"]').forEach(input=>{
     if(input.closest(".upload-card")||input.closest(".editor-audio-upload"))return;
     const ref=input.closest(".reference-upload"),field=input.closest(".field");let root=ref;
-    if(ref){ref.classList.add("is-modern-upload");if(!qs(".modern-upload-footer",ref)){const footer=document.createElement("span");footer.className="modern-upload-footer";const cta=document.createElement("span");cta.className="modern-upload-cta";cta.innerHTML=icon("photo")+"<span>Выбрать или перетащить</span>";const count=document.createElement("span");count.className="modern-upload-count";count.textContent="Файлы не выбраны";footer.append(cta,count);const previews=document.createElement("span");previews.className="modern-upload-previews";ref.append(footer,previews)}}
+    if(ref){ref.classList.add("is-modern-upload");if(!qs(".modern-upload-footer",ref)){const footer=document.createElement("span");footer.className="modern-upload-footer";const cta=document.createElement("span");cta.className="modern-upload-cta";const uploadIcon=input.accept.includes("video")?"video":input.accept.includes("audio")?"microphone":"photo";cta.innerHTML=icon(uploadIcon)+"<span>Выбрать или перетащить</span>";const count=document.createElement("span");count.className="modern-upload-count";count.textContent="Файлы не выбраны";footer.append(cta,count);const previews=document.createElement("span");previews.className="modern-upload-previews";ref.append(footer,previews)}}
     else if(field){field.classList.add("file-field-enhanced");root=field;if(!qs(".file-picker-surface",field)){const surface=document.createElement("span");surface.className="file-picker-surface";const pi=document.createElement("span");pi.className="file-picker-icon";pi.innerHTML=icon(input.accept.includes("audio")?"microphone":"photo");const pc=document.createElement("span");pc.className="file-picker-copy";const title=document.createElement("strong");title.textContent=input.multiple?"Выбрать файлы":"Выбрать файл";const small=document.createElement("small");small.textContent=input.multiple?"Можно выбрать несколько файлов":"Выберите один файл";pc.append(title,small);const previews=document.createElement("span");previews.className="modern-upload-previews";surface.append(pi,pc,previews);input.after(surface)}}
     if(!root||input.dataset.modernUploadReady==="1")return;input.dataset.modernUploadReady="1";
     ["dragenter","dragover"].forEach(t=>input.addEventListener(t,()=>root.classList.add("is-dragging")));["dragleave","drop"].forEach(t=>input.addEventListener(t,()=>root.classList.remove("is-dragging")));
@@ -2520,6 +2531,7 @@
   });
 
   enhanceHelpTips();
+  enhanceModeHelpTips();
   enhanceModernFileInputs();
 
   setInterval(updateLiveJobTimers, 1000);
