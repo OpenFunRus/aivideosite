@@ -88,7 +88,8 @@
     const cpuStats = '<div class="v2-system-stat-stack"><div><span>Load 1m</span><strong>' +
       (finite(sys.cpu_load_1m) ? sys.cpu_load_1m : '—') + '</strong></div><div><span>Load 5m</span><strong>' +
       (finite(sys.cpu_load_5m) ? sys.cpu_load_5m : '—') + '</strong></div></div>';
-    return '<article class="v2-system-card">' + cardHead('RAM / CPU', 'activity', true) +
+    const online = finite(sys.ram_total) || finite(sys.cpu_load_1m);
+    return '<article class="v2-system-card">' + cardHead('RAM / CPU', 'activity', online) +
       '<div class="v2-system-card-body v2-system-dual">' +
       '<div class="v2-system-mini">' + ring(ramPct, 'RAM') + ramStats + '</div>' +
       '<div class="v2-system-mini">' + ring(cpuPct, 'CPU') + cpuStats + '</div>' +
@@ -209,10 +210,12 @@
     if (!root || !W.snapshot) return;
     const sys = W.snapshot.system || {};
     const assistant = W.snapshot.assistant || {};
-    const gpus = Array.isArray(sys.gpus) ? sys.gpus.slice().sort((a,b) => Number(a.index)-Number(b.index)) : [];
+    const gpus = Array.isArray(sys.gpus) ? sys.gpus : [];
+    const gpu0 = gpus.find((item) => Number(item.index) === 0);
+    const gpu1 = gpus.find((item) => Number(item.index) === 1);
     root.innerHTML =
-      gpuCard(gpus[0]) +
-      gpuCard(gpus[1]) +
+      gpuCard(gpu0) +
+      gpuCard(gpu1) +
       llmCard(assistant) +
       comfyCard(sys) +
       ramCpuCard(sys) +
