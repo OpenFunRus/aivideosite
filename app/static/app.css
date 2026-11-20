@@ -2210,3 +2210,15 @@ input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-ou
 .assistant-panel{
   max-width:calc(100vw - 28px);
 }
+
+
+.assistant-thinking-button.active{
+  color:#d9e8ff;
+  background:rgba(79,140,255,.2);
+  border-color:rgba(95,153,255,.62);
+  box-shadow:0 0 0 2px rgba(79,140,255,.08),inset 0 0 18px rgba(79,140,255,.08);
+}
+.assistant-thinking-button.active .icon{
+  color:#7eb0ff;
+  filter:drop-shadow(0 0 5px rgba(79,140,255,.65));
+}
