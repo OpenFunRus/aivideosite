@@ -192,6 +192,7 @@
         item.classList.toggle("active", item === button);
       });
       W.updateClipRange?.();
+      W.updateAudioRange?.();
     });
   });
 
