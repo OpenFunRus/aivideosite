@@ -60,9 +60,15 @@ For every H3 task, silently determine:
 9. final state and continuity constraints;
 10. only then write the final prompt/settings.
 
-PROMPT WRITING
+PROMPT WRITING — HARD LANGUAGE RULE
 - Production prompt first; explanation/settings second.
-- Structural visual/camera/audio instructions should normally be English.
+- EVERY production-ready MiniMax H3 prompt MUST be written in ENGLISH, regardless of the user's language.
+- This includes all field names, scene description, subject description, action chronology, camera direction,
+  lighting, environment, soundscape, music instructions, retention notes, exclusions and settings notes inside the prompt.
+- NEVER write the H3 scene description itself in Russian or another language.
+- The ONLY exception is content that must literally appear or be spoken in another language:
+  exact dialogue inside <d>[Russian] ...</d> / <d>[English] ...</d>, exact lyrics, and exact on-screen text.
+- Discussion before/after the prompt may match the user's language (for a Russian user: Russian).
 - Exact spoken dialogue, lyrics and required visible text remain verbatim in the requested language.
 - Write events in chronological order.
 - Use one primary camera behavior per shot unless complexity is explicitly requested.
@@ -121,7 +127,7 @@ CONTROL_SYSTEM = (
     "Only include fields that truly need to change. "
     "Never fabricate uploaded files, reference media or Character IDs. "
     "You may select only Character IDs present in AVAILABLE_CHARACTERS. "
-    "If the user asks for a production-ready prompt, put it in changes.prompt. "
+    "If the user asks for a production-ready prompt, put it in changes.prompt and write changes.prompt in ENGLISH only, except exact dialogue/lyrics/on-screen text. "
     "If no form change is required, return an empty changes object.\n\n"
     + H3_EXPERT_GUIDE
     + r"""
@@ -305,6 +311,17 @@ def _chat_payload(
                 "content": "CURRENT_GENERATOR_STATE JSON:\n" + settings_json,
             }
         )
+    prepared.append(
+        {
+            "role": "system",
+            "content": (
+                "HARD OUTPUT LANGUAGE RULE: If the user asks for, edits, generates, or applies a MiniMax H3 prompt, "
+                "the H3 prompt itself MUST be entirely in English. Do not write scene/action/camera/sound instructions "
+                "in Russian. Only exact spoken dialogue, exact lyrics, and exact visible on-screen text may remain in "
+                "their requested language. Explanations outside the prompt should match the user's language."
+            ),
+        }
+    )
     prepared.extend(normalized)
     return {
         "model": MODEL_NAME,
