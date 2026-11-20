@@ -160,9 +160,14 @@ Numeric text field.
 
 ### Audio
 
-Single checkbox/toggle:
+Ordinary Create/Continue workspaces may keep a simple **Генерировать звук** toggle.
 
-- **Генерировать звук**
+The dedicated **По аудио** workspace is different because the selected track is both a driving reference and an optional final soundtrack. It therefore has two explicit independent toggles:
+
+- **Вклеить трек в видео** — mux the original selected audio fragment into the final MP4; default ON.
+- **Фоновые звуки H3** — ask H3 to generate diegetic/foley scene audio; default OFF.
+
+If both are enabled, the original selected fragment is mixed with H3 scene audio after generation. Driving audio is always supplied to Digital Human for motion/lip/rhythm synchronization regardless of these final-output toggles.
 
 ### Removed from ordinary V2 generation UI
 
@@ -677,8 +682,15 @@ Acceptance:
 
 ### Stage 7 — Audio-driven workspace
 
-- modern audio uploader/player;
+- shared prompt composer first;
+- saved/uploaded master track selection;
+- real waveform preview;
+- fixed 5/10/15-second draggable selection block driven by the global duration buttons;
+- automatic end = start + generation duration + 1 second reserve;
+- compact read-only start/end information;
 - Character/reference selection;
+- optional image or short-video visual reference;
+- original-track mux toggle separate from H3 scene-audio generation;
 - H3 audio-driven generation;
 - magic-wand prompt improvement;
 - simple relevant settings only.
