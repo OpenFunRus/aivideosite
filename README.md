@@ -48,9 +48,9 @@ V2 уже содержит отдельные рабочие пространс�
 - **Создать** — 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 сек, 8/12/16 steps, seed, sound, first/last frames, Characters и magic wand;
 - **Продолжить** — Library/upload source, автоматическое наследование размера и Ref2VA video continuation;
 - **По аудио** — Digital Human с driving audio и Character/visual reference;
-- **Продолжить клип** — previous video + master track, автоматическая нарезка следующего аудиосегмента;
+- **Продолжить клип** — previous video + сохранённый per-user master track, автоматическая нарезка следующего аудиосегмента и перенос позиции в следующий клип;
 - **Библиотека** и **Очередь** — V2-native просмотр результатов, jobs и занятость обеих GPU;
-- **Монтаж** — последовательный Video 1 timeline, reorder, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
+- **Монтаж** — последовательный Video 1 timeline, reorder, zoom/snap/timecode, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
 - **Чат** — streaming Qwen3-8B с Thinking и управлением реальным 32k context budget;
 - **Система** — GPU/VRAM/load/temp, Qwen, ComfyUI, RAM/CPU/disk;
 - **Инструкция** — обучение по сайту/H3 и полный copy-paste context для ChatGPT.
