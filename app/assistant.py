@@ -877,23 +877,15 @@ def _repair_control_prompt(
 ) -> dict[str, Any]:
     source_text = _wand_source_text(original_messages)
     repair_system = (
-        "You are a dedicated H3 PROMPT REPAIR agent. You have exactly one job: repair an invalid "
-        "changes.prompt. You are NOT a general form-control agent. "
-        "Return ONLY JSON and ALWAYS return a non-empty prompt. Preferred exact shape: "
-        "{\"message\":\"исправлено\",\"changes\":{\"prompt\":\"...\"}}. "
-        "Do not return empty changes. Do not change any form setting. "
-        "The repaired prompt MUST contain exactly these three fields in this order: "
+        "You are a dedicated H3 PROMPT REPAIR agent. Return ONLY the repaired H3 prompt text. "
+        "No JSON, no Markdown, no explanation. The prompt MUST contain exactly three fields in order: "
         "integrated_multimodal_description, overall_soundscape, non_diegetic_music. "
-        "Preserve every concrete SOURCE fact exactly: numeric age, counts, directions, handedness, "
-        "props, weather, requested actions and exact dialogue. Remove every detail that is not supported "
-        "by SOURCE. Never invent thunder, footsteps, traffic, wind, extra people, extra actions, objects, "
-        "emotions, sounds, music, or a specific source for an unspecified noise. "
-        "Use English for H3 instructions, but keep exact dialogue/lyrics/visible text in their original language. "
-        "[Shot 1] has no timestamp. Any later camera cut/switch MUST start a new [Shot N] with an exact "
-        "increasing timestamp that fits CURRENT_GENERATOR_STATE.seconds. "
-        "If generate_audio is false, both sound fields must be exactly N/A. "
-        "If music was not requested, non_diegetic_music must be N/A. "
-        "Do not output subject_definitions, summary, retention_analysis or detailed_description."
+        "Preserve every concrete SOURCE fact exactly and remove every unsupported detail. "
+        "Never invent thunder, footsteps, traffic, wind, extra actions, people, objects, music, emotions, "
+        "or a specific source for an unspecified noise. Keep exact dialogue/lyrics/visible text unchanged. "
+        "[Shot 1] has no timestamp; every later cut/switch uses a new timed [Shot N] inside the selected duration. "
+        "If generate_audio is false, both sound fields are N/A. If music was not requested, non_diegetic_music is N/A. "
+        "Do not output low-level Ref2VA wrapper fields."
     )
     repair_user = (
         "SOURCE USER REQUEST:\n"
@@ -902,7 +894,7 @@ def _repair_control_prompt(
         + "\n- ".join(issues[:12])
         + "\n\nINVALID H3 PROMPT:\n"
         + bad_prompt[:16000]
-        + "\n\nReturn the repaired prompt now. changes.prompt is mandatory."
+        + "\n\nReturn only the corrected H3 prompt."
     )
     payload = _chat_payload(
         [{"role": "user", "content": repair_user}],
@@ -913,30 +905,8 @@ def _repair_control_prompt(
         temperature=0.0,
         thinking=thinking,
     )
-    decoded = _decode_control_json(_request_control_content(payload))
-
-    changes = decoded.get("changes")
-    if isinstance(changes, dict):
-        prompt = changes.get("prompt")
-        if isinstance(prompt, str) and prompt.strip():
-            return {
-                "message": str(decoded.get("message") or "исправлено"),
-                "changes": {"prompt": prompt.strip()},
-            }
-
-    # Be tolerant of a small local model returning the right payload one level too high.
-    prompt = decoded.get("prompt")
-    if isinstance(prompt, str) and prompt.strip():
-        return {
-            "message": str(decoded.get("message") or "исправлено"),
-            "changes": {"prompt": prompt.strip()},
-        }
-
-    raise AssistantUnavailable(
-        "Локальная LLM не вернула исправленный changes.prompt после проверки."
-    )
-
-
+    prompt = _extract_h3_prompt_text(_request_plain_content(payload))
+    return {"message": "исправлено", "changes": {"prompt": prompt}}
 
 def _wand_source_text(messages: Any) -> str:
     normalized = normalize_messages(messages)
