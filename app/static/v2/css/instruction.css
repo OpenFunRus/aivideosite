@@ -1,0 +1,29 @@
+.v2-instruction{max-width:1220px}
+.v2-instruction-hero{display:flex;justify-content:space-between;align-items:flex-end;gap:30px;padding:4px 2px 24px}
+.v2-instruction-hero h2{font-size:38px;letter-spacing:-.04em;margin:5px 0 10px}
+.v2-instruction-hero p{max-width:760px;color:#969daf;line-height:1.65;margin:0}
+.v2-guide-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.v2-guide-card{position:relative;min-height:205px;padding:20px;border:1px solid #292f41;border-radius:17px;background:linear-gradient(180deg,#171a26,#11131c)}
+.v2-guide-card h3{margin:30px 0 10px;font-size:18px}
+.v2-guide-card p{margin:0;color:#9198aa;font-size:12px;line-height:1.65}
+.v2-guide-number{position:absolute;top:18px;right:18px;font-size:11px;color:#6f7690}
+.v2-guide-wide{padding:22px;margin-top:16px}
+.v2-guide-heading{display:flex;gap:13px;align-items:center}
+.v2-guide-heading>span{width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:var(--accent-soft);color:#a487ff}
+.v2-guide-heading h3,.v2-guide-heading p{margin:0}
+.v2-guide-heading h3{font-size:18px}
+.v2-guide-heading p{font-size:12px;color:#888fa3;margin-top:4px}
+.v2-guide-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
+.v2-guide-columns>div{padding:16px;border:1px solid #292f41;border-radius:13px;background:#11141d}
+.v2-guide-columns strong{font-size:11px;color:#9c82ff;text-transform:uppercase;letter-spacing:.08em}
+.v2-guide-columns p{color:#b3b8c7;line-height:1.6;font-size:13px;margin:8px 0 0}
+.v2-rule-list{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:20px;background:#292f41;border:1px solid #292f41;border-radius:14px;overflow:hidden}
+.v2-rule-list>div{padding:17px;background:#12151f}
+.v2-rule-list strong,.v2-rule-list span{display:block}
+.v2-rule-list strong{font-size:13px}
+.v2-rule-list span{font-size:11px;color:#8d94a8;line-height:1.55;margin-top:5px}
+.v2-chatgpt-card{display:flex;align-items:center;justify-content:space-between;gap:28px;margin-top:16px;padding:24px;border-color:#4c3b8a;background:radial-gradient(circle at 90% 20%,rgba(117,87,255,.13),transparent 34%),linear-gradient(180deg,#171a26,#11131c)}
+.v2-chatgpt-card h3{font-size:21px;margin:5px 0 8px}
+.v2-chatgpt-card p{max-width:760px;color:#969daf;font-size:12px;line-height:1.65;margin:0}
+.v2-chatgpt-card code{color:#b29dff}
+.v2-chatgpt-actions{display:flex;flex-direction:column;gap:10px;min-width:250px}
