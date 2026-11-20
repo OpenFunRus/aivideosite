@@ -777,30 +777,66 @@ def _repair_control_prompt(
     issues: list[str],
     thinking: bool,
 ) -> dict[str, Any]:
-    normalized = normalize_messages(original_messages)
-    correction = (
-        "Your previous changes.prompt failed server validation. Correct it; do not explain. "
-        "Return ONLY the CONTROL JSON object with a corrected changes.prompt and a very short message. "
-        "Preserve the user's concrete facts exactly and REMOVE any invented details. "
-        "Do not change numeric ages/counts/directions/props/dialogue. "
-        "All three canonical fields are mandatory. "
-        "If a camera cut/switch is described, use a new timed [Shot N].\n\n"
-        "VALIDATION / FAITHFULNESS ERRORS:\n- "
-        + "\n- ".join(issues)
-        + "\n\nPREVIOUS INVALID PROMPT:\n"
-        + bad_prompt[:16000]
+    source_text = _wand_source_text(original_messages)
+    repair_system = (
+        "You are a dedicated H3 PROMPT REPAIR agent. You have exactly one job: repair an invalid "
+        "changes.prompt. You are NOT a general form-control agent. "
+        "Return ONLY JSON and ALWAYS return a non-empty prompt. Preferred exact shape: "
+        "{\"message\":\"исправлено\",\"changes\":{\"prompt\":\"...\"}}. "
+        "Do not return empty changes. Do not change any form setting. "
+        "The repaired prompt MUST contain exactly these three fields in this order: "
+        "integrated_multimodal_description, overall_soundscape, non_diegetic_music. "
+        "Preserve every concrete SOURCE fact exactly: numeric age, counts, directions, handedness, "
+        "props, weather, requested actions and exact dialogue. Remove every detail that is not supported "
+        "by SOURCE. Never invent thunder, footsteps, traffic, wind, extra people, extra actions, objects, "
+        "emotions, sounds, music, or a specific source for an unspecified noise. "
+        "Use English for H3 instructions, but keep exact dialogue/lyrics/visible text in their original language. "
+        "[Shot 1] has no timestamp. Any later camera cut/switch MUST start a new [Shot N] with an exact "
+        "increasing timestamp that fits CURRENT_GENERATOR_STATE.seconds. "
+        "If generate_audio is false, both sound fields must be exactly N/A. "
+        "If music was not requested, non_diegetic_music must be N/A. "
+        "Do not output subject_definitions, summary, retention_analysis or detailed_description."
     )
-    repair_messages = normalized + [{"role": "user", "content": correction}]
+    repair_user = (
+        "SOURCE USER REQUEST:\n"
+        + source_text[:12000]
+        + "\n\nVALIDATION / FAITHFULNESS ERRORS:\n- "
+        + "\n- ".join(issues[:12])
+        + "\n\nINVALID H3 PROMPT:\n"
+        + bad_prompt[:16000]
+        + "\n\nReturn the repaired prompt now. changes.prompt is mandatory."
+    )
     payload = _chat_payload(
-        repair_messages,
+        [{"role": "user", "content": repair_user}],
         settings=settings_payload,
-        system_prompt=CONTROL_SYSTEM,
+        system_prompt=repair_system,
         stream=False,
-        max_tokens=2600 if thinking else 1600,
-        temperature=0.05,
+        max_tokens=2800 if thinking else 1800,
+        temperature=0.0,
         thinking=thinking,
     )
-    return _decode_control_json(_request_control_content(payload))
+    decoded = _decode_control_json(_request_control_content(payload))
+
+    changes = decoded.get("changes")
+    if isinstance(changes, dict):
+        prompt = changes.get("prompt")
+        if isinstance(prompt, str) and prompt.strip():
+            return {
+                "message": str(decoded.get("message") or "исправлено"),
+                "changes": {"prompt": prompt.strip()},
+            }
+
+    # Be tolerant of a small local model returning the right payload one level too high.
+    prompt = decoded.get("prompt")
+    if isinstance(prompt, str) and prompt.strip():
+        return {
+            "message": str(decoded.get("message") or "исправлено"),
+            "changes": {"prompt": prompt.strip()},
+        }
+
+    raise AssistantUnavailable(
+        "Локальная LLM не вернула исправленный changes.prompt после проверки."
+    )
 
 
 
