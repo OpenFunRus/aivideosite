@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0c14">
+  <title>AI Video Site V2</title>
+  <link rel="stylesheet" href="/static/v2.css?v=1">
+</head>
+<body>
+<div class="v2-app" data-user-id="{{ current_user.id }}">
+  <aside class="v2-sidebar">
+    <a class="v2-brand" href="/v2" aria-label="AI Video Site V2">
+      <span class="v2-brand-mark">
+        <svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>
+      </span>
+      <span>
+        <strong>AI Video Site <em>V2</em></strong>
+        <small>MiniMax H3 · Локальный ИИ</small>
+      </span>
+    </a>
+
+    <nav class="v2-nav" aria-label="Разделы V2">
+      <button class="v2-nav-item active" type="button" data-v2-nav="create">
+        <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg><span>Создать</span>
+      </button>
+      <button class="v2-nav-item" type="button" data-v2-nav="continue">
+        <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><span>Продолжить</span>
+      </button>
+      <button class="v2-nav-item" type="button" data-v2-nav="audio">
+        <svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><span>По аудио</span>
+      </button>
+      <button class="v2-nav-item" type="button" data-v2-nav="clip">
+        <svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg><span>Продолжить клип</span>
+      </button>
+      <button class="v2-nav-item" type="button" data-v2-nav="library">
+        <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg><span>Библиотека</span>
+      </button>
+      <button class="v2-nav-item" type="button" data-v2-nav="queue">
+        <svg class="icon"><use href="/static/icons.svg#icon-stack"></use></svg><span>Очередь</span>
+      </button>
+      <button class="v2-nav-item" type="button" data-v2-nav="editor">
+        <svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg><span>Монтаж</span>
+      </button>
+      <button class="v2-nav-item" type="button" data-v2-nav="chat">
+        <svg class="icon"><use href="/static/icons.svg#icon-brain"></use></svg><span>Чат</span>
+      </button>
+      <button class="v2-nav-item" type="button" data-v2-nav="system">
+        <svg class="icon"><use href="/static/icons.svg#icon-activity"></use></svg><span>Система</span>
+      </button>
+      <button class="v2-nav-item" type="button" data-v2-nav="instruction">
+        <svg class="icon"><use href="/static/icons.svg#icon-info"></use></svg><span>Инструкция</span>
+      </button>
+    </nav>
+
+    <div class="v2-sidebar-footer">
+      <a class="v2-v1-link" href="/">Открыть старую версию</a>
+      <div class="v2-user">
+        <span class="v2-user-avatar">{{ current_user.label[:1] | upper }}</span>
+        <span><strong>{{ current_user.label }}</strong><small>{{ current_user.id }}</small></span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="v2-main">
+    <header class="v2-topbar">
+      <div>
+        <span class="v2-eyebrow">AI VIDEO SITE V2</span>
+        <h1 id="v2-page-title">Создать видео</h1>
+      </div>
+      <div class="v2-topbar-status">
+        <div class="v2-gpu-pill" id="v2-gpu-0"><span class="status-dot"></span><span>GPU 0 · проверка</span></div>
+        <div class="v2-gpu-pill" id="v2-gpu-1"><span class="status-dot"></span><span>GPU 1 · проверка</span></div>
+        <span class="v2-draft-state" id="v2-draft-state">Черновик локально</span>
+      </div>
+    </header>
+
+    <section class="v2-view active" data-v2-view="create">
+      <form class="v2-create" id="v2-create-form">
+        <section class="v2-prompt-card">
+          <div class="v2-prompt-head">
+            <label for="v2-prompt">Что должно происходить в видео?</label>
+            <span id="v2-prompt-count">0 / 16 000</span>
+          </div>
+          <div class="v2-prompt-field">
+            <textarea id="v2-prompt" name="prompt" maxlength="16000" placeholder="Например: девушка стоит у окна, поворачивается к камере и улыбается..."></textarea>
+            <button class="v2-wand-button" id="v2-wand" type="button" title="Улучшить промт через локальный ИИ">
+              <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+            </button>
+          </div>
+          <p>Волшебная палочка перепишет обычное описание под MiniMax H3 и переведёт инструкции на английский, сохранив точные реплики.</p>
+        </section>
+
+        <section class="v2-section-card v2-character-section">
+          <div class="v2-section-title">
+            <div>
+              <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+              <span><strong>Персонажи</strong><small>Выберите сохранённых героев по имени</small></span>
+            </div>
+            <div class="v2-title-actions">
+              <span id="v2-character-count">Выбрано: 0</span>
+              <button class="v2-secondary-button" id="v2-open-characters" type="button">+ Добавить персонажа</button>
+            </div>
+          </div>
+          <div class="v2-selected-characters" id="v2-selected-characters">
+            <span class="v2-empty-inline">Персонажи не выбраны</span>
+          </div>
+        </section>
+
+        <div class="v2-media-grid">
+          <label class="v2-upload-card" data-v2-upload="first">
+            <input type="file" id="v2-first-frame" accept="image/png,image/jpeg,image/webp">
+            <span class="v2-upload-title"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Начальный кадр</span>
+            <span class="v2-upload-body">
+              <img class="v2-upload-preview" alt="Начальный кадр" hidden>
+              <span class="v2-upload-placeholder">
+                <svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>
+                <strong>Перетащите изображение</strong>
+                <small>или нажмите, чтобы выбрать · JPG, PNG, WEBP</small>
+              </span>
+            </span>
+            <button class="v2-upload-remove" type="button" aria-label="Убрать начальный кадр" hidden>
+              <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+            </button>
+          </label>
+
+          <label class="v2-upload-card" data-v2-upload="last">
+            <input type="file" id="v2-last-frame" accept="image/png,image/jpeg,image/webp">
+            <span class="v2-upload-title"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Конечный кадр</span>
+            <span class="v2-upload-body">
+              <img class="v2-upload-preview" alt="Конечный кадр" hidden>
+              <span class="v2-upload-placeholder">
+                <svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>
+                <strong>Перетащите изображение</strong>
+                <small>или нажмите, чтобы выбрать · JPG, PNG, WEBP</small>
+              </span>
+            </span>
+            <button class="v2-upload-remove" type="button" aria-label="Убрать конечный кадр" hidden>
+              <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+            </button>
+          </label>
+        </div>
+
+        <section class="v2-settings-card">
+          <div class="v2-setting-group">
+            <span class="v2-setting-label">Качество</span>
+            <div class="v2-segmented" data-setting="quality">
+              <button type="button" data-value="480">480p</button>
+              <button class="active" type="button" data-value="720">720p</button>
+              <button type="button" data-value="1080">1080p</button>
+            </div>
+          </div>
+          <div class="v2-setting-group">
+            <span class="v2-setting-label">Формат</span>
+            <div class="v2-segmented" data-setting="ratio">
+              <button type="button" data-value="1:1">1:1</button>
+              <button class="active" type="button" data-value="16:9">16:9</button>
+              <button type="button" data-value="9:16">9:16</button>
+            </div>
+          </div>
+          <div class="v2-setting-group">
+            <span class="v2-setting-label">Длительность</span>
+            <div class="v2-segmented" data-setting="seconds">
+              <button type="button" data-value="5">5 сек</button>
+              <button class="active" type="button" data-value="10">10 сек</button>
+              <button type="button" data-value="15">15 сек</button>
+            </div>
+          </div>
+          <div class="v2-setting-group">
+            <span class="v2-setting-label">Шаги</span>
+            <div class="v2-segmented" data-setting="steps">
+              <button type="button" data-value="8">8</button>
+              <button class="active" type="button" data-value="12">12</button>
+              <button type="button" data-value="16">16</button>
+            </div>
+          </div>
+          <div class="v2-settings-bottom">
+            <label class="v2-seed-field">
+              <span># Seed</span>
+              <input id="v2-seed" type="number" inputmode="numeric" placeholder="Авто (-1)">
+            </label>
+            <label class="v2-check">
+              <input id="v2-audio" type="checkbox" checked>
+              <span class="v2-check-mark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>
+              <span>Генерировать звук</span>
+            </label>
+          </div>
+        </section>
+
+        <div class="v2-generate-row">
+          <span class="v2-stage-note">V2 shell · генерация будет подключена на следующем этапе</span>
+          <button class="v2-primary-button" id="v2-generate" type="button">
+            <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
+            Сгенерировать видео
+          </button>
+        </div>
+      </form>
+    </section>
+
+    {% set placeholders = [
+      ('continue', 'Продолжить видео', 'Выбор ролика из библиотеки или загрузка видео, автоматическое наследование формата и промт продолжения.'),
+      ('audio', 'Видео по аудио', 'Музыкальные клипы, танец, исполнение и движение ртом под загруженную дорожку.'),
+      ('clip', 'Продолжить клип', 'Следующий фрагмент музыкального клипа с сохранением позиции трека и визуальной непрерывности.'),
+      ('library', 'Библиотека', 'Чистая галерея результатов, промты, параметры, повторное использование и отправка в монтаж.'),
+      ('queue', 'Очередь', 'Задачи, таймеры, пользователь и реальная занятость RTX3090 / RTX2080.'),
+      ('editor', 'Монтаж', 'Полноценный таймлайн с видео- и аудиодорожками, trim, split, volume и экспортом.'),
+      ('chat', 'Чат', 'Отдельный локальный Qwen-чат с контролем 32k контекста и автоматическим забыванием старых ходов.'),
+      ('system', 'Система', 'GPU, VRAM, LLM placement, ComfyUI, RAM, диск и состояние сервисов.')
+    ] %}
+    {% for key, title, text in placeholders %}
+    <section class="v2-view" data-v2-view="{{ key }}">
+      <div class="v2-placeholder">
+        <span class="v2-placeholder-icon"><svg class="icon"><use href="/static/icons.svg#icon-stack"></use></svg></span>
+        <span class="v2-kicker">СЛЕДУЮЩИЙ ЭТАП V2</span>
+        <h2>{{ title }}</h2>
+        <p>{{ text }}</p>
+      </div>
+    </section>
+    {% endfor %}
+
+    <section class="v2-view" data-v2-view="instruction">
+      <div class="v2-instruction">
+        <div class="v2-instruction-hero">
+          <div>
+            <span class="v2-kicker">AI VIDEO SITE V2 · ОБУЧЕНИЕ</span>
+            <h2>Инструкция</h2>
+            <p>Здесь собрана логика самого сайта и практические правила MiniMax H3. Ниже есть готовая полная инструкция для ChatGPT — одной кнопкой копируется V2-контекст вместе с актуальным H3 machine guide.</p>
+          </div>
+          <button class="v2-primary-button" id="v2-copy-chatgpt" type="button">
+            <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+            Скопировать инструкцию для ChatGPT
+          </button>
+        </div>
+
+        <div class="v2-guide-grid">
+          <article class="v2-guide-card">
+            <span class="v2-guide-number">01</span>
+            <h3>Создать</h3>
+            <p>Обычная генерация: напишите сцену, при необходимости выберите персонажей и добавьте начальный/конечный кадр. Качество, формат, длительность и шаги выбираются только кнопками.</p>
+          </article>
+          <article class="v2-guide-card">
+            <span class="v2-guide-number">02</span>
+            <h3>Продолжить</h3>
+            <p>Для продолжения используется предыдущий ролик. V2 должен сам прочитать его формат и продолжить движение, камеру, направление и состояние сцены без ручной настройки размеров.</p>
+          </article>
+          <article class="v2-guide-card">
+            <span class="v2-guide-number">03</span>
+            <h3>По аудио</h3>
+            <p>Режим для клипов: загружается трек, выбирается герой/визуальный референс и описывается действие — танец, исполнение, мимика, движение ртом и камера.</p>
+          </article>
+          <article class="v2-guide-card">
+            <span class="v2-guide-number">04</span>
+            <h3>Персонажи</h3>
+            <p>Персонажи выбираются по имени через поиск. На основном экране остаются только выбранные. Список может содержать десятки героев; лимиты конкретной H3-задачи проверяются отдельно.</p>
+          </article>
+        </div>
+
+        <article class="v2-guide-wide">
+          <div class="v2-guide-heading">
+            <span><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></span>
+            <div><h3>Как пользоваться волшебной палочкой</h3><p>Пишите человеческим языком — не пытайтесь самостоятельно воспроизводить внутренний формат H3.</p></div>
+          </div>
+          <div class="v2-guide-columns">
+            <div>
+              <strong>До</strong>
+              <p>«Лиса сначала машет рукой, потом хитро улыбается, камера медленно приближается. 10 секунд.»</p>
+            </div>
+            <div>
+              <strong>После</strong>
+              <p>Локальный ИИ превращает запрос в структурированный английский H3 prompt, сохраняет точные русские реплики и учитывает выбранные медиа/персонажей.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="v2-guide-wide">
+          <div class="v2-guide-heading">
+            <span><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span>
+            <div><h3>MiniMax H3 — главное без перегруза</h3><p>V2 скрывает большую часть терминологии, но эти принципы полезно знать.</p></div>
+          </div>
+          <div class="v2-rule-list">
+            <div><strong>Пишите действия по порядку.</strong><span>Что герой делает сначала, что затем и в каком состоянии заканчивает сцену.</span></div>
+            <div><strong>Камера — конкретно.</strong><span>Один главный тип движения на кадр: static, push in, tracking, pan и т.п.</span></div>
+            <div><strong>Начальный/конечный кадр.</strong><span>Это точные визуальные опорные состояния FL2VA, а не просто «похожие картинки».</span></div>
+            <div><strong>Персонажи и референсы.</strong><span>Нужны для идентичности, внешности, одежды, голоса и других сохраняемых признаков.</span></div>
+            <div><strong>Продолжение видео.</strong><span>Важно сохранять направление движения, позу, скорость, камеру, освещение и географию сцены.</span></div>
+            <div><strong>Звук.</strong><span>Диалог, шум действия, постоянная атмосфера и музыка — разные слои. Для слышимого native H3 audio должен быть включён звук.</span></div>
+            <div><strong>Точные реплики.</strong><span>Русский текст реплик остаётся русским; техническая часть production prompt пишется на английском.</span></div>
+            <div><strong>Не перегружайте.</strong><span>Лучше короткая физически выполнимая сцена, чем десяток действий и движений камеры за 5 секунд.</span></div>
+          </div>
+        </article>
+
+        <article class="v2-chatgpt-card">
+          <div>
+            <span class="v2-kicker">ДЛЯ ВНЕШНЕГО CHATGPT</span>
+            <h3>Полный copy-paste контекст</h3>
+            <p>Кнопка объединяет описание V2, правила работы с разделами сайта, доступные упрощённые настройки и полный актуальный <code>h3-prompting-guide-ai.txt</code>. В ChatGPT можно вставить всё одним сообщением и дальше просить промты под конкретную сцену.</p>
+          </div>
+          <div class="v2-chatgpt-actions">
+            <button class="v2-primary-button" id="v2-copy-chatgpt-bottom" type="button">
+              <svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>
+              Скопировать всё
+            </button>
+            <a class="v2-secondary-button" href="/static/h3-prompting-guide-ai.txt" target="_blank" rel="noopener">Открыть H3 machine guide</a>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="v2-character-dialog" id="v2-character-dialog">
+    <div class="v2-character-dialog-head">
+      <div>
+        <span class="v2-kicker">CHARACTERS</span>
+        <h2>Выбор персонажей</h2>
+      </div>
+      <button class="v2-icon-button" id="v2-close-characters" type="button" aria-label="Закрыть">
+        <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+      </button>
+    </div>
+    <label class="v2-search">
+      <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+      <input id="v2-character-search" type="search" placeholder="Поиск персонажа по имени...">
+    </label>
+    <div class="v2-character-tabs">
+      <button class="active" type="button" data-character-tab="all">Все</button>
+      <button type="button" data-character-tab="selected">Выбранные <span id="v2-selected-tab-count">0</span></button>
+      <button type="button" data-character-tab="recent">Недавние</button>
+    </div>
+    <div class="v2-character-grid" id="v2-character-grid"></div>
+    <div class="v2-character-empty" id="v2-character-empty" hidden>Персонажи не найдены.</div>
+    <div class="v2-character-dialog-foot">
+      <span id="v2-character-total">0 персонажей</span>
+      <button class="v2-primary-button" id="v2-character-done" type="button">Готово</button>
+    </div>
+  </dialog>
+
+  <div class="v2-toast" id="v2-toast" role="status" aria-live="polite"></div>
+</div>
+<script src="/static/v2.js?v=1" defer></script>
+</body>
+</html>
