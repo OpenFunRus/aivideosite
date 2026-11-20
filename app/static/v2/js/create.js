@@ -133,7 +133,8 @@
               "integrated_multimodal_description, overall_soundscape, non_diegetic_music. " +
               "Соблюдай выбранную длительность: [Shot 1] без времени, каждый следующий cut с точным временем. " +
               "Один основной camera move на shot. Точные реплики оформляй как (S1) и <d>[Language] ...</d> без перевода. " +
-              "Если музыки не просили — non_diegetic_music: N/A. " +
+              "Если generate_audio выключен — overall_soundscape: N/A и non_diegetic_music: N/A. " +
+              "Если звук включён, но музыки не просили — non_diegetic_music: N/A. " +
               "Если есть first/last frame, добавь перед тремя полями правильную alignment line из H3 guide. " +
               "Если выбраны Characters, не придумывай Picture/Subject ordinals и не пиши шесть Ref2VA-полей: backend добавит их сам. " +
               "Не меняй настройки формы и не добавляй события, которых пользователь не просил. " +
@@ -231,6 +232,7 @@
       const resolutionText =
         resolved?.width && resolved?.height ? " · " + resolved.width + "×" + resolved.height : "";
       showToast("Задача добавлена в очередь" + (shortId ? " · " + shortId : "") + resolutionText);
+      api.setView?.("queue");
       setTimeout(() => api.refreshSystem?.(), 700);
     } catch (error) {
       showToast("Не удалось запустить генерацию: " + error.message, "error");
