@@ -1,0 +1,37 @@
+<aside class="v2-character-rail" id="v2-character-rail" aria-label="Персонажи">
+    <div class="v2-character-rail-head">
+      <span class="v2-character-rail-icon" title="Персонажи">
+        <svg class="icon"><use href="/static/icons.svg#icon-users"></use></svg>
+        <span class="v2-character-count-badge" id="v2-character-count" hidden>0</span>
+      </span>
+      <span class="v2-character-rail-title">
+        <strong>Персонажи</strong>
+        <small>Выбор героев для генерации</small>
+      </span>
+    </div>
+
+    <div class="v2-character-panel">
+      <label class="v2-search">
+        <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+        <input id="v2-character-search" type="search" placeholder="Поиск по имени...">
+      </label>
+
+      <div class="v2-character-tabs">
+        <button class="active" type="button" data-character-tab="all">Все</button>
+        <button type="button" data-character-tab="selected">Выбранные <span id="v2-selected-tab-count">0</span></button>
+        <button type="button" data-character-tab="recent">Недавние</button>
+      </div>
+
+      <div class="v2-selected-characters v2-selected-characters-rail" id="v2-selected-characters">
+        <span class="v2-empty-inline">Персонажи не выбраны</span>
+      </div>
+
+      <div class="v2-character-grid" id="v2-character-grid"></div>
+      <div class="v2-character-empty" id="v2-character-empty" hidden>Персонажи не найдены.</div>
+
+      <div class="v2-character-dialog-foot">
+        <span id="v2-character-total">0 персонажей</span>
+        <span class="v2-character-hint">Выберите персонажа</span>
+      </div>
+    </div>
+  </aside>
