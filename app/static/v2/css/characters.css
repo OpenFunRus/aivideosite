@@ -1,0 +1,25 @@
+.v2-character-dialog{position:fixed;inset:18px 18px 18px auto;width:min(440px,calc(100vw - 36px));max-height:none;margin:0;padding:0;border:1px solid #3a4054;border-radius:20px;background:#151823;color:var(--text);box-shadow:var(--shadow)}
+.v2-character-dialog::backdrop{background:rgba(5,6,10,.64);backdrop-filter:blur(4px)}
+.v2-character-dialog[open]{display:flex;flex-direction:column}
+.v2-character-dialog-head{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 14px}
+.v2-character-dialog-head h2{font-size:22px;margin:4px 0 0}
+.v2-icon-button{width:38px;height:38px;border:1px solid #343a4e;border-radius:10px;background:#1e2230}
+.v2-search{display:flex;align-items:center;gap:9px;margin:0 20px;padding:0 12px;height:44px;border:1px solid #353b51;border-radius:11px;background:#11141d}
+.v2-search .icon{width:17px;height:17px;color:#7e869b}
+.v2-search input{flex:1;border:0;outline:0;background:transparent;color:#fff}
+.v2-character-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:14px 20px 12px}
+.v2-character-tabs button{height:38px;border:1px solid #343a4e;border-radius:10px;background:#1c202d;color:#b9bfce;cursor:pointer;font-size:12px}
+.v2-character-tabs button.active{background:#6948eb;border-color:#7e62f7;color:white}
+.v2-character-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:0 20px 16px;overflow-y:auto;min-height:160px}
+.v2-character-card{display:grid;grid-template-columns:54px 1fr 22px;gap:9px;align-items:center;min-height:72px;padding:7px;border:1px solid #30364a;border-radius:13px;background:#191d29;cursor:pointer;text-align:left}
+.v2-character-card:hover{border-color:#545d7c}
+.v2-character-card.selected{border-color:#815fff;box-shadow:0 0 0 2px rgba(117,87,255,.12)}
+.v2-character-card img{width:54px;height:54px;border-radius:10px;object-fit:cover;background:#0d0f16}
+.v2-character-card strong{font-size:12px;overflow:hidden;text-overflow:ellipsis}
+.v2-character-card small{display:block;color:#767e92;font-size:10px;margin-top:3px}
+.v2-character-selectmark{width:19px;height:19px;border-radius:6px;border:1px solid #596078;display:grid;place-items:center;color:transparent}
+.v2-character-card.selected .v2-character-selectmark{background:#7657ff;border-color:#8b72ff;color:#fff}
+.v2-character-selectmark .icon{width:13px;height:13px}
+.v2-character-empty{padding:30px 20px;text-align:center;color:#858ca0}
+.v2-character-dialog-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:auto;padding:14px 20px 18px;border-top:1px solid #2b3042}
+.v2-character-dialog-foot>span{font-size:11px;color:#858ca0}
