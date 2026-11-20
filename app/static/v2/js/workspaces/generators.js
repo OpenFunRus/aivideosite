@@ -54,6 +54,193 @@
     });
   };
 
+  const continuePrompt = qs("#v2-continue-prompt");
+  const continuePromptCount = qs("#v2-continue-prompt-count");
+  const continueLibrary = qs("#v2-continue-library");
+  const continueUpload = qs("#v2-continue-upload");
+  const continueLibraryTab = qs("#v2-continue-library-tab");
+  const continueUploadTab = qs("#v2-continue-upload-tab");
+  const continueLibraryPicker = qs("#v2-continue-library-picker");
+  const continueUploadHint = qs("#v2-continue-upload-hint");
+  const continueSourcePicker = qs("#v2-continue-source-picker");
+  const continueSelectedSource = qs("#v2-continue-selected-source");
+  const continuePreview = qs("#v2-continue-preview");
+  const continueSourceName = qs("#v2-continue-source-name");
+  const continueMeta = qs("#v2-continue-meta");
+  const continueReplace = qs("#v2-continue-replace");
+
+  const setWorkspaceSetting = (name, value) => {
+    const group = qs('[data-v2-setting="' + name + '"]');
+    if (!group) return;
+    const buttons = Array.from(group.querySelectorAll("[data-value]"));
+    const target = buttons.find((button) => button.dataset.value === String(value));
+    if (!target) return;
+    buttons.forEach((button) => button.classList.toggle("active", button === target));
+  };
+
+  const inferContinueProfile = (width, height) => {
+    const w = Number(width);
+    const h = Number(height);
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return;
+
+    const ratio = w / h;
+    const targets = [
+      { value: "1:1", ratio: 1 },
+      { value: "16:9", ratio: 16 / 9 },
+      { value: "9:16", ratio: 9 / 16 },
+    ];
+    targets.sort(
+      (a, b) =>
+        Math.abs(Math.log(ratio / a.ratio)) -
+        Math.abs(Math.log(ratio / b.ratio))
+    );
+    setWorkspaceSetting("continue-ratio", targets[0].value);
+
+    const shortSide = Math.min(w, h);
+    const qualities = [
+      { value: "480", pixels: 480 },
+      { value: "720", pixels: 736 },
+      { value: "1080", pixels: 1088 },
+    ];
+    qualities.sort(
+      (a, b) =>
+        Math.abs(shortSide - a.pixels) -
+        Math.abs(shortSide - b.pixels)
+    );
+    setWorkspaceSetting("continue-quality", qualities[0].value);
+  };
+
+  const updateContinuePromptCount = () => {
+    if (!continuePromptCount || !continuePrompt) return;
+    continuePromptCount.textContent =
+      continuePrompt.value.length.toLocaleString("ru-RU") + " / 16 000";
+  };
+
+  const setContinueSourceMode = (mode) => {
+    const libraryMode = mode !== "upload";
+    continueLibraryTab?.classList.toggle("active", libraryMode);
+    continueUploadTab?.classList.toggle("active", !libraryMode);
+    if (continueLibraryPicker) continueLibraryPicker.hidden = !libraryMode;
+    if (continueUploadHint) continueUploadHint.hidden = libraryMode;
+  };
+
+  const clearContinueSourceVisual = () => {
+    if (continuePreview) {
+      continuePreview.pause?.();
+      continuePreview.removeAttribute("src");
+      continuePreview.load?.();
+    }
+    if (continueSelectedSource) continueSelectedSource.hidden = true;
+    if (continueSourcePicker) continueSourcePicker.hidden = false;
+    if (continueSourceName) continueSourceName.textContent = "Исходный ролик";
+    if (continueMeta) continueMeta.textContent = "Размер определяется автоматически";
+  };
+
+  const renderContinueSource = ({ url, name, width = 0, height = 0, duration = 0 } = {}) => {
+    if (!url || !continuePreview) {
+      clearContinueSourceVisual();
+      return;
+    }
+
+    continuePreview.src = url;
+    if (continueSelectedSource) continueSelectedSource.hidden = false;
+    if (continueSourcePicker) continueSourcePicker.hidden = true;
+    if (continueSourceName) continueSourceName.textContent = name || "Исходный ролик";
+
+    const renderMeta = (resolvedWidth, resolvedHeight, resolvedDuration) => {
+      const parts = [];
+      if (resolvedDuration > 0) parts.push(W.formatSeconds(resolvedDuration));
+      if (resolvedWidth > 0 && resolvedHeight > 0) {
+        const ratio =
+          Math.abs(resolvedWidth / resolvedHeight - 1) < 0.08
+            ? "1:1"
+            : resolvedWidth > resolvedHeight
+              ? "16:9"
+              : "9:16";
+        parts.push(Math.round(resolvedWidth) + " × " + Math.round(resolvedHeight) + " (" + ratio + ")");
+        inferContinueProfile(resolvedWidth, resolvedHeight);
+      }
+      if (continueMeta) {
+        continueMeta.textContent =
+          parts.length ? parts.join("  ·  ") : "Параметры определятся после загрузки";
+      }
+    };
+
+    renderMeta(Number(width), Number(height), Number(duration));
+
+    continuePreview.onloadedmetadata = () => {
+      renderMeta(
+        continuePreview.videoWidth || Number(width),
+        continuePreview.videoHeight || Number(height),
+        continuePreview.duration || Number(duration)
+      );
+    };
+  };
+
+  continuePrompt?.addEventListener("input", updateContinuePromptCount);
+  updateContinuePromptCount();
+
+  continueLibraryTab?.addEventListener("click", () => {
+    setContinueSourceMode("library");
+    if (continueLibrary?.value) {
+      const item = W.mediaById(continueLibrary.value);
+      if (item) {
+        renderContinueSource({
+          url: "/media/" + encodeURIComponent(item.id),
+          name: item.title || item.filename || "Видео из библиотеки",
+          width: item.meta?.width,
+          height: item.meta?.height,
+          duration: item.duration || item.meta?.seconds,
+        });
+      }
+    } else {
+      clearContinueSourceVisual();
+    }
+  });
+
+  continueUploadTab?.addEventListener("click", () => {
+    setContinueSourceMode("upload");
+    continueUpload?.click();
+  });
+
+  continueLibrary?.addEventListener("change", () => {
+    if (!continueLibrary.value) {
+      clearContinueSourceVisual();
+      return;
+    }
+    if (continueUpload) continueUpload.value = "";
+    W.setObjectUrl("continue-source", null);
+    setContinueSourceMode("library");
+    const item = W.mediaById(continueLibrary.value);
+    if (!item) return;
+    renderContinueSource({
+      url: "/media/" + encodeURIComponent(item.id),
+      name: item.title || item.filename || "Видео из библиотеки",
+      width: item.meta?.width,
+      height: item.meta?.height,
+      duration: item.duration || item.meta?.seconds,
+    });
+  });
+
+  continueUpload?.addEventListener("change", () => {
+    const file = continueUpload.files?.[0];
+    if (!file) return;
+    if (continueLibrary) continueLibrary.value = "";
+    setContinueSourceMode("upload");
+    const url = W.setObjectUrl("continue-source", file);
+    renderContinueSource({ url, name: file.name });
+  });
+
+  continueReplace?.addEventListener("click", () => {
+    if (continueLibrary) continueLibrary.value = "";
+    if (continueUpload) continueUpload.value = "";
+    W.setObjectUrl("continue-source", null);
+    setContinueSourceMode("library");
+    clearContinueSourceVisual();
+  });
+
+  setContinueSourceMode("library");
+
   const improvePrompt = async (kind) => {
     const config = {
       continue: {
@@ -111,7 +298,6 @@
     }
   };
 
-  bindSourcePicker("continue");
   bindSourcePicker("clip");
 
   document.querySelectorAll("[data-v2-wand]").forEach((button) => {
@@ -128,6 +314,8 @@
     data.set("source_media_id", qs("#v2-continue-library")?.value || "");
     const upload = qs("#v2-continue-upload")?.files?.[0];
     if (upload) data.set("source_video", upload);
+    data.set("quality", W.settingValue("continue-quality", "720"));
+    data.set("ratio", W.settingValue("continue-ratio", "16:9"));
     data.set("seconds", W.settingValue("continue-seconds", "10"));
     data.set("steps", W.settingValue("continue-steps", "12"));
     data.set("seed", qs("#v2-continue-seed")?.value || "");
@@ -267,9 +455,16 @@
   window.addEventListener("v2:use-continue", (event) => {
     const item = W.mediaById(event.detail?.mediaId);
     if (!item) return;
-    const select = qs("#v2-continue-library");
-    if (select) select.value = item.id;
-    applyLibrarySource("continue", item);
+    if (continueLibrary) continueLibrary.value = item.id;
+    if (continueUpload) continueUpload.value = "";
+    setContinueSourceMode("library");
+    renderContinueSource({
+      url: "/media/" + encodeURIComponent(item.id),
+      name: item.title || item.filename || "Видео из библиотеки",
+      width: item.meta?.width,
+      height: item.meta?.height,
+      duration: item.duration || item.meta?.seconds,
+    });
     api.setView?.("continue");
   });
 
