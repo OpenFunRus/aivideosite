@@ -775,6 +775,155 @@ async def api_generate(
     return {"ok": True, "job_id": job_id}
 
 
+V2_RESOLUTION_SHORT_SIDE = {
+    "480": 480,
+    "720": 736,
+    "1080": 1088,
+}
+V2_ASPECT_RATIOS = {
+    "1:1": (1, 1),
+    "16:9": (16, 9),
+    "9:16": (9, 16),
+}
+V2_DURATIONS = {5, 10, 15}
+V2_STEPS = {8, 12, 16}
+
+
+def _v2_resolution(quality: str, ratio: str) -> tuple[int, int]:
+    short_side = V2_RESOLUTION_SHORT_SIDE.get(str(quality).strip())
+    ratio_pair = V2_ASPECT_RATIOS.get(str(ratio).strip())
+    if short_side is None:
+        raise HTTPException(400, "V2 поддерживает только 480p, 720p и 1080p.")
+    if ratio_pair is None:
+        raise HTTPException(400, "V2 поддерживает только форматы 1:1, 16:9 и 9:16.")
+
+    ratio_width, ratio_height = ratio_pair
+    if ratio_width == ratio_height:
+        return short_side, short_side
+
+    def grid_up(value: float) -> int:
+        return int(math.ceil(value / 32.0) * 32)
+
+    if ratio_width > ratio_height:
+        height = short_side
+        width = grid_up(short_side * ratio_width / ratio_height)
+    else:
+        width = short_side
+        height = grid_up(short_side * ratio_height / ratio_width)
+    return width, height
+
+
+def _v2_character_ids(raw: str) -> list[str]:
+    try:
+        value = json.loads(raw or "[]")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, "Некорректный список персонажей.") from exc
+    if not isinstance(value, list):
+        raise HTTPException(400, "Некорректный список персонажей.")
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        character_id = str(item).strip()
+        if not character_id or character_id in seen:
+            continue
+        seen.add(character_id)
+        result.append(character_id)
+    return result
+
+
+@app.post("/api/v2/generate")
+async def api_v2_generate(
+    request: Request,
+    prompt: Annotated[str, Form()],
+    quality: Annotated[str, Form()] = "720",
+    ratio: Annotated[str, Form()] = "16:9",
+    seconds: Annotated[int, Form()] = 10,
+    steps: Annotated[int, Form()] = 12,
+    seed: Annotated[str, Form()] = "",
+    generate_audio: Annotated[bool, Form()] = True,
+    character_ids: Annotated[str, Form()] = "[]",
+    first_frame: UploadFile | None = File(None),
+    last_frame: UploadFile | None = File(None),
+    user_id: str = Depends(require_user),
+):
+    if seconds not in V2_DURATIONS:
+        raise HTTPException(400, "V2 поддерживает длительность только 5, 10 или 15 секунд.")
+    if steps not in V2_STEPS:
+        raise HTTPException(400, "V2 поддерживает только 8, 12 или 16 шагов.")
+
+    width, height = _v2_resolution(quality, ratio)
+    selected_characters = _v2_character_ids(character_ids)
+    has_first = first_frame is not None and bool(first_frame.filename)
+    has_last = last_frame is not None and bool(last_frame.filename)
+
+    if selected_characters and (has_first or has_last):
+        raise HTTPException(
+            400,
+            "Точные начальный/конечный кадры FL2VA нельзя смешивать с Characters Ref2VA "
+            "в текущем H3 pipeline. Для одной генерации выберите либо кадры, либо персонажей.",
+        )
+
+    seed_text = str(seed or "").strip()
+    if seed_text:
+        try:
+            seed_value = int(seed_text)
+        except ValueError as exc:
+            raise HTTPException(
+                400,
+                "Seed должен быть целым числом или пустым для Auto (-1).",
+            ) from exc
+    else:
+        seed_value = -1
+
+    generation_mode = "reference" if selected_characters else "frames"
+
+    result = await api_generate(
+        request=request,
+        prompt=prompt,
+        width=width,
+        height=height,
+        seconds=float(seconds),
+        fps=24,
+        steps=steps,
+        seed=seed_value,
+        generate_audio=generate_audio,
+        generation_mode=generation_mode,
+        keyframe_role="first",
+        reference_task="reference_generation",
+        ref_image_size="match",
+        character_ids=json.dumps(selected_characters),
+        reference_manifest="{}",
+        guide_manifest="{}",
+        control_mode="none",
+        control_strength=1.0,
+        control_start_percent=0.0,
+        control_end_percent=1.0,
+        control_canny_low=0.4,
+        control_canny_high=0.8,
+        first_frame=first_frame,
+        last_frame=last_frame,
+        reference_images=None,
+        reference_videos=None,
+        reference_audios=None,
+        guide_images=None,
+        control_video=None,
+        control_source_video=None,
+        control_mask_video=None,
+        user_id=user_id,
+    )
+    result["v2"] = {
+        "quality": str(quality),
+        "ratio": str(ratio),
+        "width": width,
+        "height": height,
+        "seconds": seconds,
+        "steps": steps,
+        "generation_mode": generation_mode,
+    }
+    return result
+
+
 @app.post("/api/jobs/{job_id}/cancel")
 async def api_cancel_job(
     job_id: str,
