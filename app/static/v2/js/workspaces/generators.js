@@ -463,12 +463,6 @@
         W.setObjectUrl("clip-source", null);
       } else {
         W.setObjectUrl("clip-master-audio", null);
-        const player = qs("#v2-clip-audio-player");
-        if (player) {
-          player.pause?.();
-          player.hidden = true;
-          player.removeAttribute("src");
-        }
       }
       setClipSourceMode(kind, "library");
     });
@@ -485,24 +479,10 @@
     if (!clipTrackSelect.value) return;
     if (clipAudio) clipAudio.value = "";
     W.setObjectUrl("clip-master-audio", null);
-    const player = qs("#v2-clip-audio-player");
-    if (player) {
-      player.pause?.();
-      player.hidden = true;
-      player.removeAttribute("src");
-    }
   });
   clipAudio?.addEventListener("change", () => {
     const file = clipAudio.files?.[0];
-    const player = qs("#v2-clip-audio-player");
     if (file && clipTrackSelect) clipTrackSelect.value = "";
-    if (!player) return;
-    if (!file) {
-      player.hidden = true;
-      return;
-    }
-    player.src = W.setObjectUrl("clip-master-audio", file);
-    player.hidden = false;
   });
 
   const updateClipRange = () => {
