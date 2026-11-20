@@ -210,6 +210,7 @@ async def api_assistant_chat(
         local_assistant.stream_chat(
             payload.get("messages"),
             settings=payload.get("settings"),
+            thinking=bool(payload.get("thinking")),
         ),
         media_type="text/plain; charset=utf-8",
         headers=headers,
@@ -235,6 +236,7 @@ async def api_assistant_control(
             payload.get("messages"),
             settings=payload.get("settings"),
             characters=characters,
+            thinking=bool(payload.get("thinking")),
         )
     except local_assistant.AssistantUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
