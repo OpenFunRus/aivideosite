@@ -2442,22 +2442,61 @@
     button.addEventListener("click", () => infoDialog.close());
   });
 
+  const copyTextFallback = (text) => {
+    const helper = document.createElement("textarea");
+    helper.value = String(text ?? "");
+    helper.setAttribute("readonly", "");
+    helper.setAttribute("aria-hidden", "true");
+    helper.style.position = "fixed";
+    helper.style.left = "-9999px";
+    helper.style.top = "0";
+    helper.style.width = "1px";
+    helper.style.height = "1px";
+    helper.style.padding = "0";
+    helper.style.border = "0";
+    helper.style.opacity = "0";
+
+    const active = document.activeElement;
+    document.body.appendChild(helper);
+    helper.focus({ preventScroll: true });
+    helper.select();
+    helper.setSelectionRange(0, helper.value.length);
+
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } finally {
+      helper.remove();
+      if (active && typeof active.focus === "function") {
+        try {
+          active.focus({ preventScroll: true });
+        } catch {
+          active.focus();
+        }
+      }
+    }
+    return copied;
+  };
+
   const copyText = async (text) => {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return;
+    const value = String(text ?? "");
+    if (!value) return false;
+
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return true;
+      } catch {
+        // Browser/permissions may expose Clipboard API but still reject it.
+        // Fall through to the synchronous user-gesture fallback below.
+      }
     }
 
-    const helper = document.createElement("textarea");
-    helper.value = text;
-    helper.setAttribute("readonly", "");
-    helper.style.position = "fixed";
-    helper.style.opacity = "0";
-    document.body.appendChild(helper);
-    helper.select();
-    document.execCommand("copy");
-    helper.remove();
+    if (copyTextFallback(value)) return true;
+    throw new Error("Clipboard API and copy fallback are unavailable.");
   };
+
+  window.AIVideoCopyText = copyText;
 
   qs("#copy-ai-guide-link")?.addEventListener("click", async () => {
     const url = new URL("/static/h3-prompting-guide-ai.txt", window.location.origin).href;
@@ -2474,7 +2513,8 @@
       const target = document.getElementById(button.dataset.copyTarget);
       if (!target) return;
       try {
-        await copyText(target.value || target.textContent || "");
+        const copied = await copyText(target.value || target.textContent || "");
+        if (!copied) throw new Error("copy failed");
         showToast("Скопировано.");
       } catch {
         showToast("Не удалось скопировать.", "error");
