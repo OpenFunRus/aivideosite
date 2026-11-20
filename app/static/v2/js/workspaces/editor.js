@@ -28,7 +28,7 @@
 
   let selected = -1;
   let librarySelectedId = "";
-  let dragIndex = -1;
+  let clipDrag = null;
   let audioFile = null;
   let projectTime = 0;
   let pendingSeek = null;
@@ -72,8 +72,13 @@
   const renderHistoryButtons = () => {
     const undoButton = qs("#v2-editor-undo");
     const redoButton = qs("#v2-editor-redo");
+    const removeButton = qs("#v2-editor-remove");
+    const splitButton = qs("#v2-editor-toolbar-split");
+    const hasSelection = Boolean(state.clips[selected]);
     if (undoButton) undoButton.disabled = !undoStack.length;
     if (redoButton) redoButton.disabled = !redoStack.length;
+    if (removeButton) removeButton.disabled = !hasSelection;
+    if (splitButton) splitButton.disabled = !hasSelection;
   };
 
   const normalize = () => {
@@ -250,10 +255,13 @@
       const width = Math.max(48, duration * state.zoom);
       cursor += duration;
       return '<div class="v2-timeline-clip' + (index === selected ? " selected" : "") +
-        '" draggable="true" data-editor-index="' + index + '" style="left:' + left + 'px;width:' + width + 'px">' +
+        '" data-editor-index="' + index + '" tabindex="0" style="left:' + left + 'px;width:' + width + 'px">' +
         '<video class="v2-timeline-thumb" src="/media/' + encodeURIComponent(clip.media_id) +
         '#t=' + encodeURIComponent(Math.max(0.05, Number(clip.trim_start) || 0.05)) +
-        '" muted playsinline preload="metadata" tabindex="-1"></video>' +
+        '" muted playsinline preload="metadata" tabindex="-1" draggable="false"></video>' +
+        '<button class="v2-timeline-delete" type="button" data-editor-delete-index="' + index +
+        '" title="Удалить клип" aria-label="Удалить клип">' +
+        '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-trash"></use></svg></button>' +
         '<div class="v2-timeline-clip-copy"><strong>' + escapeHtml(item?.title || "Клип") +
         '</strong><small>' + escapeHtml(formatTime(duration)) + ' · ' +
         Math.round((Number(clip.volume) || 0) * 100) + '%</small></div></div>';
@@ -440,17 +448,26 @@
     selectClip(index, within, autoplay);
   };
 
-  const removeSelected = () => {
-    if (!state.clips[selected]) return;
+  const removeClipAt = (index) => {
+    const targetIndex = Number(index);
+    if (!Number.isInteger(targetIndex) || !state.clips[targetIndex]) return;
     pushUndo();
-    const start = clipProjectStart(selected);
-    state.clips.splice(selected, 1);
-    selected = Math.min(selected, state.clips.length - 1);
-    projectTime = Math.min(start, projectDuration());
+    const start = clipProjectStart(targetIndex);
+    state.clips.splice(targetIndex, 1);
+    if (!state.clips.length) {
+      selected = -1;
+      projectTime = 0;
+    } else {
+      selected = Math.min(targetIndex, state.clips.length - 1);
+      projectTime = Math.min(start, projectDuration());
+    }
     save();
     renderAll();
     if (selected >= 0) selectClip(selected, 0, false);
+    showToast("Клип удалён с таймлайна.");
   };
+
+  const removeSelected = () => removeClipAt(selected);
 
   const splitSelected = (value) => {
     const clip = state.clips[selected];
@@ -493,30 +510,100 @@
     }
   });
 
-  qs("#v2-editor-timeline")?.addEventListener("click", (event) => {
+  const timeline = qs("#v2-editor-timeline");
+
+  timeline?.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest("[data-editor-delete-index]");
+    if (deleteButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      removeClipAt(Number(deleteButton.dataset.editorDeleteIndex));
+      return;
+    }
+    if (clipDrag?.moved) return;
     const clip = event.target.closest("[data-editor-index]");
     if (!clip) return;
     selectClip(Number(clip.dataset.editorIndex), 0, false);
   });
-  qs("#v2-editor-timeline")?.addEventListener("dragstart", (event) => {
+
+  timeline?.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("[data-editor-delete-index]")) return;
     const clip = event.target.closest("[data-editor-index]");
-    dragIndex = clip ? Number(clip.dataset.editorIndex) : -1;
-  });
-  qs("#v2-editor-timeline")?.addEventListener("dragover", (event) => event.preventDefault());
-  qs("#v2-editor-timeline")?.addEventListener("drop", (event) => {
+    if (!clip) return;
+
+    const sourceIndex = Number(clip.dataset.editorIndex);
+    if (!Number.isInteger(sourceIndex) || !state.clips[sourceIndex]) return;
+
+    selected = sourceIndex;
+    renderTimeline();
+    renderInspector();
+
+    const activeClip = timeline.querySelector('[data-editor-index="' + sourceIndex + '"]');
+    if (!activeClip) return;
+
+    clipDrag = {
+      pointerId: event.pointerId,
+      sourceIndex,
+      element: activeClip,
+      startX: event.clientX,
+      lastX: event.clientX,
+      moved: false,
+    };
+    activeClip.setPointerCapture?.(event.pointerId);
+    activeClip.classList.add("dragging");
     event.preventDefault();
-    const target = event.target.closest("[data-editor-index]");
-    const targetIndex = target ? Number(target.dataset.editorIndex) : state.clips.length - 1;
-    if (dragIndex < 0 || targetIndex < 0 || dragIndex === targetIndex) return;
+  });
+
+  timeline?.addEventListener("pointermove", (event) => {
+    if (!clipDrag || event.pointerId !== clipDrag.pointerId) return;
+    const delta = event.clientX - clipDrag.startX;
+    clipDrag.lastX = event.clientX;
+    if (Math.abs(delta) >= 4) clipDrag.moved = true;
+    if (!clipDrag.moved) return;
+    clipDrag.element.style.transform = "translateX(" + delta + "px)";
+    event.preventDefault();
+  });
+
+  const finishClipDrag = (event, canceled = false) => {
+    if (!clipDrag || event.pointerId !== clipDrag.pointerId) return;
+    const drag = clipDrag;
+    clipDrag = null;
+
+    drag.element.releasePointerCapture?.(event.pointerId);
+    drag.element.classList.remove("dragging");
+    drag.element.style.transform = "";
+
+    if (canceled || !drag.moved || !state.clips[drag.sourceIndex]) {
+      renderTimeline();
+      return;
+    }
+
+    const rect = timeline.getBoundingClientRect();
+    const pointerX = Math.max(0, drag.lastX - rect.left);
+    const [moved] = state.clips.splice(drag.sourceIndex, 1);
+
+    let cursor = 0;
+    let insertIndex = state.clips.length;
+    for (let i = 0; i < state.clips.length; i += 1) {
+      const width = effectiveDuration(state.clips[i]) * state.zoom;
+      if (pointerX < cursor + width / 2) {
+        insertIndex = i;
+        break;
+      }
+      cursor += width;
+    }
+
     pushUndo();
-    const [moved] = state.clips.splice(dragIndex, 1);
-    state.clips.splice(targetIndex, 0, moved);
-    selected = targetIndex;
-    dragIndex = -1;
+    state.clips.splice(insertIndex, 0, moved);
+    selected = insertIndex;
     projectTime = clipProjectStart(selected);
     save();
     renderAll();
-  });
+    selectClip(selected, 0, false);
+  };
+
+  timeline?.addEventListener("pointerup", (event) => finishClipDrag(event, false));
+  timeline?.addEventListener("pointercancel", (event) => finishClipDrag(event, true));
 
   qs("#v2-editor-ruler")?.addEventListener("click", (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
