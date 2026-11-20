@@ -29,7 +29,7 @@
   setInterval(() => api.refreshSystem?.(), 8000);
   setInterval(() => {
     const view = api.state.view;
-    if (["queue", "system"].includes(view)) {
+    if (view === "queue") {
       W.refreshState({ silent: true, includeMedia: false });
     }
   }, 4000);
