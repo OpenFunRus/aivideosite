@@ -1,17 +1,20 @@
 <section class="v2-view active" data-v2-view="create">
       <form class="v2-create" id="v2-create-form">
-        <section class="v2-prompt-card">
-          <div class="v2-prompt-head">
-            <label for="v2-prompt">Что должно происходить в видео?</label>
-            <span id="v2-prompt-count">0 / 16 000</span>
+        <section class="v2-tool-card v2-prompt-panel">
+          <div class="v2-prompt-panel-head">
+            <label class="v2-card-title" for="v2-prompt">
+              <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+              <strong>Что должно происходить в видео?</strong>
+            </label>
+            <span class="v2-prompt-counter" id="v2-prompt-count">0 / 16 000</span>
           </div>
-          <div class="v2-prompt-field">
+          <div class="v2-tool-textarea v2-prompt-panel-box">
             <textarea id="v2-prompt" name="prompt" maxlength="16000" placeholder="Например: девушка стоит у окна, поворачивается к камере и улыбается..."></textarea>
-            <button class="v2-wand-button" id="v2-wand" type="button" title="Улучшить промт через локальный ИИ">
+            <button class="v2-inline-wand" id="v2-wand" type="button" title="Улучшить промт через локальный ИИ">
               <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
             </button>
           </div>
-          <p>Волшебная палочка перепишет обычное описание под MiniMax H3 и переведёт инструкции на английский, сохранив точные реплики.</p>
+          <p class="v2-help">Волшебная палочка перепишет обычное описание под MiniMax H3 и переведёт инструкции на английский, сохранив точные реплики.</p>
         </section>
 
         <div class="v2-media-grid">
