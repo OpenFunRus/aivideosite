@@ -785,7 +785,7 @@ def _repair_control_prompt(
         "Do not change numeric ages/counts/directions/props/dialogue. "
         "All three canonical fields are mandatory. "
         "If a camera cut/switch is described, use a new timed [Shot N].\n\n"
-        "VALIDATION ERRORS:\n- "
+        "VALIDATION / FAITHFULNESS ERRORS:\n- "
         + "\n- ".join(issues)
         + "\n\nPREVIOUS INVALID PROMPT:\n"
         + bad_prompt[:16000]
@@ -801,6 +801,68 @@ def _repair_control_prompt(
         thinking=thinking,
     )
     return _decode_control_json(_request_control_content(payload))
+
+
+
+def _wand_source_text(messages: Any) -> str:
+    normalized = normalize_messages(messages)
+    if not normalized:
+        return ""
+    content = str(normalized[-1].get("content") or "").strip()
+    if "\n\n" in content:
+        tail = content.rsplit("\n\n", 1)[-1].strip()
+        if tail:
+            return tail[:12000]
+    return content[:12000]
+
+
+def _semantic_faithfulness_issues(
+    source_text: str,
+    candidate_prompt: str,
+) -> list[str]:
+    if not source_text.strip() or not candidate_prompt.strip():
+        return []
+
+    verifier_system = (
+        "You are a strict semantic faithfulness auditor for a prompt-rewriting tool. "
+        "Compare SOURCE with CANDIDATE. The candidate may translate to English, add required H3 field labels, "
+        "shot timestamps, speaker tags, and neutral cinematography wording needed to express an explicitly requested "
+        "camera change. It MUST NOT invent new diegetic facts, actions, sounds, weather events, objects, people, "
+        "dialogue, emotions, movement, body actions, environmental events, or change exact numbers/age/count/direction/"
+        "handedness/props. Example: if SOURCE says rain and an unspecified noise behind the man, adding thunder, "
+        "footsteps, traffic, wind, a branch snap, or a named source of the noise is INVALID. "
+        "Return ONLY JSON: {\"valid\":true,\"issues\":[]} or "
+        "{\"valid\":false,\"issues\":[\"short concrete issue\", ...]}. "
+        "Do not rewrite the prompt and do not explain outside JSON."
+    )
+    review_messages = [
+        {
+            "role": "user",
+            "content": (
+                "SOURCE:\n"
+                + source_text[:12000]
+                + "\n\nCANDIDATE:\n"
+                + candidate_prompt[:16000]
+            ),
+        }
+    ]
+    payload = _chat_payload(
+        review_messages,
+        settings=None,
+        system_prompt=verifier_system,
+        stream=False,
+        max_tokens=700,
+        temperature=0.0,
+        thinking=False,
+    )
+    decoded = _decode_control_json(_request_control_content(payload))
+    if decoded.get("valid") is True:
+        return []
+    raw_issues = decoded.get("issues")
+    if not isinstance(raw_issues, list):
+        return ["semantic faithfulness audit failed"]
+    issues = [str(item).strip()[:500] for item in raw_issues if str(item).strip()]
+    return issues or ["candidate prompt is not faithful to the source request"]
 
 
 def sanitize_changes(value: Any, *, valid_character_ids: set[str]) -> dict[str, Any]:
@@ -907,7 +969,9 @@ def control(
 
     prompt = changes.get("prompt")
     if isinstance(prompt, str) and prompt:
+        source_text = _wand_source_text(messages)
         issues = _v2_prompt_validation_issues(prompt, settings_payload)
+        issues.extend(_semantic_faithfulness_issues(source_text, prompt))
         if issues:
             decoded = _repair_control_prompt(
                 messages,
@@ -923,9 +987,13 @@ def control(
                 if isinstance(repaired_prompt, str) and repaired_prompt
                 else ["corrective retry did not return changes.prompt"]
             )
+            if isinstance(repaired_prompt, str) and repaired_prompt:
+                repaired_issues.extend(
+                    _semantic_faithfulness_issues(source_text, repaired_prompt)
+                )
             if repaired_issues:
                 raise AssistantUnavailable(
-                    "Локальная LLM дважды нарушила формат H3: "
+                    "Локальная LLM дважды нарушила формат/смысл H3: "
                     + "; ".join(repaired_issues[:4])
                 )
 
