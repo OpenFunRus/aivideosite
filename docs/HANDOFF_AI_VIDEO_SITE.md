@@ -32,6 +32,8 @@
 - Textarea prompt больше не имеет стандартного browser resize-handle; добавлены стилизованные scrollbar для страницы и внутренних скроллируемых областей.
 - GPU chips теперь разделяют model / VRAM / LOAD визуально, вместо слитной строки.
 - Центральный Create workspace больше не ограничен старым max-width; пустое пространство справа убрано, вертикальная плотность формы уменьшена.
+- Mobile navigation дополнительно переделана: нижняя икон-панель удалена в пользу fixed top bar с hamburger слева, брендом по центру и отдельной кнопкой Characters справа. Hamburger открывает левый drawer, Characters — правый drawer, оба закрываются по backdrop/выбору раздела.
+- На mobile верхний page title / eyebrow / GPU status центрированы как единый блок.
 - Важное техническое ограничение текущего backend: FL2VA first/last и Ref2VA Characters пока разделены режимами. Не обещать их одновременное conditioning до отдельного решения на Stage 3.
 
 Подробный план: `docs/v2/PLAN.md`.
