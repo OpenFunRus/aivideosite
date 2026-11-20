@@ -90,3 +90,88 @@
 @media(max-width:1100px){.v2-steps-grid{grid-template-columns:repeat(3,1fr)}.v2-camera-grid{grid-template-columns:repeat(3,1fr)}.v2-example-list{grid-template-columns:1fr}.v2-instruction-hero{align-items:flex-start;flex-direction:column}.v2-chatgpt-card{align-items:flex-start;flex-direction:column}.v2-chatgpt-actions{width:100%;min-width:0;flex-direction:row}}
 @media(max-width:760px){.v2-site-guide-grid,.v2-format-grid,.v2-sound-grid,.v2-timing-grid,.v2-rule-list,.v2-refs-grid,.v2-mistakes,.v2-guide-columns{grid-template-columns:1fr}.v2-steps-grid{grid-template-columns:1fr 1fr}.v2-camera-grid{grid-template-columns:1fr 1fr}.v2-instruction-source{align-items:flex-start;flex-wrap:wrap}.v2-instruction-source a{margin-left:24px}.v2-chatgpt-actions{flex-direction:column}.v2-instruction-section{padding:14px}}
 @media(max-width:480px){.v2-steps-grid,.v2-camera-grid{grid-template-columns:1fr}.v2-instruction-hero h2{font-size:28px}.v2-instruction-nav{top:0}.v2-code-card pre{font-size:8px}}
+
+
+/* Readability pass: instruction is long-form content, not compact dashboard UI. */
+.v2-instruction-hero p{font-size:13px;line-height:1.65}
+.v2-instruction-tags span{font-size:10.5px;padding:6px 10px}
+.v2-instruction-source{font-size:11px;line-height:1.5;padding:12px 14px}
+.v2-instruction-source .icon{width:17px;height:17px;flex:0 0 17px}
+.v2-instruction-nav a{font-size:11px;padding:9px 11px}
+
+.v2-instruction-section{padding:22px}
+.v2-instruction-section-head>span{font-size:11px}
+.v2-instruction-section-head h3{font-size:20px}
+.v2-instruction-section-head p{font-size:12px;line-height:1.5}
+
+.v2-steps-grid article{padding:15px;min-height:170px}
+.v2-steps-grid b{font-size:11px}
+.v2-steps-grid strong{font-size:13px;line-height:1.35}
+.v2-steps-grid p{font-size:12px;line-height:1.6;margin-top:9px}
+
+.v2-site-guide-grid article{padding:16px 17px}
+.v2-site-guide-grid article>span{font-size:10px}
+.v2-site-guide-grid h4{font-size:14px;margin-bottom:8px}
+.v2-site-guide-grid p{font-size:12px;line-height:1.65}
+.v2-site-guide-grid small{font-size:10.5px;line-height:1.45;margin-top:10px}
+
+.v2-guide-callout{padding:15px 17px}
+.v2-guide-callout strong{font-size:11.5px;line-height:1.4}
+.v2-guide-callout p{font-size:12.5px;line-height:1.65;margin-top:7px}
+
+.v2-format-grid article,.v2-sound-grid article{padding:16px}
+.v2-format-title span{font-size:10px;width:25px;height:25px}
+.v2-format-title strong,.v2-sound-grid strong{font-size:12.5px;line-height:1.35}
+.v2-format-grid p,.v2-sound-grid p{font-size:12px;line-height:1.6;margin-top:9px}
+
+.v2-code-head{padding:11px 13px}
+.v2-code-head strong{font-size:11.5px}
+.v2-code-head small{font-size:10px}
+.v2-code-head button{height:30px;font-size:10px;padding:0 11px}
+.v2-code-card pre{font-size:11.5px;line-height:1.7;padding:16px}
+
+.v2-timing-grid article{padding:16px}
+.v2-timing-grid strong{font-size:14px}
+.v2-timing-grid p{font-size:12px;line-height:1.6;margin:8px 0}
+.v2-timing-grid span{font-size:10px;line-height:1.4}
+
+.v2-rule-list>div{padding:14px}
+.v2-rule-list strong{font-size:12px;line-height:1.4}
+.v2-rule-list span{font-size:12px;line-height:1.6;margin-top:6px}
+
+.v2-camera-grid div{padding:11px}
+.v2-camera-grid b{font-size:11px;line-height:1.4}
+.v2-camera-grid span{font-size:10.5px;line-height:1.45;margin-top:5px}
+
+.v2-guide-columns>div{padding:15px}
+.v2-guide-columns strong{font-size:11px}
+.v2-guide-columns p{font-size:12px;line-height:1.6;margin-top:8px}
+
+.v2-refs-grid article{padding:16px}
+.v2-refs-grid h4{font-size:13px}
+.v2-refs-grid p{font-size:12px;line-height:1.6;margin:8px 0}
+.v2-refs-grid code{font-size:10.5px;line-height:1.5}
+
+.v2-mistakes>div{padding:15px 15px 15px 42px}
+.v2-mistakes b{left:14px;top:15px;font-size:13px}
+.v2-mistakes strong{font-size:12px}
+.v2-mistakes p{font-size:11px;line-height:1.5;margin:6px 0}
+.v2-mistakes span{font-size:11px;line-height:1.5}
+
+.v2-faq{gap:8px}
+.v2-faq summary{padding:13px 15px;font-size:12px;line-height:1.45}
+.v2-faq p{padding:0 15px 14px;font-size:12px;line-height:1.65}
+
+.v2-chatgpt-card h3{font-size:20px}
+.v2-chatgpt-card p{font-size:12px;line-height:1.65}
+
+@media(max-width:760px){
+  .v2-instruction-section{padding:16px}
+  .v2-steps-grid article{min-height:0}
+  .v2-code-card pre{font-size:11px}
+}
+@media(max-width:480px){
+  .v2-instruction-hero p{font-size:12px}
+  .v2-instruction-nav a{font-size:10.5px}
+  .v2-code-card pre{font-size:10.5px}
+}
