@@ -135,9 +135,15 @@
     const submit = qs("#v2-character-create-submit");
     if (submit) submit.disabled = true;
     try {
+      const data = new FormData();
+      data.set("name", name);
+      data.set("description", qs("#v2-character-create-description")?.value.trim() || "");
+      createImageFiles.forEach((file) => data.append("images", file, file.name));
+      const voice = createVoice?.files?.[0];
+      if (voice) data.set("voice", voice, voice.name);
       const result = await fetchJson("/api/characters", {
         method: "POST",
-        body: new FormData(createForm),
+        body: data,
       });
       createDialog?.close();
       showToast("Персонаж сохранён.");
