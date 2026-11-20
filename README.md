@@ -34,6 +34,12 @@
 - два независимых H3 ComfyUI backend: primary RTX3090 и secondary RTX2080, плюс сайт;
 - мобильная навигация и responsive layout.
 
+## Опциональный локальный ИИ-помощник
+
+Для будущего встроенного чата подготовлен отдельный CPU-only `llama.cpp` service на `127.0.0.1:8090` с `w3joe/Qwen3-8B-abliterated Q4_K_M`. Он намеренно не использует GPU, чтобы не отнимать VRAM у RTX3090/RTX2080 и двух H3 backend.
+
+Установка и проверка: [docs/LOCAL_LLM_ASSISTANT.md](docs/LOCAL_LLM_ASSISTANT.md).
+
 ## Ожидаемая структура на Ubuntu
 
 Проект рассчитан на уже настроенную машину:
