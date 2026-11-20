@@ -10,10 +10,12 @@
   const userId = appShell?.dataset.userId || "user";
   const HISTORY_KEY = `aivideosite-${userId}-assistant-history-v1`;
   const MODE_KEY = `aivideosite-${userId}-assistant-mode`;
+  const THINKING_KEY = `aivideosite-${userId}-assistant-thinking`;
 
   const panel = qs("#assistant-panel");
   const toggle = qs("#assistant-toggle");
   const closeButton = qs("#assistant-close");
+  const thinkingButton = qs("#assistant-thinking");
   const clearButton = qs("#assistant-clear");
   const form = qs("#assistant-form");
   const input = qs("#assistant-input");
@@ -23,6 +25,7 @@
   const modeButtons = qsa("[data-assistant-mode]");
 
   let mode = localStorage.getItem(MODE_KEY) === "control" ? "control" : "chat";
+  let thinking = localStorage.getItem(THINKING_KEY) === "1";
   let busy = false;
   let history = [];
 
@@ -61,6 +64,7 @@
     try {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-24)));
       localStorage.setItem(MODE_KEY, mode);
+      localStorage.setItem(THINKING_KEY, thinking ? "1" : "0");
     } catch {
       // The assistant continues to work even when browser storage is disabled.
     }
@@ -119,6 +123,19 @@
       return;
     }
     history.forEach((item) => createMessage(item.role, item.content));
+  };
+
+  const renderThinking = () => {
+    if (!thinkingButton) return;
+    thinkingButton.classList.toggle("active", thinking);
+    thinkingButton.setAttribute("aria-pressed", thinking ? "true" : "false");
+    thinkingButton.title = thinking ? "Thinking включен" : "Thinking выключен";
+  };
+
+  const setThinking = (enabled) => {
+    thinking = Boolean(enabled);
+    renderThinking();
+    persist();
   };
 
   const setMode = (nextMode) => {
@@ -204,6 +221,7 @@
       body: JSON.stringify({
         messages: history,
         settings: currentSettings(),
+        thinking,
       }),
     });
     if (response.status === 401) {
@@ -253,6 +271,7 @@
         body: JSON.stringify({
           messages: history,
           settings: currentSettings(),
+          thinking,
         }),
       });
       if (response.status === 401) {
@@ -326,6 +345,10 @@
 
   toggle.addEventListener("click", () => setOpen(!widget.classList.contains("open")));
   closeButton.addEventListener("click", () => setOpen(false));
+  thinkingButton?.addEventListener("click", () => {
+    if (busy) return;
+    setThinking(!thinking);
+  });
   clearButton.addEventListener("click", () => {
     history = [];
     persist();
@@ -337,6 +360,7 @@
 
   renderHistory();
   setMode(mode);
+  renderThinking();
   setOpen(false);
   refreshStatus();
   setInterval(refreshStatus, 8000);
