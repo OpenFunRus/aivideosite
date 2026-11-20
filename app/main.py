@@ -38,7 +38,7 @@ from .h3_references import (
     parse_reference_manifest,
     validate_reference_items,
 )
-from .worker import JobWorker, probe_has_audio
+from .worker import JobWorker, probe_duration, probe_has_audio, probe_video_size
 
 
 @asynccontextmanager
@@ -1108,7 +1108,40 @@ async def api_editor_export(
             0.0,
             2.0,
         )
-        normalized_clips.append({"media_id": media_id, "volume": volume})
+        trim_start = _editor_float(
+            clip.get("trim_start", 0.0),
+            f"Начало клипа #{index}",
+            0.0,
+            86400.0,
+        )
+        trim_duration = _editor_float(
+            clip.get("trim_duration", 0.0),
+            f"Длина клипа #{index}",
+            0.0,
+            86400.0,
+        )
+        fade_in = _editor_float(
+            clip.get("fade_in", 0.0),
+            f"Fade in клипа #{index}",
+            0.0,
+            60.0,
+        )
+        fade_out = _editor_float(
+            clip.get("fade_out", 0.0),
+            f"Fade out клипа #{index}",
+            0.0,
+            60.0,
+        )
+        normalized_clips.append(
+            {
+                "media_id": media_id,
+                "volume": volume,
+                "trim_start": trim_start,
+                "trim_duration": trim_duration,
+                "fade_in": fade_in,
+                "fade_out": fade_out,
+            }
+        )
 
     audio_settings = data.get("audio")
     if audio_settings is None:
