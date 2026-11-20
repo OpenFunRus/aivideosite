@@ -1,7 +1,27 @@
 <section class="v2-view" data-v2-view="library">
-      <div class="v2-workspace">
-        <div class="v2-workspace-toolbar"><p>Результаты без лишних инструментов: смотреть, скачать, переиспользовать, отправить в монтаж.</p><div class="v2-head-actions"><span class="v2-count-pill" id="v2-library-count">0 роликов</span><button class="v2-secondary-button" id="v2-library-refresh" type="button">Обновить</button></div></div>
-        <div class="v2-library-grid" id="v2-library-grid"></div>
-        <div class="v2-empty-state" id="v2-library-empty" hidden><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg><strong>Библиотека пока пустая</strong><span>Готовые ролики появятся здесь автоматически.</span></div>
+  <div class="v2-workspace v2-library-workspace">
+    <p class="v2-library-intro">Ваши сгенерированные видео и клипы. Смотрите, скачивайте, продолжайте генерацию и собирайте в монтаж.</p>
+
+    <div class="v2-library-toolbar">
+      <label class="v2-library-search">
+        <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-search"></use></svg>
+        <input id="v2-library-search" type="search" autocomplete="off" placeholder="Поиск по названию..." aria-label="Поиск роликов по названию">
+      </label>
+      <div class="v2-library-toolbar-actions">
+        <button class="v2-secondary-button" id="v2-library-refresh" type="button"><svg class="icon"><use href="/static/icons.svg#icon-refresh"></use></svg>Обновить</button>
+        <span class="v2-count-pill" id="v2-library-count">0 роликов</span>
       </div>
-    </section>
+    </div>
+
+    <div class="v2-library-grid" id="v2-library-grid"></div>
+    <div class="v2-empty-state" id="v2-library-empty" hidden>
+      <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+      <strong id="v2-library-empty-title">Библиотека пока пустая</strong>
+      <span id="v2-library-empty-description">Готовые ролики появятся здесь автоматически.</span>
+    </div>
+    <nav class="v2-library-pagination" id="v2-library-pagination" aria-label="Страницы библиотеки" hidden>
+      <div class="v2-library-pagination-buttons" id="v2-library-pages"></div>
+      <span>По 20 роликов на странице</span>
+    </nav>
+  </div>
+</section>

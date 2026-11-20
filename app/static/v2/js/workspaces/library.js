@@ -59,18 +59,52 @@
 
   W.openMediaDialog = openMediaDialog;
 
+  const PAGE_SIZE = 20;
+  let page = 1;
+  let search = "";
+  const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-' + name + '"></use></svg>';
+  const pageNumbers = (current, total) => {
+    const numbers = new Set([1, total, current - 1, current, current + 1]);
+    return [...numbers].filter((value) => value >= 1 && value <= total).sort((a, b) => a - b);
+  };
+
+  const renderPagination = (totalPages) => {
+    const nav = qs("#v2-library-pagination");
+    const buttons = qs("#v2-library-pages");
+    if (!nav || !buttons) return;
+    nav.hidden = totalPages <= 1;
+    if (totalPages <= 1) { buttons.innerHTML = ""; return; }
+    const sequence = pageNumbers(page, totalPages);
+    let previous = 0;
+    let html = '<button type="button" data-library-page="' + (page - 1) + '" ' + (page === 1 ? "disabled" : "") + ' aria-label="Предыдущая страница">‹</button>';
+    for (const number of sequence) {
+      if (previous && number > previous + 1) html += '<span class="v2-library-page-ellipsis">…</span>';
+      html += '<button type="button" data-library-page="' + number + '" ' + (number === page ? 'class="active" aria-current="page"' : "") + '>' + number + '</button>';
+      previous = number;
+    }
+    html += '<button type="button" data-library-page="' + (page + 1) + '" ' + (page === totalPages ? "disabled" : "") + ' aria-label="Следующая страница">›</button>';
+    buttons.innerHTML = html;
+  };
+
   const renderLibrary = () => {
     const grid = qs("#v2-library-grid");
     const empty = qs("#v2-library-empty");
     const count = qs("#v2-library-count");
     if (!grid) return;
 
-    if (count) count.textContent = W.allMedia.length + " роликов";
-    if (empty) empty.hidden = W.allMedia.length > 0;
-
-    const visibleMedia = W.allMedia.slice(0, W.libraryLimit);
-    const more = qs("#v2-library-more");
-    if (more) more.hidden = visibleMedia.length >= W.allMedia.length;
+    const filtered = W.allMedia.filter((item) =>
+      String(item.title || item.filename || "Видео").toLocaleLowerCase("ru-RU").includes(search)
+    );
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    page = Math.min(page, totalPages);
+    if (count) count.textContent = (search ? filtered.length + " из " + W.allMedia.length : W.allMedia.length) + " роликов";
+    if (empty) empty.hidden = filtered.length > 0;
+    const emptyTitle = qs("#v2-library-empty-title");
+    const emptyDescription = qs("#v2-library-empty-description");
+    if (emptyTitle) emptyTitle.textContent = search ? "Ничего не найдено" : "Библиотека пока пуста";
+    if (emptyDescription) emptyDescription.textContent = search ? "Попробуйте другое название ролика." : "Готовые ролики появятся здесь автоматически.";
+    const visibleMedia = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    renderPagination(totalPages);
 
     grid.innerHTML = visibleMedia.map((item) => {
       const meta = item.meta || {};
@@ -78,7 +112,8 @@
       const kind = meta.v2_context?.workspace || meta.operation || item.kind || "video";
       return (
         '<article class="v2-media-card" data-media-id="' + escapeHtml(item.id) + '">' +
-        '<video src="/media/' + encodeURIComponent(item.id) + '" preload="metadata" muted playsinline></video>' +
+        '<div class="v2-media-cover"><video src="/media/' + encodeURIComponent(item.id) + '" preload="metadata" muted playsinline></video>' +
+        '<span class="v2-media-duration">' + icon("video") + escapeHtml(duration ? W.formatSeconds(duration) : "—") + '</span></div>' +
         '<div class="v2-media-card-body">' +
         "<h3>" + escapeHtml(item.title || "Видео") + "</h3>" +
         '<div class="v2-media-meta"><span>' + escapeHtml(W.formatDate(item.created_at)) + "</span>" +
@@ -86,25 +121,34 @@
         "<span>" + escapeHtml(W.mediaResolution(item)) + "</span>" +
         "<span>" + escapeHtml(kind) + "</span></div>" +
         '<div class="v2-media-actions">' +
-        '<button type="button" data-library-action="open"><svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>Открыть</button>' +
-        '<a href="/media/' + encodeURIComponent(item.id) + '?download=1"><svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>Скачать</a>' +
-        '<button type="button" data-library-action="continue">Продолжить</button>' +
-        '<button type="button" data-library-action="clip">След. клип</button>' +
-        '<button type="button" data-library-action="editor"><svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg>Монтаж</button>' +
-        '<button class="danger" type="button" data-library-action="delete"><svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg></button>' +
+        '<button class="v2-media-action-open" type="button" data-library-action="open">' + icon("player-play") + '<span>Открыть</span></button>' +
+        '<a href="/media/' + encodeURIComponent(item.id) + '?download=1">' + icon("download") + '<span>Скачать</span></a>' +
+        '<button type="button" data-library-action="continue">' + icon("player-play") + '<span>Продолжить</span></button>' +
+        '<button type="button" data-library-action="clip">' + icon("video") + '<span>След. клип</span></button>' +
+        '<details class="v2-media-more"><summary aria-label="Другие действия">' + icon("dots") + '</summary>' +
+        '<div class="v2-media-menu"><button type="button" data-library-action="editor">' + icon("scissors") + 'В монтаж</button>' +
+        '<button class="danger" type="button" data-library-action="delete">' + icon("trash") + 'Удалить</button></div></details>' +
         "</div></div></article>"
       );
     }).join("");
   };
 
   qs("#v2-library-refresh")?.addEventListener("click", () => {
-    W.libraryLimit = 40;
     W.refreshState();
   });
 
-  qs("#v2-library-more")?.addEventListener("click", () => {
-    W.libraryLimit += 40;
+  qs("#v2-library-search")?.addEventListener("input", (event) => {
+    search = event.target.value.trim().toLocaleLowerCase("ru-RU");
+    page = 1;
     renderLibrary();
+  });
+
+  qs("#v2-library-pages")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-library-page]");
+    if (!button || button.disabled) return;
+    page = Number(button.dataset.libraryPage) || 1;
+    renderLibrary();
+    qs("#v2-library-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   qs("#v2-library-grid")?.addEventListener("click", async (event) => {

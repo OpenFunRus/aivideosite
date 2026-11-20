@@ -9,7 +9,6 @@
     allMedia: [],
     refreshing: null,
     objectUrls: new Map(),
-    libraryLimit: 40,
   };
 
   W.loadJson = (key, fallback) => {
