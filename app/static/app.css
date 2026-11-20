@@ -2177,3 +2177,35 @@ input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-ou
   .assistant-toggle{height:42px;min-width:70px}
   .assistant-message-bubble{max-width:92%}
 }
+
+
+/* Prevent invisible help popovers and fixed overlays from widening the page. */
+.app-page,
+.app-page .app-shell,
+.app-page .workspace{
+  max-width:100%;
+}
+.app-page{
+  overflow-x:clip;
+}
+.app-page .workspace,
+.app-page .content,
+.app-page .view,
+.app-page .generator-grid,
+.app-page .generator-main,
+.app-page .generator-settings{
+  min-width:0;
+}
+.help-tip::after{
+  display:none;
+}
+.help-tip:hover::after,
+.help-tip:focus-visible::after{
+  display:block;
+}
+.assistant-widget{
+  max-width:calc(100vw - 16px);
+}
+.assistant-panel{
+  max-width:calc(100vw - 28px);
+}
