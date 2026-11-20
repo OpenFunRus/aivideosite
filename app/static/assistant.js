@@ -74,6 +74,43 @@
     messagesElement.scrollTop = messagesElement.scrollHeight;
   };
 
+  const copyText = async (value) => {
+    const text = String(value ?? "");
+    if (!text) return false;
+
+    if (typeof window.AIVideoCopyText === "function") {
+      return window.AIVideoCopyText(text);
+    }
+
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Use legacy fallback below.
+      }
+    }
+
+    const helper = document.createElement("textarea");
+    helper.value = text;
+    helper.setAttribute("readonly", "");
+    helper.style.position = "fixed";
+    helper.style.left = "-9999px";
+    helper.style.top = "0";
+    document.body.appendChild(helper);
+    helper.focus({ preventScroll: true });
+    helper.select();
+    helper.setSelectionRange(0, helper.value.length);
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } finally {
+      helper.remove();
+    }
+    if (!copied) throw new Error("copy failed");
+    return true;
+  };
+
   const createMessage = (role, content = "", { temporary = false } = {}) => {
     const row = document.createElement("div");
     row.className = `assistant-message ${role}`;
@@ -93,14 +130,17 @@
       copy.className = "assistant-copy";
       copy.textContent = "Копировать";
       copy.addEventListener("click", async () => {
+        const original = copy.textContent;
         try {
-          await navigator.clipboard.writeText(text.textContent || "");
+          const copied = await copyText(text.textContent || "");
+          if (!copied) throw new Error("copy failed");
           copy.textContent = "Скопировано";
-          setTimeout(() => {
-            copy.textContent = "Копировать";
-          }, 1200);
         } catch {
           copy.textContent = "Ошибка";
+        } finally {
+          setTimeout(() => {
+            copy.textContent = original || "Копировать";
+          }, 1200);
         }
       });
       bubble.appendChild(copy);
