@@ -40,6 +40,7 @@
   let serverClockPerfAtFetch = null;
   let currentView = localStorage.getItem(VIEW_KEY) || "generate";
   const uploadObjectUrls = new Map();
+  const modernUploadUrls = new Map();
   let characters = [];
   const selectedCharacterIds = new Set();
   let refreshCharacters = async () => {};
@@ -107,6 +108,64 @@
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 4500);
   };
+
+
+  const FIELD_HELP={
+    "Промт":"Опишите сцену, действия по порядку, движение камеры, свет и звук. Для сложной хореографии H3 обычно стабильнее понимает английский.",
+    "Задача референсов":"Определяет, как H3 трактует изображения, видео и аудио: внешний вид, раскадровку, редактирование, продолжение или аудио-ориентир.",
+    "Размер референс-изображения":"Как подготовить изображения перед Ref2VA. «Под размер результата» — безопасный вариант; оригинал сохраняет исходный масштаб с обрезкой по сетке.",
+    "Режим управления":"ControlNet задаёт структуру движения или формы по видео. Canny можно построить автоматически, остальные режимы требуют подготовленного управляющего ролика.",
+    "Сила влияния":"Насколько жёстко ControlNet следует управляющему видео. 1.0 — хороший старт; слишком большое значение может ухудшить естественность.",
+    "Начало влияния":"Доля генерации от 0 до 1, с которой начинает действовать ControlNet. 0 — с самого начала.",
+    "Конец влияния":"Доля генерации от 0 до 1, до которой действует ControlNet. 1 — до самого конца.",
+    "Нижний порог Canny":"Нижний порог поиска контуров. Меньше значение сохраняет больше слабых границ и мелких деталей.",
+    "Верхний порог Canny":"Верхний порог сильных контуров. Обычно должен быть выше нижнего порога.",
+    "Формат и размер":"Сначала выберите соотношение сторон, затем разрешение. Размеры округляются к сетке H3 ×32.",
+    "Длительность":"Продолжительность ролика. Чем длиннее видео, тем выше расход времени и риск дрейфа персонажей.",
+    "FPS":"Количество кадров в секунду. 24 FPS — основной безопасный вариант; больше FPS означает больше генерируемых кадров.",
+    "Шаги":"4/8 — быстрые Turbo-профили, 12/16/20 — Base-модель. Для Ref2VA Turbo используется только 4 шага.",
+    "Seed":"Сид генерации. -1 создаёт новый случайный сид; конкретное число помогает повторять близкий результат.",
+    "Имя":"Короткое имя сохранённого персонажа для выбора в генераторе.",
+    "Неизменяемые особенности":"Постоянные черты: лицо, волосы/шерсть, одежда, пропорции и характерные аксессуары.",
+    "Референс-изображения":"Добавьте 1–4 изображения одного персонажа. Лучше использовать разные понятные ракурсы без сильных перекрытий.",
+    "Референс голоса · необязательно":"Необязательный образец голоса. При выборе персонажа он добавляется как аудио-референс.",
+    "Позиция на таймлайне, сек":"С какой секунды проекта начинается отдельная аудиодорожка.",
+    "Обрезать начало, сек":"Сколько секунд убрать от начала загруженного аудиофайла.",
+    "Длина фрагмента, сек":"Какой участок аудиофайла использовать после обрезки.",
+    "Громкость трека":"Громкость отдельной аудиодорожки относительно исходного уровня.",
+    "Аудиодорожка":"Загрузите внешний аудиофайл, который будет добавлен к выбранному ролику.",
+    "Начало дорожки, сек":"На какой секунде видео должна начаться добавляемая аудиодорожка."
+  };
+  const enhanceHelpTips=()=>qsa(".field-label").forEach(label=>{
+    if(qs(".help-tip",label))return;
+    const key=label.textContent.replace(/\s+/g," ").trim(),help=FIELD_HELP[key];if(!help)return;
+    const tip=document.createElement("span");tip.className="help-tip";tip.tabIndex=0;tip.setAttribute("role","button");tip.setAttribute("aria-label","Подсказка: "+key);tip.dataset.tip=help;tip.textContent="?";
+    tip.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();tip.focus()});
+    const value=label.querySelector(":scope > strong");if(value)label.insertBefore(tip,value);else label.appendChild(tip);
+  });
+  const revokeModernInputUrls=input=>{(modernUploadUrls.get(input)||[]).forEach(URL.revokeObjectURL);modernUploadUrls.delete(input)};
+  const renderModernFileInput=input=>{
+    if(!input)return;revokeModernInputUrls(input);const files=[...(input.files||[])],urls=[],root=input.closest(".reference-upload, .file-field-enhanced");if(!root)return;
+    const previews=qs(".modern-upload-previews",root),count=qs(".modern-upload-count",root),copy=qs(".file-picker-copy small",root);
+    if(count)count.textContent=files.length?(files.length===1?"1 файл выбран":files.length+" файла выбрано"):"Файлы не выбраны";
+    if(copy)copy.textContent=files.length?files.map(f=>f.name).join(", "):(input.multiple?"Можно выбрать несколько файлов":"Выберите один файл");
+    if(previews){previews.innerHTML="";files.slice(0,4).forEach(file=>{const box=document.createElement("span");box.className="modern-upload-preview";
+      if(file.type.startsWith("image/")){const url=URL.createObjectURL(file);urls.push(url);const img=document.createElement("img");img.src=url;img.alt=file.name;box.appendChild(img)}
+      else if(file.type.startsWith("video/")){const url=URL.createObjectURL(file);urls.push(url);const video=document.createElement("video");video.src=url;video.muted=true;video.preload="metadata";box.appendChild(video)}
+      else{box.innerHTML=icon(file.type.startsWith("audio/")?"music":"photo");box.title=file.name}previews.appendChild(box)});
+      if(files.length>4){const more=document.createElement("span");more.className="modern-upload-preview modern-upload-more";more.textContent="+"+(files.length-4);previews.appendChild(more)}
+    }modernUploadUrls.set(input,urls);
+  };
+  const enhanceModernFileInputs=()=>qsa('input[type="file"]').forEach(input=>{
+    if(input.closest(".upload-card")||input.closest(".editor-audio-upload"))return;
+    const ref=input.closest(".reference-upload"),field=input.closest(".field");let root=ref;
+    if(ref){ref.classList.add("is-modern-upload");if(!qs(".modern-upload-footer",ref)){const footer=document.createElement("span");footer.className="modern-upload-footer";const cta=document.createElement("span");cta.className="modern-upload-cta";cta.innerHTML=icon("photo")+"<span>Выбрать или перетащить</span>";const count=document.createElement("span");count.className="modern-upload-count";count.textContent="Файлы не выбраны";footer.append(cta,count);const previews=document.createElement("span");previews.className="modern-upload-previews";ref.append(footer,previews)}}
+    else if(field){field.classList.add("file-field-enhanced");root=field;if(!qs(".file-picker-surface",field)){const surface=document.createElement("span");surface.className="file-picker-surface";const pi=document.createElement("span");pi.className="file-picker-icon";pi.innerHTML=icon(input.accept.includes("audio")?"microphone":"photo");const pc=document.createElement("span");pc.className="file-picker-copy";const title=document.createElement("strong");title.textContent=input.multiple?"Выбрать файлы":"Выбрать файл";const small=document.createElement("small");small.textContent=input.multiple?"Можно выбрать несколько файлов":"Выберите один файл";pc.append(title,small);const previews=document.createElement("span");previews.className="modern-upload-previews";surface.append(pi,pc,previews);input.after(surface)}}
+    if(!root||input.dataset.modernUploadReady==="1")return;input.dataset.modernUploadReady="1";
+    ["dragenter","dragover"].forEach(t=>input.addEventListener(t,()=>root.classList.add("is-dragging")));["dragleave","drop"].forEach(t=>input.addEventListener(t,()=>root.classList.remove("is-dragging")));
+    input.addEventListener("change",()=>renderModernFileInput(input));renderModernFileInput(input);
+  });
+  const askConfirm=(message,options={})=>{const dialog=qs("#confirm-dialog");if(!dialog)return Promise.resolve(false);qs("#confirm-dialog-title").textContent=options.title||"Подтверждение";qs("#confirm-dialog-message").textContent=message;const submit=qs("#confirm-dialog-submit");submit.textContent=options.confirmText||"Продолжить";submit.classList.toggle("is-danger",Boolean(options.danger));dialog.returnValue="cancel";dialog.showModal();return new Promise(resolve=>dialog.addEventListener("close",()=>resolve(dialog.returnValue==="confirm"),{once:true}))};
 
   const humanBytes = (bytes) => {
     const value = Number(bytes || 0);
@@ -575,7 +634,7 @@
       ["setting", "Локация / окружение"],
       ["style", "Стиль"],
       ["composition", "Композиция"],
-      ["storyboard", "Storyboard / keyframe"],
+      ["storyboard", "Раскадровка / ключевой кадр"],
     ],
     videos: [
       ["motion", "Движение / действие"],
@@ -632,7 +691,7 @@
         const retentionChoices = retentionOptions[kind]
           .map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`)
           .join("");
-        const typeLabel = kind === "images" ? "Picture" : kind === "videos" ? "Video" : "Audio";
+        const typeLabel = kind === "images" ? "Изображение" : kind === "videos" ? "Видео" : "Аудио";
         return `
           <div class="reference-file-row" data-ref-kind="${kind}" data-ref-index="${index}">
             <div class="reference-file-name">
@@ -672,7 +731,7 @@
     const element = qs("#reference-budget");
     if (!element) return budget;
     element.textContent =
-      `${budget.total} / 15 media · ${budget.images} / 9 images · ${budget.videos} / 3 videos · ${budget.audios} / 3 audio`;
+      `${budget.total} / 15 файлов · ${budget.images} / 9 изображений · ${budget.videos} / 3 видео · ${budget.audios} / 3 аудио`;
     const mode = currentGenerationMode();
     const invalid =
       budget.total > 15 ||
@@ -768,37 +827,37 @@
     const note = qs("#control-mode-note");
     if (title) {
       title.textContent = isInpaint
-        ? "Control video · optional"
+        ? "Управляющее видео · необязательно"
         : mode === "canny_auto"
-          ? "Raw motion video"
-          : "Prepared control video";
+          ? "Обычное видео движения"
+          : "Подготовленное управляющее видео";
     }
     if (help) {
       if (mode === "canny_auto") {
-        help.textContent = "Сайт сам применит built-in Canny к каждому кадру.";
+        help.textContent = "Сайт сам применит встроенный Canny к каждому кадру.";
       } else if (isInpaint) {
-        help.textContent = "Необязательно: добавьте структуру поверх source + mask.";
+        help.textContent = "Необязательно: добавьте структуру поверх исходника и маски.";
       } else if (mode !== "none") {
         help.textContent =
-          "Видео должно быть заранее подготовлено как " + mode.toUpperCase() + " control.";
+          "Видео должно быть заранее подготовлено для режима " + mode.toUpperCase() + ".";
       }
     }
     if (note) {
       const notes = {
         canny_auto:
-          "Raw RGB → built-in Canny → H3 Fun ControlNet. Дополнительные модели-препроцессоры не нужны.",
+          "Обычное RGB-видео → встроенный Canny → H3 Fun ControlNet. Дополнительные модели-препроцессоры не нужны.",
         canny:
-          "Готовое Canny/edge control video подаётся напрямую в Union.",
+          "Готовое Canny-видео с контурами подаётся напрямую в Union.",
         pose:
-          "Загрузите заранее построенное Pose control video (например SDPose/SAM3D Body).",
+          "Загрузите заранее построенное Pose-видео (например SDPose/SAM3D Body).",
         depth:
-          "Загрузите заранее построенное Depth control video (например Depth Anything 3 / MoGe).",
+          "Загрузите заранее построенное Depth-видео (например Depth Anything 3 / MoGe).",
         hed:
-          "HED поддерживается Union, но built-in HED-preprocessor в ComfyUI отсутствует: нужен заранее подготовленный ролик.",
+          "HED поддерживается Union, но встроенного HED-препроцессора в ComfyUI нет: нужен заранее подготовленный ролик.",
         mlsd:
-          "MLSD поддерживается Union, но built-in MLSD-preprocessor в ComfyUI отсутствует: нужен заранее подготовленный ролик.",
+          "MLSD поддерживается Union, но встроенного MLSD-препроцессора в ComfyUI нет: нужен заранее подготовленный ролик.",
         inpaint:
-          "Source + mask обязательны. Белое в mask video = regenerate. Control video можно добавить дополнительно.",
+          "Исходник и маска обязательны. Белое в видео-маске = перегенерировать область. Управляющее видео можно добавить дополнительно.",
       };
       note.textContent = notes[mode] || "";
     }
@@ -818,16 +877,16 @@
         mode === "frames"
           ? "MiniMax H3 FL2VA"
           : mode === "multiframe"
-            ? "MiniMax H3 MULTIFRAME GUIDE"
+            ? "MiniMax H3 · ТАЙМЛАЙН"
             : mode === "digital_human"
-              ? "MiniMax H3 DIGITAL HUMAN"
+              ? "MiniMax H3 · DIGITAL HUMAN"
               : "MiniMax H3 REF2VA";
     }
     const audioInput = referenceInputs.audios;
     if (audioInput) audioInput.multiple = mode !== "digital_human";
     const audioTitle = qs("#reference-audio-title");
     const audioHelp = qs("#reference-audio-help");
-    if (audioTitle) audioTitle.textContent = mode === "digital_human" ? "Driving audio" : "Аудио / голос";
+    if (audioTitle) audioTitle.textContent = mode === "digital_human" ? "Управляющее аудио" : "Аудио / голос";
     if (audioHelp) {
       audioHelp.textContent =
         mode === "digital_human"
@@ -911,7 +970,7 @@
           ${item.preview_url ? `<img src="${escapeHtml(item.preview_url)}" alt="">` : ""}
           <span>
             <strong>${escapeHtml(item.name)}</strong>
-            <small>${Number(item.image_count || 0)} image${Number(item.image_count || 0) === 1 ? "" : "s"}${item.voice ? " · voice" : ""}</small>
+            <small>${Number(item.image_count || 0)} реф.${item.voice ? " · голос" : ""}</small>
           </span>
         </label>`)
       .join("");
@@ -941,13 +1000,13 @@
           <div class="character-card-body">
             <div class="character-card-title">
               <h3>${escapeHtml(item.name)}</h3>
-              <span class="badge badge-blue">${Number(item.image_count || 0)} refs</span>
-              ${item.voice ? '<span class="badge badge-green">voice</span>' : ""}
+              <span class="badge badge-blue">${Number(item.image_count || 0)} реф.</span>
+              ${item.voice ? '<span class="badge badge-green">голос</span>' : ""}
             </div>
             <p>${escapeHtml(item.description || "Без дополнительного описания.")}</p>
             <div class="media-actions">
-              <button class="btn btn-secondary btn-compact" type="button" data-character-action="edit">Редактировать</button>
-              <button class="btn btn-danger btn-compact" type="button" data-character-action="delete">${icon("trash")} Удалить</button>
+              <button class="btn btn-secondary btn-compact" type="button" data-character-action="edit">${icon("adjustments")} Изменить</button>
+              <button class="icon-btn" type="button" data-character-action="delete" aria-label="Удалить персонажа" title="Удалить персонажа">${icon("trash")}</button>
             </div>
           </div>
         </article>`)
@@ -985,6 +1044,7 @@
         body: new FormData(form),
       });
       form.reset();
+      qsa('input[type="file"]', form).forEach((input) => renderModernFileInput(input));
       showToast("Персонаж сохранён.");
       await refreshCharacters();
     } catch (error) {
@@ -994,6 +1054,11 @@
     }
   });
 
+  const characterEditDialog=qs("#character-edit-dialog"),characterEditForm=qs("#character-edit-form");
+  const openCharacterEdit=character=>{if(!characterEditDialog||!character)return;qs("#character-edit-id").value=character.id;qs("#character-edit-name").value=character.name||"";qs("#character-edit-description").value=character.description||"";characterEditDialog.showModal()};
+  qsa("[data-close-character-edit]").forEach(button=>button.addEventListener("click",()=>characterEditDialog?.close()));
+  characterEditForm?.addEventListener("submit",async event=>{event.preventDefault();const characterId=qs("#character-edit-id")?.value||"",submit=qs("#character-edit-submit"),data=new FormData(characterEditForm);data.delete("character_id");submit.disabled=true;try{await api("/api/characters/"+encodeURIComponent(characterId),{method:"POST",body:data});characterEditDialog.close();showToast("Персонаж обновлён.");await refreshCharacters()}catch(error){showToast(error.message,"error")}finally{submit.disabled=false}});
+
   qs("#character-grid")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-character-action]");
     const card = button?.closest("[data-character-id]");
@@ -1002,7 +1067,7 @@
     if (!character) return;
 
     if (button.dataset.characterAction === "delete") {
-      if (!confirm(`Удалить персонажа «${character.name}» и его reference-файлы?`)) return;
+      if (!(await askConfirm(`Удалить персонажа «${character.name}» и его референс-файлы?`, { title: "Удаление персонажа", confirmText: "Удалить", danger: true }))) return;
       button.disabled = true;
       try {
         await api(`/api/characters/${encodeURIComponent(character.id)}`, { method: "DELETE" });
@@ -1018,29 +1083,7 @@
     }
 
     if (button.dataset.characterAction === "edit") {
-      const name = prompt("Имя персонажа", character.name);
-      if (name === null) return;
-      const description = prompt(
-        "Неизменяемые особенности персонажа",
-        character.description || ""
-      );
-      if (description === null) return;
-      const data = new FormData();
-      data.set("name", name);
-      data.set("description", description);
-      button.disabled = true;
-      try {
-        await api(`/api/characters/${encodeURIComponent(character.id)}`, {
-          method: "POST",
-          body: data,
-        });
-        showToast("Персонаж обновлён.");
-        await refreshCharacters();
-      } catch (error) {
-        showToast(error.message, "error");
-      } finally {
-        button.disabled = false;
-      }
+      openCharacterEdit(character);
     }
   });
 
@@ -1908,9 +1951,9 @@
     qs(selector)?.addEventListener("change", syncEditorAudioControls);
   });
 
-  qs("#editor-clear")?.addEventListener("click", () => {
+  qs("#editor-clear")?.addEventListener("click", async () => {
     if (editorClips.length || editorAudio.file) {
-      if (!confirm("Очистить весь таймлайн и аудиодорожку?")) return;
+      if (!(await askConfirm("Очистить весь таймлайн и аудиодорожку?", { title: "Очистить таймлайн", confirmText: "Очистить", danger: true }))) return;
     }
     editorClips = [];
     clearEditorAudio();
@@ -1974,9 +2017,10 @@
 
   qs("#clear-library").addEventListener("click", async () => {
     if (
-      !confirm(
-        "Удалить все ролики из библиотеки? Ролики, которые нужны активной задаче, будут сохранены."
-      )
+      !(await askConfirm(
+        "Удалить все ролики из библиотеки? Ролики, которые нужны активной задаче, будут сохранены.",
+        { title: "Очистить библиотеку", confirmText: "Удалить", danger: true }
+      ))
     ) {
       return;
     }
@@ -2001,9 +2045,10 @@
 
   qs("#clear-queue").addEventListener("click", async () => {
     if (
-      !confirm(
-        "Очистить очередь? Будут удалены завершённые, ошибочные, отменённые и ожидающие задачи. Работающие останутся."
-      )
+      !(await askConfirm(
+        "Очистить очередь? Будут удалены завершённые, ошибочные, отменённые и ожидающие задачи. Работающие останутся.",
+        { title: "Очистить очередь", confirmText: "Очистить", danger: true }
+      ))
     ) {
       return;
     }
@@ -2100,6 +2145,8 @@
   window.addEventListener("beforeunload", () => {
     uploadObjectUrls.forEach((url) => URL.revokeObjectURL(url));
     uploadObjectUrls.clear();
+    modernUploadUrls.forEach((urls) => urls.forEach((url) => URL.revokeObjectURL(url)));
+    modernUploadUrls.clear();
     if (editorAudio.objectUrl) {
       URL.revokeObjectURL(editorAudio.objectUrl);
     }
@@ -2273,9 +2320,9 @@
       ["FPS", meta.fps ?? "—"],
       ["Профиль", profileLabel(meta.profile)],
       ["Режим H3", meta.generation_mode || "frames"],
-      ["Reference task", meta.reference_task || "—"],
-      ["Ref image size", meta.ref_image_size || "—"],
-      ["Timeline guides", Array.isArray(meta.timeline_guides) ? meta.timeline_guides.length : 0],
+      ["Задача референсов", meta.reference_task || "—"],
+      ["Размер референса", meta.ref_image_size || "—"],
+      ["Кадры таймлайна", Array.isArray(meta.timeline_guides) ? meta.timeline_guides.length : 0],
       ["ControlNet", meta.control?.mode || "none"],
       ["GPU", meta.gpu_backend || "—"],
       ["Нативный звук H3", meta.generate_audio ? "Да" : "Нет"],
@@ -2364,7 +2411,7 @@
     }
 
     if (action === "remove-audio") {
-      if (!confirm("Создать отдельную копию ролика без аудиодорожки?")) {
+      if (!(await askConfirm("Создать отдельную копию ролика без аудиодорожки?", { title: "Удалить звук", confirmText: "Создать копию" }))) {
         return;
       }
       try {
@@ -2384,9 +2431,10 @@
 
     if (action === "delete") {
       if (
-        !confirm(
-          "Удалить этот файл из библиотеки? Производные версии не удаляются."
-        )
+        !(await askConfirm(
+          "Удалить этот файл из библиотеки? Производные версии не удаляются.",
+          { title: "Удалить файл", confirmText: "Удалить", danger: true }
+        ))
       ) {
         return;
       }
@@ -2421,7 +2469,7 @@
     if (!jobId) return;
 
     if (action === "cancel") {
-      if (!confirm("Отменить эту задачу?")) return;
+      if (!(await askConfirm("Отменить эту задачу?", { title: "Отмена задачи", confirmText: "Отменить задачу", danger: true }))) return;
       target.disabled = true;
       try {
         await api(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, {
@@ -2455,7 +2503,7 @@
     }
 
     if (action === "delete") {
-      if (!confirm("Удалить эту запись из очереди?")) return;
+      if (!(await askConfirm("Удалить эту запись из очереди?", { title: "Удалить запись", confirmText: "Удалить", danger: true }))) return;
       target.disabled = true;
       try {
         await api(`/api/jobs/${encodeURIComponent(jobId)}`, {
@@ -2470,6 +2518,9 @@
       }
     }
   });
+
+  enhanceHelpTips();
+  enhanceModernFileInputs();
 
   setInterval(updateLiveJobTimers, 1000);
   refreshState(true, currentView === "library");
