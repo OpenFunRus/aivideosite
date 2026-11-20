@@ -26,6 +26,20 @@
   let busy = false;
   let history = [];
 
+  const repairMojibake = (value) => {
+    const text = String(value ?? "");
+    const markers = (text.match(/[ÐÑÃÂ]/g) || []).length;
+    if (markers < 2) return text;
+    try {
+      const bytes = Uint8Array.from([...text], (char) => char.charCodeAt(0) & 0xff);
+      const repaired = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      const repairedMarkers = (repaired.match(/[ÐÑÃÂ]/g) || []).length;
+      return repairedMarkers < markers ? repaired : text;
+    } catch {
+      return text;
+    }
+  };
+
   try {
     const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
     if (Array.isArray(saved)) {
@@ -36,6 +50,7 @@
             ["user", "assistant"].includes(item.role) &&
             typeof item.content === "string"
         )
+        .map((item) => ({ ...item, content: repairMojibake(item.content) }))
         .slice(-24);
     }
   } catch {
