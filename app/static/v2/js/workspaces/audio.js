@@ -232,6 +232,13 @@
   };
 
   W.updateAudioRange = updateRange;
+  W.audioAssistantContext = () => ({
+    audio_start: Number(audioStart.toFixed(3)),
+    audio_end: Number((audioStart + selectedSeconds()).toFixed(3)),
+    master_track_title: String(selectedTrack?.title || selectedTrack?.file?.name || ""),
+    source_kind: selectedTrack?.id ? "library_track" : (selectedTrack ? "uploaded_track" : "none"),
+    has_visual_reference: Boolean(visualInput?.files?.[0]),
+  });
 
   const stopPreview = () => {
     previewAudio.pause();
