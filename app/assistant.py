@@ -651,6 +651,68 @@ def _request_control_content(payload: dict[str, Any]) -> str:
     raise AssistantUnavailable("LLM не приняла запрос управления.")
 
 
+def _request_plain_content(payload: dict[str, Any]) -> str:
+    candidate = dict(payload)
+    candidate.pop("response_format", None)
+    try:
+        response = requests.post(
+            f"{LLM_URL}/v1/chat/completions",
+            json=candidate,
+            timeout=(8, 180),
+        )
+    except requests.RequestException as exc:
+        raise AssistantUnavailable(f"Не удалось обратиться к локальной LLM: {exc}") from exc
+    if not response.ok:
+        data = _safe_json(response)
+        raise AssistantUnavailable(
+            str(data.get("error") or data.get("detail") or f"LLM HTTP {response.status_code}")
+        )
+    data = _safe_json(response)
+    choices = data.get("choices") or []
+    if not choices:
+        raise AssistantUnavailable("LLM вернула пустой ответ.")
+    content = (choices[0].get("message") or {}).get("content")
+    if not content:
+        raise AssistantUnavailable("LLM не вернула текст.")
+    return str(content)
+
+
+def _extract_h3_prompt_text(content: str) -> str:
+    text = _strip_think_blocks(str(content or "")).strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:text|txt|markdown|md)?\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*```$", "", text)
+
+    try:
+        decoded = _extract_json(text)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        decoded = {}
+    if isinstance(decoded, dict):
+        changes = decoded.get("changes")
+        if isinstance(changes, dict):
+            prompt = changes.get("prompt")
+            if isinstance(prompt, str) and prompt.strip():
+                return prompt.strip()
+        prompt = decoded.get("prompt")
+        if isinstance(prompt, str) and prompt.strip():
+            return prompt.strip()
+
+    if "\\n" in text and "\n" not in text:
+        text = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\\"", "\"")
+
+    lowered = text.lower()
+    start = lowered.find("integrated_multimodal_description:")
+    if start < 0:
+        raise AssistantUnavailable("LLM не вернула H3 prompt.")
+    prompt = text[start:].strip()
+    prompt = re.sub(r"\s*```+\s*$", "", prompt).strip()
+    if prompt.endswith('\"}') or prompt.endswith("'}"):
+        prompt = prompt[:-2].rstrip()
+    return prompt[:16000]
+
+
+_V2_WAND_WORKSPACES = {"create", "continue", "audio", "clip"}
+
 def _int(value: Any, minimum: int, maximum: int) -> int | None:
     try:
         number = int(round(float(value)))
