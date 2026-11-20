@@ -1,0 +1,28 @@
+<section class="v2-view" data-v2-view="audio">
+      <form class="v2-workspace" id="v2-audio-form">
+        <div class="v2-workspace-intro"><p>Трек управляет выступлением, танцем или движением рта. Справа выбери Character или добавь визуальный референс.</p></div>
+        <div class="v2-workspace-grid">
+          <section class="v2-tool-card">
+            <div class="v2-card-title"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Аудиодорожка</strong></div>
+            <label class="v2-field"><span>Сохранённый master track</span><select id="v2-audio-track"><option value="">Выберите сохранённый трек…</option></select></label>
+            <div class="v2-or"><span>или новый файл</span></div>
+            <label class="v2-audio-drop"><input id="v2-audio-file" type="file" accept="audio/*"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Выбрать трек</strong><small>WAV, MP3, FLAC, M4A, AAC, OGG · сохранится для продолжений</small></label>
+            <audio id="v2-audio-player" controls hidden></audio>
+            <label class="v2-field"><span>Дополнительный визуальный референс</span><input id="v2-audio-visual" type="file" accept="image/png,image/jpeg,image/webp"></label>
+          </section>
+          <section class="v2-tool-card v2-prompt-tool">
+            <div class="v2-card-title"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg><strong>Сценическое действие</strong></div>
+            <div class="v2-tool-textarea"><textarea id="v2-audio-prompt" maxlength="16000" placeholder="Например: девушка поёт в камеру, мягко двигается в ритм, крупный план, естественная артикуляция..."></textarea><button type="button" class="v2-inline-wand" data-v2-wand="audio"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></button></div>
+            <p class="v2-help">Трек прикладывается как driving audio. В generated video сохраняется его звук.</p>
+          </section>
+        </div>
+        <section class="v2-compact-settings v2-compact-settings-wide">
+          <div><span>Качество</span><div class="v2-mini-segment" data-v2-setting="audio-quality"><button type="button" data-value="480">480p</button><button class="active" type="button" data-value="720">720p</button><button type="button" data-value="1080">1080p</button></div></div>
+          <div><span>Формат</span><div class="v2-mini-segment" data-v2-setting="audio-ratio"><button type="button" data-value="1:1">1:1</button><button class="active" type="button" data-value="16:9">16:9</button><button type="button" data-value="9:16">9:16</button></div></div>
+          <div><span>Длительность</span><div class="v2-mini-segment" data-v2-setting="audio-seconds"><button type="button" data-value="5">5</button><button class="active" type="button" data-value="10">10</button><button type="button" data-value="15">15</button></div></div>
+          <div><span>Шаги</span><div class="v2-mini-segment" data-v2-setting="audio-steps"><button type="button" data-value="8">8</button><button class="active" type="button" data-value="12">12</button><button type="button" data-value="16">16</button></div></div>
+          <label class="v2-field v2-field-compact"><span>Seed</span><input id="v2-audio-seed" type="number" placeholder="Auto (-1)"></label>
+          <button class="v2-primary-button v2-workspace-submit" type="submit"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg>Сгенерировать по треку</button>
+        </section>
+      </form>
+    </section>
