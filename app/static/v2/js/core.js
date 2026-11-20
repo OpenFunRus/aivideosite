@@ -1,0 +1,166 @@
+(() => {
+  "use strict";
+
+  const qs = (selector, root = document) => root.querySelector(selector);
+  const qsa = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  const app = qs(".v2-app");
+  if (!app) return;
+
+  const userId = app.dataset.userId || "user";
+  const keys = {
+    draft: "aivideosite-" + userId + "-v2-draft",
+    view: "aivideosite-" + userId + "-v2-view",
+    recentCharacters: "aivideosite-" + userId + "-v2-recent-characters",
+  };
+
+  const state = {
+    view: "create",
+    characters: [],
+    selectedCharacterIds: new Set(),
+    recentCharacterIds: [],
+    characterTab: "all",
+    uploadUrls: new Map(),
+    draft: {
+      prompt: "",
+      quality: "720",
+      ratio: "16:9",
+      seconds: "10",
+      steps: "12",
+      seed: "",
+      audio: true,
+    },
+  };
+
+  const toast = qs("#v2-toast");
+  let toastTimer = null;
+
+  const showToast = (message, kind = "info") => {
+    if (!toast) return;
+    toast.textContent = String(message || "");
+    toast.classList.toggle("error", kind === "error");
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 3200);
+  };
+
+  const escapeHtml = (value) =>
+    String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+  const copyFallback = (text) => {
+    const helper = document.createElement("textarea");
+    helper.value = String(text || "");
+    helper.setAttribute("readonly", "");
+    helper.style.position = "fixed";
+    helper.style.left = "-9999px";
+    helper.style.top = "0";
+    document.body.appendChild(helper);
+    helper.focus({ preventScroll: true });
+    helper.select();
+    helper.setSelectionRange(0, helper.value.length);
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } finally {
+      helper.remove();
+    }
+    return ok;
+  };
+
+  const copyText = async (text) => {
+    const value = String(text || "");
+    if (!value) throw new Error("empty");
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return;
+      } catch {}
+    }
+    if (!copyFallback(value)) throw new Error("copy failed");
+  };
+
+  const fetchJson = async (url, options = {}) => {
+    const response = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        "X-Requested-With": "AI-Video-Site-V2",
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+    if (response.status === 401) {
+      location.href = "/login";
+      throw new Error("Требуется вход.");
+    }
+    if (!response.ok) {
+      let detail = "HTTP " + response.status;
+      try {
+        const body = await response.json();
+        detail = body.detail || body.error || detail;
+      } catch {}
+      throw new Error(detail);
+    }
+    return response.json();
+  };
+
+  const readStoredJson = (key, fallback) => {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || "");
+      return value ?? fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const saveDraft = () => {
+    try {
+      localStorage.setItem(
+        keys.draft,
+        JSON.stringify({
+          ...state.draft,
+          selectedCharacterIds: Array.from(state.selectedCharacterIds),
+        })
+      );
+      localStorage.setItem(keys.view, state.view);
+      localStorage.setItem(
+        keys.recentCharacters,
+        JSON.stringify(state.recentCharacterIds.slice(0, 30))
+      );
+    } catch {}
+  };
+
+  const loadDraft = () => {
+    const saved = readStoredJson(keys.draft, {});
+    if (saved && typeof saved === "object") {
+      ["prompt", "quality", "ratio", "seconds", "steps", "seed"].forEach((key) => {
+        if (saved[key] !== undefined && saved[key] !== null) state.draft[key] = String(saved[key]);
+      });
+      if (typeof saved.audio === "boolean") state.draft.audio = saved.audio;
+      if (Array.isArray(saved.selectedCharacterIds)) {
+        state.selectedCharacterIds = new Set(saved.selectedCharacterIds.map(String));
+      }
+    }
+    const recent = readStoredJson(keys.recentCharacters, []);
+    if (Array.isArray(recent)) state.recentCharacterIds = recent.map(String).slice(0, 30);
+  };
+
+  window.AIVideoV2 = {
+    app,
+    userId,
+    keys,
+    state,
+    qs,
+    qsa,
+    fetchJson,
+    showToast,
+    escapeHtml,
+    copyText,
+    readStoredJson,
+    saveDraft,
+    loadDraft,
+  };
+})();
