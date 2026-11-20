@@ -995,3 +995,256 @@ html {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Desktop: permanent balanced sidebars */
+@media (min-width: 821px) {
+  .v2-app,
+  .v2-app.left-open,
+  .v2-app.right-open,
+  .v2-app.left-open.right-open {
+    grid-template-columns: 238px minmax(0, 1fr) 238px;
+    transition: none;
+  }
+
+  .v2-sidebar {
+    width: 238px;
+    padding: 18px 12px 14px;
+    overflow: hidden;
+  }
+
+  .v2-brand,
+  .v2-app.left-open .v2-brand {
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 6px 5px 18px;
+  }
+
+  .v2-brand > span:last-child,
+  .v2-app.left-open .v2-brand > span:last-child {
+    width: auto;
+    max-width: 165px;
+    opacity: 1;
+    overflow: hidden;
+    pointer-events: auto;
+  }
+
+  .v2-brand-mark {
+    flex: 0 0 46px;
+    width: 46px;
+    height: 46px;
+  }
+
+  .v2-nav {
+    width: 100%;
+    padding: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .v2-nav-item,
+  .v2-app.left-open .v2-nav-item {
+    width: 100%;
+    height: 46px;
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    align-items: center;
+    justify-content: stretch;
+    gap: 12px;
+    padding: 0 12px;
+    border-radius: 11px;
+    text-align: left;
+  }
+
+  .v2-nav-item .icon {
+    display: block;
+    width: 20px;
+    height: 20px;
+    margin: 0 auto;
+    flex: none;
+  }
+
+  .v2-nav-item > span,
+  .v2-app.left-open .v2-nav-item > span {
+    display: block;
+    width: auto;
+    max-width: none;
+    opacity: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: auto;
+    line-height: 1;
+  }
+
+  .v2-nav-item.active {
+    background: linear-gradient(90deg, rgba(99,74,210,.68), rgba(79,64,145,.52));
+    box-shadow:
+      inset 0 0 0 1px rgba(159,134,255,.12),
+      0 4px 16px rgba(48,33,112,.14);
+  }
+
+  .v2-sidebar-footer {
+    padding: 14px 4px 0;
+  }
+
+  .v2-v1-link,
+  .v2-app.left-open .v2-v1-link {
+    width: auto;
+    max-width: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .v2-user,
+  .v2-app.left-open .v2-user {
+    justify-content: flex-start;
+  }
+
+  .v2-user > span:last-child,
+  .v2-app.left-open .v2-user > span:last-child {
+    width: auto;
+    max-width: 150px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .v2-character-rail,
+  .v2-app.right-open .v2-character-rail {
+    width: 238px;
+    padding: 18px 12px 14px;
+    overflow: hidden;
+  }
+
+  .v2-character-rail-head {
+    width: 100%;
+    min-width: 0;
+    height: 50px;
+    gap: 10px;
+  }
+
+  .v2-character-rail-icon {
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+
+  .v2-character-rail-title,
+  .v2-app.right-open .v2-character-rail-title {
+    min-width: 0;
+    opacity: 1;
+    transform: none;
+    overflow: hidden;
+  }
+
+  .v2-character-rail-title strong,
+  .v2-character-rail-title small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .v2-character-panel,
+  .v2-app.right-open .v2-character-panel {
+    width: 214px;
+    height: calc(100vh - 86px);
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .v2-character-rail .v2-search {
+    height: 40px;
+    margin-top: 10px;
+    padding-inline: 10px;
+  }
+
+  .v2-character-rail .v2-search input {
+    min-width: 0;
+    font-size: 11px;
+  }
+
+  .v2-character-rail .v2-character-tabs {
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 5px;
+    padding: 10px 0 9px;
+  }
+
+  .v2-character-rail .v2-character-tabs button {
+    min-width: 0;
+    height: 34px;
+    padding: 0 5px;
+    font-size: 9px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .v2-selected-characters-rail {
+    max-height: 92px;
+    margin-bottom: 9px;
+    padding: 7px;
+  }
+
+  .v2-selected-characters-rail .v2-character-chip {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .v2-selected-characters-rail .v2-character-chip img {
+    width: 28px;
+    height: 28px;
+  }
+
+  .v2-selected-characters-rail .v2-character-chip strong {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .v2-character-rail .v2-character-grid {
+    grid-template-columns: 1fr !important;
+    gap: 7px;
+    padding: 0 2px 8px 0;
+  }
+
+  .v2-character-rail .v2-character-card {
+    width: 100%;
+    min-height: 58px;
+    grid-template-columns: 42px minmax(0,1fr) 18px;
+    gap: 8px;
+    padding: 7px;
+    border-radius: 11px;
+  }
+
+  .v2-character-rail .v2-character-card img {
+    width: 42px;
+    height: 42px;
+    border-radius: 9px;
+  }
+
+  .v2-character-rail .v2-character-card strong {
+    display: block;
+    font-size: 11px;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .v2-character-rail .v2-character-card small {
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .v2-character-rail .v2-character-dialog-foot {
+    padding-top: 9px;
+  }
+
+  .v2-character-hint {
+    display: none;
+  }
+}
