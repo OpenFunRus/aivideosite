@@ -145,6 +145,17 @@ Streaming local chat.
 - обычный V2 prompt и Magic Wand используют три поля: `integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`;
 - в Ref2VA-workspace backend сам добавляет `subject_definitions / summary / retention_analysis` и реальные reference labels, поэтому LLM не должна выдумывать `<Picture N>/<Video N>/<Audio N>`.
 
+## Разделение Chat и Magic Wand
+
+- `POST /api/assistant/chat` — **обычный разговорный помощник**: идеи, вопросы, разбор результатов, советы, troubleshooting. Он не управляет формой и не обязан превращать любой ответ в H3 prompt.
+- `POST /api/assistant/control` — **Magic Wand / control agent**. Только он возвращает JSON `changes.prompt` для формы.
+- Каждая палочка получает собственный workspace context:
+  - Create — duration/ratio/steps/sound + first/last flags + Characters;
+  - Continue — source video context + свои settings;
+  - Audio — выбранный master-track диапазон + embed/scene-sound + visual/Characters;
+  - Clip — previous video + следующий master-track диапазон + свои settings.
+- Состояние Create нельзя spread/переиспользовать для Continue/Audio/Clip.
+
 ## Управление
 
 Модель возвращает JSON, backend валидирует и разрешает менять только allowlisted fields:
