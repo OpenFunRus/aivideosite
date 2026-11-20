@@ -89,3 +89,9 @@ Cross-workspace actions use small browser events such as `v2:datarefresh`, `v2:u
 ## Editing rule
 
 When changing one V2 section, edit its view + its JS module + its CSS module first. Put only truly shared behavior into the corresponding core/common file.
+
+### Монтаж V2
+- Layout: Library → Viewer → Inspector; Toolbar + Timeline находятся ниже и занимают всю рабочую ширину.
+- Реальная модель проекта пока: последовательный `clips[]` на V1 и один optional Music file. JSON-проект хранит clip/audio settings, но не бинарный аудиофайл.
+- `editor.js` отвечает за library search/selection, preview transport, ruler/playhead, drag reorder, trim/split/delete, undo/redo, snap/zoom, inspector tabs, JSON open/save и `/api/editor/export`.
+- Не добавлять визуально активные V2/A1/A2 до изменения backend export.
