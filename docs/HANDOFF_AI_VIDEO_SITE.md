@@ -27,11 +27,11 @@
 
 - **Создать**: prompt + magic wand, Characters, first/last previews, 480/720/1080, 1:1/16:9/9:16, 5/10/15 sec, 8/12/16 steps, seed, sound. `POST /api/v2/generate` мапит упрощённую форму в существующий H3 pipeline и общую очередь.
 - **Продолжить**: ролик из Library или upload, автоматический ffprobe размеров, округление H3-размеров вверх до ×32, Characters, Ref2VA `video_continuation`, magic wand.
-- **По аудио**: Digital Human, driving audio, Character и/или visual reference, упрощённые настройки и magic wand.
-- **Продолжить клип**: previous video + master audio + start time. Backend FFmpeg вырезает только нужный аудиосегмент; результат сохраняет `audio_start/audio_end`, чтобы следующий сегмент начинался с нужной позиции.
+- **По аудио**: Digital Human, driving audio, Character и/или visual reference, упрощённые настройки и magic wand. Новый master track сохраняется per-user в `data/audio_tracks/<user_id>/` и затем доступен повторно.
+- **Продолжить клип**: previous video + сохранённый master track + start time. Backend FFmpeg вырезает только нужный аудиосегмент; результат сохраняет `track_id/audio_start/audio_end`, поэтому Library → «След. клип» автоматически восстанавливает тот же track и следующую позицию.
 - **Библиотека**: видео, metadata/prompt/settings, download/delete, Continue, next clip, отправка в Editor. Первые 40 preview, затем «Показать ещё».
 - **Очередь**: личные jobs, progress/stage/timers, Cancel/Retry/Delete/Result; отдельно показана общая занятость RTX3090/RTX2080 и пользователь текущей H3-задачи.
-- **Монтаж**: persistent per-user browser project, Library → последовательный Video 1 timeline, drag reorder, trim, split, clip volume, video/audio fade in/out, отдельный Music track с offset/trim/length/volume, background FFmpeg export в Library.
+- **Монтаж**: persistent per-user browser project, Library → последовательный Video 1 timeline, drag reorder, zoom, Snap 0.5s, monitor timecode, trim, split, clip volume, video/audio fade in/out, отдельный Music track с offset/trim/length/volume, Space/Delete keyboard basics и background FFmpeg export в Library.
 - **Чат**: отдельный streaming Qwen3-8B chat, Thinking, per-user browser history, 32k context meter; backend резервирует output и удаляет из model request самые старые полные user+assistant turns. Для token count используется llama.cpp `/tokenize`, при недоступности — conservative fallback.
 - **Система**: GPU/VRAM/load/temp, active user/job, Qwen target/state, оба ComfyUI, RAM, CPU load, disk.
 - **Инструкция**: обучение по V2/H3 и copy-paste контекст для ChatGPT. Кнопка объединяет `v2-chatgpt-site-guide.txt` с актуальным `h3-prompting-guide-ai.txt`.
