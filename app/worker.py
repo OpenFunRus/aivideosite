@@ -32,14 +32,14 @@ class JobWorker(threading.Thread):
         self._gpu_lanes: list[dict[str, Any]] = [
             {
                 "key": "primary",
-                "label": "RTX 3090",
+                "label": "RTX3090",
                 "client": ComfyUIClient(settings.comfyui_url),
                 "busy": False,
                 "job_id": None,
             },
             {
                 "key": "secondary",
-                "label": "RTX 2080 Ti",
+                "label": "RTX2080",
                 "client": ComfyUIClient(settings.comfyui_secondary_url),
                 "busy": False,
                 "job_id": None,
@@ -235,6 +235,7 @@ class JobWorker(threading.Thread):
                 "height": payload.get("height"),
                 "seconds": payload.get("seconds"),
                 "fps": payload.get("fps"),
+                "steps": payload.get("steps"),
                 "profile": payload.get("profile"),
                 "seed": result.get("seed"),
                 "generate_audio": bool(payload.get("generate_audio", False)),
@@ -662,6 +663,7 @@ def _generation_context(source: dict[str, Any]) -> dict[str, Any]:
         "height",
         "seconds",
         "fps",
+        "steps",
         "profile",
         "seed",
         "generate_audio",
