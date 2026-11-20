@@ -1138,17 +1138,116 @@ def _v2_enqueue_reference_job(
     return job_id
 
 
-async def _v2_audio_segment(
-    upload: UploadFile,
-    *,
-    start_seconds: float,
-    duration: float,
-) -> Path:
-    source = await save_upload(
+def _v2_track_root(user_id: str) -> Path:
+    root = settings.data_dir / "audio_tracks" / user_id
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _v2_track_id(value: object) -> str:
+    track_id = str(value or "").strip().lower()
+    if len(track_id) != 32 or any(ch not in "0123456789abcdef" for ch in track_id):
+        raise HTTPException(400, "Некорректный ID master track.")
+    return track_id
+
+
+def _v2_track_info(track_id: str, user_id: str) -> dict:
+    normalized = _v2_track_id(track_id)
+    meta_path = _v2_track_root(user_id) / f"{normalized}.json"
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(404, "Master track не найден.") from exc
+    if not isinstance(data, dict):
+        raise HTTPException(404, "Master track не найден.")
+    stored_filename = str(data.get("stored_filename") or "")
+    audio_path = (_v2_track_root(user_id) / stored_filename).resolve()
+    try:
+        audio_path.relative_to(_v2_track_root(user_id).resolve())
+    except ValueError as exc:
+        raise HTTPException(404, "Master track не найден.") from exc
+    if not audio_path.is_file():
+        raise HTTPException(404, "Файл master track отсутствует.")
+    data["path"] = str(audio_path)
+    return data
+
+
+def _v2_list_tracks(user_id: str) -> list[dict]:
+    root = _v2_track_root(user_id)
+    result: list[dict] = []
+    for meta_path in root.glob("*.json"):
+        try:
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                continue
+            track_id = _v2_track_id(data.get("id"))
+            stored_filename = str(data.get("stored_filename") or "")
+            audio_path = (root / stored_filename).resolve()
+            audio_path.relative_to(root.resolve())
+            if not audio_path.is_file():
+                continue
+            result.append(
+                {
+                    "id": track_id,
+                    "title": str(data.get("title") or stored_filename),
+                    "duration": data.get("duration"),
+                    "created_at": data.get("created_at"),
+                }
+            )
+        except Exception:
+            continue
+    result.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    return result
+
+
+async def _v2_store_master_track(upload: UploadFile, user_id: str) -> dict:
+    original_name = Path(upload.filename or "track").name
+    temporary = await save_upload(
         upload,
         kind="audio",
         max_bytes=settings.max_audio_upload_bytes,
     )
+    track_id = uuid.uuid4().hex
+    root = _v2_track_root(user_id)
+    destination = root / f"{track_id}{temporary.suffix.lower()}"
+    try:
+        shutil.move(str(temporary), str(destination))
+        duration = probe_duration(destination)
+        data = {
+            "id": track_id,
+            "title": original_name,
+            "stored_filename": destination.name,
+            "duration": duration,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        (root / f"{track_id}.json").write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        data["path"] = str(destination)
+        return data
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        destination.unlink(missing_ok=True)
+        (root / f"{track_id}.json").unlink(missing_ok=True)
+        raise
+
+
+def _v2_delete_track_files(track_id: str, user_id: str) -> None:
+    try:
+        data = _v2_track_info(track_id, user_id)
+    except HTTPException:
+        return
+    Path(str(data["path"])).unlink(missing_ok=True)
+    (_v2_track_root(user_id) / f"{track_id}.json").unlink(missing_ok=True)
+
+
+async def _v2_audio_segment(
+    source: Path,
+    *,
+    start_seconds: float,
+    duration: float,
+) -> Path:
     destination = settings.upload_dir / f"{uuid.uuid4().hex}_segment.wav"
 
     def extract() -> None:
@@ -1182,8 +1281,6 @@ async def _v2_audio_segment(
     except Exception as exc:
         destination.unlink(missing_ok=True)
         raise HTTPException(400, "Не удалось подготовить сегмент аудиотрека.") from exc
-    finally:
-        source.unlink(missing_ok=True)
 
     if not destination.is_file():
         raise HTTPException(400, "Не удалось подготовить сегмент аудиотрека.")
@@ -1238,6 +1335,7 @@ async def api_v2_state(
         "global_counts": db.state_counts(),
         "system": get_system_status(),
         "assistant": await asyncio.to_thread(local_assistant.status),
+        "tracks": _v2_list_tracks(user_id),
     }
 
 
@@ -1328,14 +1426,23 @@ async def api_v2_audio(
     steps: Annotated[int, Form()] = 12,
     seed: Annotated[str, Form()] = "",
     character_ids: Annotated[str, Form()] = "[]",
-    audio: UploadFile = File(...),
+    track_id: Annotated[str, Form()] = "",
+    audio: UploadFile | None = File(None),
     visual_reference: UploadFile | None = File(None),
     user_id: str = Depends(require_user),
 ):
     _v2_validate_simple_settings(seconds, steps)
     width, height = _v2_resolution(quality, ratio)
     selected = _v2_character_ids(character_ids)
+    has_upload = audio is not None and bool(audio.filename)
+    if bool(track_id.strip()) == bool(has_upload):
+        raise HTTPException(
+            400,
+            "Выберите ровно один master track: сохранённый или новый файл.",
+        )
+
     temporary_paths: list[Path] = []
+    created_track_id: str | None = None
     try:
         items = _v2_character_references(
             selected,
@@ -1361,29 +1468,36 @@ async def api_v2_audio(
                 }
             )
 
-        audio_path = await save_upload(
-            audio,
-            kind="audio",
-            max_bytes=settings.max_audio_upload_bytes,
-        )
-        temporary_paths.append(audio_path)
-        items.append(
-            {
-                "type": "audio",
-                "path": str(audio_path),
-                "temporary": True,
-                "source_name": Path(audio.filename or audio_path.name).name,
-                "role": "audio",
-                "retention": "fully_copy",
-                "note": "Driving performance audio. Synchronize visible performance to this audio.",
-            }
-        )
-
         if not any(item.get("type") == "image" for item in items):
             raise HTTPException(
                 400,
                 "Для генерации по аудио выберите Character или добавьте визуальный референс.",
             )
+
+        if has_upload:
+            assert audio is not None
+            track = await _v2_store_master_track(audio, user_id)
+            created_track_id = str(track["id"])
+        else:
+            track = _v2_track_info(track_id, user_id)
+
+        segment = await _v2_audio_segment(
+            Path(str(track["path"])),
+            start_seconds=0.0,
+            duration=float(seconds),
+        )
+        temporary_paths.append(segment)
+        items.append(
+            {
+                "type": "audio",
+                "path": str(segment),
+                "temporary": True,
+                "source_name": f"{track['title']} [0-{seconds}s]",
+                "role": "audio",
+                "retention": "fully_copy",
+                "note": "Driving performance audio. Synchronize visible performance to this audio.",
+            }
+        )
 
         job_id = _v2_enqueue_reference_job(
             user_id=user_id,
@@ -1397,17 +1511,27 @@ async def api_v2_audio(
             generation_mode="digital_human",
             reference_task="audio_reference",
             items=items,
-            v2_context={"workspace": "audio"},
+            v2_context={
+                "workspace": "audio",
+                "track_id": track["id"],
+                "audio_start": 0.0,
+                "audio_end": float(seconds),
+            },
         )
         return {
             "ok": True,
             "job_id": job_id,
             "width": width,
             "height": height,
+            "track_id": track["id"],
+            "audio_start": 0.0,
+            "audio_end": float(seconds),
         }
     except Exception:
         for path in temporary_paths:
             path.unlink(missing_ok=True)
+        if created_track_id:
+            _v2_delete_track_files(created_track_id, user_id)
         raise
 
 
@@ -1420,15 +1544,24 @@ async def api_v2_clip(
     steps: Annotated[int, Form()] = 12,
     seed: Annotated[str, Form()] = "",
     character_ids: Annotated[str, Form()] = "[]",
+    track_id: Annotated[str, Form()] = "",
     source_video: UploadFile | None = File(None),
-    master_audio: UploadFile = File(...),
+    master_audio: UploadFile | None = File(None),
     user_id: str = Depends(require_user),
 ):
     _v2_validate_simple_settings(seconds, steps)
     if audio_start < 0 or audio_start > 86400:
         raise HTTPException(400, "Позиция аудиотрека должна быть неотрицательной.")
+    has_track_upload = master_audio is not None and bool(master_audio.filename)
+    if bool(track_id.strip()) == bool(has_track_upload):
+        raise HTTPException(
+            400,
+            "Выберите ровно один master track: сохранённый или новый файл.",
+        )
+
     selected = _v2_character_ids(character_ids)
     temporary_paths: list[Path] = []
+    created_track_id: str | None = None
     try:
         source_item, width, height = await _v2_source_video(
             source_media_id=source_media_id,
@@ -1438,8 +1571,22 @@ async def api_v2_clip(
         if source_item.get("temporary"):
             temporary_paths.append(Path(str(source_item["path"])))
 
+        if has_track_upload:
+            assert master_audio is not None
+            track = await _v2_store_master_track(master_audio, user_id)
+            created_track_id = str(track["id"])
+        else:
+            track = _v2_track_info(track_id, user_id)
+
+        track_duration = track.get("duration")
+        if track_duration is not None and audio_start >= float(track_duration):
+            raise HTTPException(
+                400,
+                "Начальная позиция находится за пределами master track.",
+            )
+
         segment = await _v2_audio_segment(
-            master_audio,
+            Path(str(track["path"])),
             start_seconds=audio_start,
             duration=float(seconds),
         )
@@ -1457,7 +1604,7 @@ async def api_v2_clip(
                     "type": "audio",
                     "path": str(segment),
                     "temporary": True,
-                    "source_name": f"track_{audio_start:g}_{audio_start + seconds:g}.wav",
+                    "source_name": f"{track['title']} [{audio_start:g}-{audio_start + seconds:g}s]",
                     "role": "audio",
                     "retention": "fully_copy",
                     "note": (
@@ -1482,6 +1629,7 @@ async def api_v2_clip(
             v2_context={
                 "workspace": "clip",
                 "source_media_id": str(source_media_id or "") or None,
+                "track_id": track["id"],
                 "audio_start": float(audio_start),
                 "audio_end": float(audio_start) + seconds,
             },
@@ -1491,13 +1639,26 @@ async def api_v2_clip(
             "job_id": job_id,
             "width": width,
             "height": height,
+            "track_id": track["id"],
             "audio_start": audio_start,
             "audio_end": audio_start + seconds,
         }
     except Exception:
         for path in temporary_paths:
             path.unlink(missing_ok=True)
+        if created_track_id:
+            _v2_delete_track_files(created_track_id, user_id)
         raise
+
+
+@app.delete("/api/v2/tracks/{track_id}")
+async def api_v2_delete_track(
+    track_id: str,
+    user_id: str = Depends(require_user),
+):
+    _v2_track_info(track_id, user_id)
+    _v2_delete_track_files(track_id, user_id)
+    return {"ok": True}
 
 
 @app.post("/api/jobs/{job_id}/cancel")
