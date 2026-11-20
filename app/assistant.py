@@ -920,46 +920,86 @@ def _wand_source_text(messages: Any) -> str:
     return content[:12000]
 
 
-def _semantic_faithfulness_issues(
+def _clean_v2_wand_prompt(
+    original_messages: Any,
+    *,
+    settings_payload: dict[str, Any],
+    candidate_prompt: str,
+    thinking: bool,
+) -> str:
+    source_text = _wand_source_text(original_messages)
+    cleanup_system = (
+        "You are the final cleanup pass for a MiniMax H3 prompt. SOURCE is the absolute truth. "
+        "Return ONLY the cleaned H3 prompt text. No JSON, no Markdown, no explanation. "
+        "Keep exactly three fields in this order: integrated_multimodal_description, overall_soundscape, non_diegetic_music. "
+        "Preserve all concrete SOURCE facts exactly: numeric age/count, direction, handedness, props, weather, actions, camera request, dialogue, lyrics and visible text. "
+        "REMOVE every detail not explicitly supported by SOURCE. Do not enrich the scene from common sense. "
+        "Do not add thunder, footsteps, traffic, wind, branch snaps, extra people, extra actions, extra objects, emotions, or a named source for an unspecified noise unless SOURCE says so. "
+        "overall_soundscape may contain ONLY sounds explicitly supported by SOURCE; if SOURCE provides no sound at all, use N/A. "
+        "If SOURCE says music is not wanted, non_diegetic_music must be N/A. "
+        "[Shot 1] has no timestamp. If SOURCE explicitly requests a camera switch/cut/new framing, represent that switch as a new [Shot N] with an exact timestamp inside CURRENT_GENERATOR_STATE.seconds. "
+        "Do not output low-level Ref2VA wrapper fields."
+    )
+    cleanup_user = (
+        "SOURCE USER REQUEST:\n"
+        + source_text[:12000]
+        + "\n\nDRAFT H3 PROMPT:\n"
+        + candidate_prompt[:16000]
+        + "\n\nRewrite the draft faithfully to SOURCE and return only the final H3 prompt."
+    )
+    payload = _chat_payload(
+        [{"role": "user", "content": cleanup_user}],
+        settings=settings_payload,
+        system_prompt=cleanup_system,
+        stream=False,
+        max_tokens=2800 if thinking else 1800,
+        temperature=0.0,
+        thinking=thinking,
+    )
+    return _extract_h3_prompt_text(_request_plain_content(payload))
+
+
+def _source_literal_validation_issues(
     source_text: str,
     candidate_prompt: str,
 ) -> list[str]:
-    if not source_text.strip() or not candidate_prompt.strip():
-        return []
+    source = str(source_text or "")
+    prompt = str(candidate_prompt or "")
+    issues: list[str] = []
 
-    verifier_system = (
-        "You are a strict semantic faithfulness auditor. Compare SOURCE with CANDIDATE. "
-        "The candidate may translate to English, add H3 field labels, shot timestamps, speaker tags, "
-        "and neutral wording required to express an explicitly requested camera change. It MUST NOT invent "
-        "new facts, actions, sounds, weather events, objects, people, dialogue, emotions, movement, or change "
-        "exact numbers/age/count/direction/handedness/props. Example: SOURCE has rain and an unspecified noise; "
-        "thunder, footsteps, traffic, wind, branch snap or naming the noise source are unsupported. "
-        "Return exactly one of these forms and nothing else:\nVALID\nor\nINVALID: short issue 1 | short issue 2"
+    # Concrete numbers from the user's own text must survive the rewrite.
+    source_numbers = {m.group(0).replace(",", ".") for m in re.finditer(r"(?<![\w])\d+(?:[\.,]\d+)?(?![\w])", source)}
+    prompt_numbers = {m.group(0).replace(",", ".") for m in re.finditer(r"(?<![\w])\d+(?:[\.,]\d+)?(?![\w])", prompt)}
+    missing_numbers = sorted(source_numbers - prompt_numbers)
+    if missing_numbers:
+        issues.append("missing exact source number(s): " + ", ".join(missing_numbers[:8]))
+
+    # Exact quoted content (dialogue / visible text) must remain verbatim.
+    quoted: list[str] = []
+    for pattern in (r"«([^»\n]{1,500})»", r"“([^”\n]{1,500})”", r'"([^"\n]{1,500})"'):
+        quoted.extend(match.group(1).strip() for match in re.finditer(pattern, source) if match.group(1).strip())
+    for literal in quoted:
+        if literal not in prompt:
+            issues.append("missing exact quoted source text: " + literal[:120])
+
+    source_lower = source.lower()
+    no_music = any(
+        phrase in source_lower
+        for phrase in (
+            "музыки не надо", "без музыки", "музыка не нужна", "музыку не надо",
+            "no music", "without music", "music is not needed",
+        )
     )
-    payload = _chat_payload(
-        [{
-            "role": "user",
-            "content": "SOURCE:\n" + source_text[:12000] + "\n\nCANDIDATE:\n" + candidate_prompt[:16000],
-        }],
-        settings=None,
-        system_prompt=verifier_system,
-        stream=False,
-        max_tokens=500,
-        temperature=0.0,
-        thinking=False,
-    )
-    raw = _strip_think_blocks(_request_plain_content(payload)).strip()
-    if re.match(r"^VALID\b", raw, flags=re.IGNORECASE):
-        return []
-    match = re.search(r"INVALID\s*:\s*(.*)", raw, flags=re.IGNORECASE | re.DOTALL)
-    if not match:
-        return ["semantic faithfulness audit could not confirm validity"]
-    issues = [
-        part.strip()[:500]
-        for part in re.split(r"\s*\|\s*|\n+", match.group(1))
-        if part.strip()
-    ]
-    return issues or ["candidate prompt is not faithful to the source request"]
+    if no_music:
+        music = re.search(
+            r"non_diegetic_music:\s*(.*)\Z",
+            prompt,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not music or music.group(1).strip().upper() != "N/A":
+            issues.append("source explicitly requests no music, so non_diegetic_music must be N/A")
+
+    return issues
 
 def sanitize_changes(value: Any, *, valid_character_ids: set[str]) -> dict[str, Any]:
     if not isinstance(value, dict):
@@ -1057,9 +1097,15 @@ def control(
             settings_payload=settings_payload,
             thinking=thinking,
         )
+        prompt = _clean_v2_wand_prompt(
+            messages,
+            settings_payload=settings_payload,
+            candidate_prompt=prompt,
+            thinking=thinking,
+        )
         source_text = _wand_source_text(messages)
         issues = _v2_prompt_validation_issues(prompt, settings_payload)
-        issues.extend(_semantic_faithfulness_issues(source_text, prompt))
+        issues.extend(_source_literal_validation_issues(source_text, prompt))
         if issues:
             repaired = _repair_control_prompt(
                 messages,
@@ -1070,10 +1116,10 @@ def control(
             )
             prompt = str((repaired.get("changes") or {}).get("prompt") or "").strip()
             repaired_issues = _v2_prompt_validation_issues(prompt, settings_payload)
-            repaired_issues.extend(_semantic_faithfulness_issues(source_text, prompt))
+            repaired_issues.extend(_source_literal_validation_issues(source_text, prompt))
             if repaired_issues:
                 raise AssistantUnavailable(
-                    "Локальная LLM дважды нарушила формат/смысл H3: "
+                    "Локальная LLM не смогла собрать корректный H3 prompt: "
                     + "; ".join(repaired_issues[:4])
                 )
         return {"message": "Промт подготовлен.", "changes": {"prompt": prompt}}
