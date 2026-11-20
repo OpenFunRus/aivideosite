@@ -1320,7 +1320,7 @@ async def api_v2_state(
     user_id: str = Depends(require_user),
 ):
     media_data = db.list_media_page(media_page, 40, owner_id=user_id)
-    jobs_data = db.list_jobs_page(jobs_page, 60, owner_id=user_id)
+    jobs_data = db.list_jobs_page(jobs_page, 20, owner_id=user_id)
     active_global = []
     for job in db.list_jobs(200):
         if job.get("status") not in {"queued", "running"}:

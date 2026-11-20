@@ -4,97 +4,118 @@
   const W = window.AIVideoV2Workspaces;
   if (!api || !W) return;
   const { qs, fetchJson, showToast, escapeHtml } = api;
+  const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-' + name + '"></use></svg>';
+  const statusLabels = {
+    running: "В работе", queued: "В очереди", done: "Готово",
+    failed: "Ошибка", cancelled: "Отменено", canceled: "Отменено",
+  };
 
   const jobTitle = (job) => {
     const payload = job.payload || {};
-    if (job.kind === "editor_export") return payload.title || "Монтаж";
-    if (job.kind === "generate") {
-      return String(payload.user_prompt || payload.prompt || "MiniMax H3").slice(0, 140);
-    }
+    if (job.kind === "editor_export") return payload.title || "Экспорт видео";
+    if (job.kind === "generate") return String(payload.user_prompt || payload.prompt || "MiniMax H3").slice(0, 140);
     return job.kind || "Задача";
   };
-
+  const jobProgress = (job) => job.status === "done"
+    ? 100 : Math.max(0, Math.min(100, Number(job.progress) || 0));
+  const jobTime = (job) => W.elapsed(
+    job.started_at || job.created_at,
+    job.finished_at ? new Date(job.finished_at).getTime() / 1000 : W.snapshot?.server_now
+  );
   const renderJob = (job) => {
-    const progress = Math.max(0, Math.min(100, Number(job.progress) || 0));
-    const running = job.status === "running";
-    const time = running
-      ? W.elapsed(job.started_at, W.snapshot?.server_now)
-      : W.elapsed(
-          job.started_at || job.created_at,
-          job.finished_at ? new Date(job.finished_at).getTime() / 1000 : W.snapshot?.server_now
-        );
+    const status = String(job.status || "queued");
+    const progress = jobProgress(job);
+    const running = ["queued", "running"].includes(status);
+    const actions = [];
+    if (running) actions.push('<button class="v2-queue-stop" type="button" data-job-action="cancel">' + icon("x") + 'Остановить</button>');
+    if (status === "failed") actions.push('<button type="button" data-job-action="retry">' + icon("refresh") + 'Повторить</button>');
+    if (job.result_media_id) actions.push('<button class="v2-queue-result" type="button" data-job-action="open">' + icon("player-play") + 'Результат</button>');
+    if (!running) actions.push('<button class="v2-queue-delete" type="button" data-job-action="delete" aria-label="Удалить задачу" title="Удалить задачу">' + icon("trash") + '</button>');
+    const subtitle = [job.stage || "H3", job.gpu_backend || ""].filter(Boolean).join(" · ");
+    return '<article class="v2-job" data-job-id="' + escapeHtml(job.id) + '" data-status="' + escapeHtml(status) + '">' +
+      '<span class="v2-job-icon">' + icon("video") + '</span>' +
+      '<div class="v2-job-main"><strong title="' + escapeHtml(jobTitle(job)) + '">' + escapeHtml(jobTitle(job)) + '</strong><small>' + escapeHtml(subtitle) + '</small></div>' +
+      '<span class="v2-job-status">' + (status === "done" ? icon("check") : "") + escapeHtml(statusLabels[status] || status) + '</span>' +
+      '<div class="v2-job-progress-info"><b>' + progress + '%</b><div class="v2-job-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + progress + '"><span style="width:' + progress + '%"></span></div></div>' +
+      '<span class="v2-job-time">' + icon("clock") + escapeHtml(jobTime(job)) + '</span>' +
+      '<div class="v2-job-actions">' + actions.join("") + '</div></article>';
+  };
 
-    let actions = "";
-    if (["queued", "running"].includes(job.status)) {
-      actions += '<button type="button" data-job-action="cancel">Стоп</button>';
+  const renderPages = (pagination) => {
+    const nav = qs("#v2-queue-pagination");
+    const root = qs("#v2-queue-pages");
+    if (!nav || !root) return;
+    const pages = Math.max(1, Number(pagination?.pages) || 1);
+    const current = Math.max(1, Number(pagination?.page) || 1);
+    W.queuePage = current;
+    nav.hidden = pages <= 1;
+    if (pages <= 1) { root.innerHTML = ""; return; }
+    const numbers = [...new Set([1, pages, current - 1, current, current + 1])]
+      .filter((value) => value >= 1 && value <= pages).sort((a, b) => a - b);
+    let prev = 0;
+    let html = '<button type="button" data-queue-page="' + (current - 1) + '" ' + (current === 1 ? "disabled" : "") + ' aria-label="Предыдущая страница">‹</button>';
+    for (const number of numbers) {
+      if (prev && number - prev > 1) html += '<span class="v2-queue-page-ellipsis">…</span>';
+      html += '<button type="button" data-queue-page="' + number + '" ' + (number === current ? 'class="active" aria-current="page"' : "") + '>' + number + '</button>';
+      prev = number;
     }
-    if (job.status === "failed") {
-      actions += '<button type="button" data-job-action="retry">Retry</button>';
-    }
-    if (!["queued", "running"].includes(job.status)) {
-      actions += '<button type="button" data-job-action="delete">Удалить</button>';
-    }
-    if (job.result_media_id) {
-      actions += '<button type="button" data-job-action="open">Результат</button>';
-    }
-
-    return (
-      '<article class="v2-job" data-job-id="' + escapeHtml(job.id) +
-      '" data-status="' + escapeHtml(job.status) + '">' +
-      '<div class="v2-job-status"><i></i><span>' + escapeHtml(job.status) + "</span></div>" +
-      '<div class="v2-job-main"><strong>' + escapeHtml(jobTitle(job)) +
-      '</strong><small>' + escapeHtml(job.stage || "") +
-      '</small><div class="v2-job-progress"><span style="width:' + progress + '%"></span></div></div>' +
-      '<div class="v2-job-time">' + escapeHtml(time) + "</div>" +
-      '<div class="v2-job-actions">' + actions + "</div></article>"
-    );
+    html += '<button type="button" data-queue-page="' + (current + 1) + '" ' + (current === pages ? "disabled" : "") + ' aria-label="Следующая страница">›</button>';
+    root.innerHTML = html;
   };
 
   const renderQueue = () => {
     const gpuRoot = qs("#v2-queue-gpus");
     const jobsRoot = qs("#v2-job-list");
     if (!gpuRoot || !jobsRoot || !W.snapshot) return;
-
     const gpus = W.snapshot.system?.gpus || [];
     gpuRoot.innerHTML = [0, 1].map((index) => {
       const gpu = gpus.find((item) => Number(item.index) === index);
       const active = W.gpuJob(index);
-      const name = gpu?.name || (index === 0 ? "RTX3090" : "RTX2080");
-      return (
-        '<article class="v2-queue-gpu' + (active ? " busy" : "") + '">' +
-        '<div class="v2-queue-gpu-head"><h3>' + escapeHtml(name) +
-        '</h3><span class="v2-queue-gpu-status">' + (active ? "Занята" : "Свободна") + "</span></div>" +
-        '<div class="v2-queue-gpu-metrics"><span>VRAM ' +
-        escapeHtml(gpu ? (gpu.memory_used_mb / 1024).toFixed(1) + "/" + (gpu.memory_total_mb / 1024).toFixed(0) + "GB" : "—") +
-        "</span><span>GPU " + escapeHtml(gpu ? gpu.utilization + "%" : "—") +
-        "</span><span>" + escapeHtml(gpu ? gpu.temperature + "°C" : "—") + "</span></div>" +
-        (active
-          ? '<div class="v2-queue-gpu-job"><strong>' +
-            escapeHtml(active.user_label || active.owner_id) +
-            "</strong><br>" +
-            escapeHtml(active.prompt || active.stage || "H3 generation") +
-            "</div>"
-          : '<div class="v2-queue-gpu-job">Готова принять следующую H3-задачу.</div>') +
-        "</article>"
-      );
+      const name = gpu?.name || (index === 0 ? "RTX 3090" : "RTX 2080 Ti");
+      const util = Math.max(0, Math.min(100, Number(gpu?.utilization) || 0));
+      const memory = gpu && Number.isFinite(Number(gpu.memory_total_mb))
+        ? (Number(gpu.memory_used_mb || 0) / 1024).toFixed(1) + " / " + (Number(gpu.memory_total_mb) / 1024).toFixed(0) + " GB"
+        : "—";
+      const footer = active
+        ? icon("users") + '<span>Пользователь: <strong>' + escapeHtml(active.user_label || active.owner_id || "—") + '</strong></span>' +
+          icon("clock") + '<span>Генерирует: <strong>' + escapeHtml(W.elapsed(active.started_at || active.created_at, W.snapshot.server_now)) + '</strong></span>'
+        : icon("clock") + '<span>Ожидает новых задач.</span>';
+      return '<article class="v2-queue-gpu' + (active ? " busy" : "") + '">' +
+        '<div class="v2-queue-gpu-head"><span class="v2-queue-gpu-icon">' + icon("gpu") + '</span><div class="v2-queue-gpu-name"><h3>' + escapeHtml(name) + '</h3>' +
+        '<div class="v2-queue-gpu-metrics">VRAM ' + escapeHtml(memory) + ' <span>·</span> GPU ' + util + '% <span>·</span> ' + escapeHtml(gpu?.temperature == null ? "—" : gpu.temperature + "°C") + '</div></div>' +
+        '<span class="v2-queue-gpu-status">' + (active ? "Занята" : "Свободна") + '</span></div>' +
+        '<div class="v2-queue-utilization"><span style="width:' + util + '%"></span></div>' +
+        '<div class="v2-queue-gpu-job">' + footer + '</div></article>';
     }).join("");
 
     const jobs = Array.isArray(W.snapshot.jobs) ? W.snapshot.jobs : [];
+    const total = Number(W.snapshot.jobs_pagination?.total) || 0;
     const empty = qs("#v2-queue-empty");
-    if (empty) empty.hidden = jobs.length > 0;
+    const count = qs("#v2-queue-count");
+    if (empty) empty.hidden = total > 0;
+    if (count) count.textContent = total + " задач";
     jobsRoot.innerHTML = jobs.map(renderJob).join("");
+    renderPages(W.snapshot.jobs_pagination);
   };
 
   qs("#v2-queue-refresh")?.addEventListener("click", () => W.refreshState());
+  qs("#v2-queue-pages")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-queue-page]");
+    if (!button || button.disabled) return;
+    const nextPage = Number(button.dataset.queuePage) || 1;
+    if (W.refreshing) await W.refreshing;
+    W.queuePage = nextPage;
+    await W.refreshState({ silent: true, includeMedia: false });
+    qs("#v2-job-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   qs("#v2-job-list")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-job-action]");
     if (!button) return;
-    const row = button.closest("[data-job-id]");
-    const id = row?.dataset.jobId;
+    const id = button.closest("[data-job-id]")?.dataset.jobId;
     const action = button.dataset.jobAction;
     if (!id) return;
-
+    if (action === "delete" && !confirm("Удалить задачу из очереди?")) return;
     button.disabled = true;
     try {
       if (action === "cancel") {
@@ -107,6 +128,8 @@
         const job = (W.snapshot?.jobs || []).find((item) => String(item.id) === id);
         const item = W.mediaById(job?.result_media_id);
         if (item) W.openMediaDialog?.(item);
+        else showToast("Результат ещё не найден в библиотеке.", "error");
+        return;
       }
       await W.refreshState({ silent: true });
     } catch (error) {

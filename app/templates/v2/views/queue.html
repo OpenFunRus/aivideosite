@@ -1,8 +1,16 @@
 <section class="v2-view" data-v2-view="queue">
-      <div class="v2-workspace">
-        <div class="v2-workspace-toolbar"><p>Общая загрузка двух GPU и твои задачи.</p><button class="v2-secondary-button" id="v2-queue-refresh" type="button">Обновить</button></div>
-        <div class="v2-queue-gpus" id="v2-queue-gpus"></div>
-        <div class="v2-job-list" id="v2-job-list"></div>
-        <div class="v2-empty-state" id="v2-queue-empty" hidden><svg class="icon"><use href="/static/icons.svg#icon-stack"></use></svg><strong>Задач пока нет</strong></div>
-      </div>
-    </section>
+  <div class="v2-workspace v2-queue-workspace">
+    <div class="v2-workspace-toolbar v2-queue-toolbar">
+      <p>Общая загрузка двух GPU и твои задачи.</p>
+      <button class="v2-secondary-button" id="v2-queue-refresh" type="button"><svg class="icon"><use href="/static/icons.svg#icon-refresh"></use></svg>Обновить</button>
+    </div>
+    <div class="v2-queue-gpus" id="v2-queue-gpus"></div>
+    <div class="v2-queue-section-heading"><h2>Задачи</h2><span class="v2-count-pill" id="v2-queue-count">0 задач</span></div>
+    <div class="v2-job-list" id="v2-job-list"></div>
+    <div class="v2-empty-state" id="v2-queue-empty" hidden><svg class="icon"><use href="/static/icons.svg#icon-stack"></use></svg><strong>Задач пока нет</strong><span>Новые задачи появятся здесь автоматически.</span></div>
+    <nav class="v2-queue-pagination" id="v2-queue-pagination" aria-label="Страницы очереди" hidden>
+      <div class="v2-queue-pagination-buttons" id="v2-queue-pages"></div>
+      <span>По 20 задач на странице</span>
+    </nav>
+  </div>
+</section>
