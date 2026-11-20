@@ -84,3 +84,16 @@
 - Когда открыт workspace «Система», его polling управляется `system.js`; общий 4-секундный polling `bootstrap.js` оставлен только для «Очереди», чтобы не делать двойные запросы.
 - До 1280px dashboard переходит на 2 колонки, до 900px — на одну. Графики следуют той же сетке.
 - Правила раздела: `views/system.html`, `css/workspaces/system.css`, `js/workspaces/system.js`; CPU metric добавляется в `app/main.py`.
+
+## Монтаж
+
+- Эталон — утверждённый профессиональный layout: библиотека слева, большой viewer по центру, inspector справа, toolbar и timeline во всю ширину ниже.
+- Текущий backend честно поддерживает **одну последовательную видеодорожку V1 + одну Music-дорожку**. Не рисовать рабочие V2/A1/A2 до расширения FFmpeg export.
+- Библиотека имеет поиск, реальные preview через `/media/{id}`, выбор элемента и «Добавить»; двойной клик также добавляет ролик.
+- Viewer использует собственный transport: предыдущий/следующий клип, ±1 сек, play/pause, project scrub и громкость preview. Позиция считается относительно всего последовательного проекта.
+- Timeline имеет ruler, playhead, drag-reorder клипов, Snap 0.5s и zoom 8–32 px/s. Длина каждого клипа на шкале соответствует его реальной effective duration.
+- Inspector содержит вкладки «Клип / Аудио / Инфо». В «Клип» остаются только реально экспортируемые параметры: trim start/duration, split, volume, fade in/out. В «Аудио» — Music file, offset, trim, length, volume.
+- Toolbar: selection, split, delete, undo/redo, snap, zoom. Горячие клавиши: Space play/pause, Delete удаление, Ctrl/Cmd+Z undo, Ctrl/Cmd+Y или Cmd/Ctrl+Shift+Z redo.
+- Проект автоматически хранится per-user в localStorage. «Сохранить» выгружает JSON, «Открыть» импортирует JSON. Бинарный Music-файл в JSON не встраивается и после перезагрузки/импорта выбирается заново.
+- Экспорт сохраняет существующий контракт `POST /api/editor/export`: последовательные clips + optional Music file. UI не должен обещать compositing, overlays или несколько независимых audio/video lanes, пока backend этого не поддерживает.
+- Основные файлы: `views/editor.html`, `css/workspaces/editor.css`, `js/workspaces/editor.js`.
