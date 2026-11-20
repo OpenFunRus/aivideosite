@@ -1,0 +1,27 @@
+<section class="v2-view" data-v2-view="continue">
+      <form class="v2-workspace" id="v2-continue-form">
+        <div class="v2-workspace-intro"><p>Выбери готовый ролик или загрузи свой. Формат и размер наследуются автоматически.</p></div>
+        <div class="v2-workspace-grid">
+          <section class="v2-tool-card v2-source-card">
+            <div class="v2-card-title"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><strong>Исходный ролик</strong></div>
+            <label class="v2-field"><span>Из Библиотеки</span><select id="v2-continue-library"><option value="">Выберите ролик…</option></select></label>
+            <div class="v2-or"><span>или</span></div>
+            <label class="v2-file-button"><input id="v2-continue-upload" type="file" accept="video/*"><svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg><span>Загрузить видео</span></label>
+            <video class="v2-source-preview" id="v2-continue-preview" controls playsinline hidden></video>
+            <div class="v2-source-meta" id="v2-continue-meta">Формат будет определён автоматически</div>
+          </section>
+          <section class="v2-tool-card v2-prompt-tool">
+            <div class="v2-card-title"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg><strong>Что происходит дальше?</strong></div>
+            <div class="v2-tool-textarea"><textarea id="v2-continue-prompt" maxlength="16000" placeholder="Например: герой продолжает идти к двери, камера сохраняет направление и медленно приближается..."></textarea><button type="button" class="v2-inline-wand" data-v2-wand="continue" title="Улучшить под H3"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></button></div>
+            <p class="v2-help">ИИ усилит continuity: позу, направление движения, камеру, свет и состояние сцены.</p>
+          </section>
+        </div>
+        <section class="v2-compact-settings">
+          <div><span>Длительность</span><div class="v2-mini-segment" data-v2-setting="continue-seconds"><button type="button" data-value="5">5 сек</button><button class="active" type="button" data-value="10">10 сек</button><button type="button" data-value="15">15 сек</button></div></div>
+          <div><span>Шаги</span><div class="v2-mini-segment" data-v2-setting="continue-steps"><button type="button" data-value="8">8</button><button class="active" type="button" data-value="12">12</button><button type="button" data-value="16">16</button></div></div>
+          <label class="v2-field v2-field-compact"><span>Seed</span><input id="v2-continue-seed" type="number" placeholder="Auto (-1)"></label>
+          <label class="v2-check v2-workspace-check"><input id="v2-continue-audio" type="checkbox" checked><span class="v2-check-mark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span><span>Звук</span></label>
+          <button class="v2-primary-button v2-workspace-submit" type="submit"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>Продолжить видео</button>
+        </section>
+      </form>
+    </section>
