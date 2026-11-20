@@ -1,0 +1,8 @@
+<section class="v2-view" data-v2-view="chat">
+      <div class="v2-chat-page">
+        <div class="v2-workspace-toolbar"><p>Обычный локальный чат. Старые ходы автоматически перестают отправляться модели, когда 32k заполняется.</p><div class="v2-head-actions"><label class="v2-thinking-toggle"><input id="v2-chat-thinking" type="checkbox"><span>Thinking</span></label><button class="v2-secondary-button" id="v2-chat-clear" type="button">Новый чат</button></div></div>
+        <div class="v2-context-meter"><div><span>Контекст</span><strong id="v2-chat-context-label">— / 32k</strong></div><div class="v2-context-track"><span id="v2-chat-context-fill"></span></div><small id="v2-chat-context-note">Считаем активный контекст модели</small></div>
+        <div class="v2-chat-messages" id="v2-chat-messages"></div>
+        <form class="v2-chat-composer" id="v2-chat-form"><textarea id="v2-chat-input" rows="2" placeholder="Напиши сообщение…"></textarea><button class="v2-primary-button" type="submit"><svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>Отправить</button></form>
+      </div>
+    </section>
