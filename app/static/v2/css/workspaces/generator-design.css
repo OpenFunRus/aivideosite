@@ -21,6 +21,10 @@
 .v2-generator-form .v2-source-actions button:nth-child(2){position:static;z-index:auto;margin:0;height:42px;border:1px solid #3a4158;border-radius:10px;background:#171b28;color:#d9deea;box-shadow:none;font-size:11px;font-weight:700}
 .v2-generator-form .v2-source-actions button:hover{background:#202536}
 .v2-generator-form .v2-source-actions button.active{border-color:#7255ee;background:linear-gradient(180deg,#6d4df0,#5739cf);color:#fff;box-shadow:0 7px 20px rgba(89,56,206,.24)}
+.v2-generator-form .v2-continue-source-picker,
+.v2-generator-form .v2-audio-source-picker{padding:10px;border:1px solid #2d3347;border-radius:11px;background:#10131c}
+.v2-generator-form .v2-continue-source-picker select,
+.v2-generator-form .v2-audio-source-picker select{height:42px}
 
 /* Create's segmented buttons are the reference component for all three panels. */
 .v2-generator-form .v2-generator-settings{display:block;overflow:hidden;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,rgba(25,29,42,.96),rgba(18,21,31,.96));box-shadow:0 10px 35px rgba(0,0,0,.12)}

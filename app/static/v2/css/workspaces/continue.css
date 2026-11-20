@@ -6,7 +6,7 @@
 
 .v2-continue-source-card{padding:17px 18px}
 .v2-continue-source-heading .v2-card-title{margin-bottom:12px}
-.v2-continue-source-heading .v2-card-title>span{display:flex;flex-direction:column;gap:2px}
+.v2-continue-source-heading .v2-card-title>span:not(.v2-heading-icon){display:flex;flex-direction:column;gap:2px}
 .v2-continue-source-heading .v2-card-title small{color:#81899e;font-size:9px;font-weight:500}
 
 .v2-continue-source-tabs{display:grid;grid-template-columns:1fr 1fr;gap:0;width:100%;margin-bottom:12px}
