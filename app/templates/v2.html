@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0b0c14">
   <title>AI Video Site V2</title>
-  <link rel="stylesheet" href="/static/v2.css?v=4">
+  <link rel="stylesheet" href="/static/v2.css?v=5">
 </head>
 <body>
 <div class="v2-app" data-user-id="{{ current_user.id }}">
@@ -187,9 +187,11 @@
           </div>
         </section>
 
-        <div class="v2-generate-row"><button class="v2-primary-button" id="v2-generate" type="button">
+        <div class="v2-create-warning" id="v2-create-warning" hidden></div>
+
+        <div class="v2-generate-row"><button class="v2-primary-button" id="v2-generate" type="submit">
             <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
-            Сгенерировать видео
+            <span class="v2-generate-label">Сгенерировать видео</span>
           </button></div>
       </form>
     </section>
@@ -344,6 +346,6 @@
 
   <div class="v2-toast" id="v2-toast" role="status" aria-live="polite"></div>
 </div>
-<script src="/static/v2.js?v=4" defer></script>
+<script src="/static/v2.js?v=5" defer></script>
 </body>
 </html>
