@@ -456,7 +456,22 @@
     if (hint) hint.hidden = library;
   };
   for (const [kind, inputId] of [["video", "v2-clip-upload"], ["track", "v2-clip-audio"]]) {
-    qs("#v2-clip-" + kind + "-library-tab")?.addEventListener("click", () => setClipSourceMode(kind, "library"));
+    qs("#v2-clip-" + kind + "-library-tab")?.addEventListener("click", () => {
+      const input = qs("#" + inputId);
+      if (input?.files?.length) input.value = "";
+      if (kind === "video") {
+        W.setObjectUrl("clip-source", null);
+      } else {
+        W.setObjectUrl("clip-master-audio", null);
+        const player = qs("#v2-clip-audio-player");
+        if (player) {
+          player.pause?.();
+          player.hidden = true;
+          player.removeAttribute("src");
+        }
+      }
+      setClipSourceMode(kind, "library");
+    });
     qs("#v2-clip-" + kind + "-upload-tab")?.addEventListener("click", () => {
       qs("#" + inputId)?.click();
     });
