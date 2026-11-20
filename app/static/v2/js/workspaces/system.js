@@ -12,7 +12,8 @@
   let autoTimer = null;
   let lastRecordedAt = 0;
 
-  const finite = (value) => Number.isFinite(Number(value));
+  const finite = (value) =>
+    value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
   const clamp = (value, min = 0, max = 100) => Math.max(min, Math.min(max, Number(value) || 0));
   const percent = (value, total) => total > 0 ? clamp((Number(value) / Number(total)) * 100) : 0;
   const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-' + name + '"></use></svg>';
@@ -20,7 +21,7 @@
   const line = (label, value) => '<div class="v2-system-line"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong></div>';
   const tableRow = (label, value) => '<div class="v2-system-table-row"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong></div>';
   const ring = (value, label) =>
-    '<div class="v2-system-ring" style="--p:' + clamp(value).toFixed(1) + '"><div><strong>' +
+    '<div class="v2-system-ring" style="--ring:' + clamp(value).toFixed(1) + '%"><div><strong>' +
     (finite(value) ? Math.round(Number(value)) + '%' : '—') + '</strong><span>' + escapeHtml(label) + '</span></div></div>';
 
   const cardHead = (title, iconName, online) =>
