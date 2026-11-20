@@ -73,6 +73,7 @@ Cross-workspace actions use small browser events such as `v2:datarefresh`, `v2:u
 ### Workspaces
 
 - `css/workspaces/common.css`
+- `css/workspaces/continue.css` — Continue-specific reference layout
 - `css/workspaces/library.css`
 - `css/workspaces/queue.css`
 - `css/workspaces/chat.css`
