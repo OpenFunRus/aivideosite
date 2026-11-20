@@ -410,20 +410,15 @@
   );
   const DEFAULT_RESOLUTION_SHAPE = "16:9";
   const DEFAULT_RESOLUTION = "1312x736";
-  const LEGACY_PROFILE_MAP = {
-    fast: "steps8",
-    quality: "steps20",
-    max: "steps20",
-  };
-  const PROFILE_LABELS = {
-    steps4: "4 шага · Turbo",
-    steps8: "8 шагов · Turbo",
-    steps12: "12 шагов · Base",
-    steps16: "16 шагов · Base",
-    steps20: "20 шагов · Base",
-    fast: "Fast · Turbo 8 (старый)",
-    quality: "Quality · Base 20 (старый)",
-    max: "Max · Base 30 (старый)",
+  const LEGACY_PROFILE_STEPS = {
+    steps4: 4,
+    steps8: 8,
+    steps12: 12,
+    steps16: 16,
+    steps20: 20,
+    fast: 8,
+    quality: 20,
+    max: 20,
   };
 
   const inferResolutionShape = (value) => {
@@ -479,22 +474,52 @@
     resolutionSelect.value = (preferred || sameTier || fallback || presets[0]).value;
   };
 
+  const setRangeState = (input, valueElement, colorForValue) => {
+    if (!input) return;
+    const value = Number(input.value);
+    const min = Number(input.min);
+    const max = Number(input.max);
+    const progress = max > min ? ((value - min) / (max - min)) * 100 : 0;
+    input.style.setProperty("--range-progress", `${Math.max(0, Math.min(100, progress))}%`);
+    input.classList.remove("range-green", "range-yellow", "range-red");
+    const color = colorForValue(value);
+    input.classList.add(`range-${color}`);
+    if (valueElement) {
+      valueElement.textContent = String(value);
+      valueElement.style.setProperty(
+        "--range-value-color",
+        color === "green" ? "var(--success)" : color === "red" ? "var(--danger)" : "var(--warning)"
+      );
+    }
+  };
+
+  const updateGeneratorRanges = () => {
+    setRangeState(qs("#steps-range"), qs("#steps-value"), (value) =>
+      value <= 10 ? "green" : value <= 16 ? "yellow" : "red"
+    );
+    setRangeState(qs("#fps-range"), qs("#fps-value"), (value) => {
+      if (value === 24) return "green";
+      if (value <= 11 || value >= 26) return "red";
+      return "yellow";
+    });
+  };
+
   const updateSeconds = () => {
     if (secondsRange && secondsValue) {
       secondsValue.textContent = `${secondsRange.value} сек`;
     }
+    updateGeneratorRanges();
   };
 
   const collectGeneratorSettings = () => {
-    const checkedProfile = qs('[name="profile"]:checked', generationForm);
     return {
       prompt: qs("#prompt")?.value || "",
       resolution: qs("#resolution")?.value || DEFAULT_RESOLUTION,
       resolution_shape:
         qs("#resolution-shape", generationForm)?.value || DEFAULT_RESOLUTION_SHAPE,
       seconds: secondsRange?.value || "5",
-      fps: qs('[name="fps"]', generationForm)?.value || "24",
-      profile: checkedProfile?.value || "steps8",
+      fps: qs("#fps-range", generationForm)?.value || "24",
+      steps: qs("#steps-range", generationForm)?.value || "8",
       seed: qs('[name="seed"]', generationForm)?.value || "-1",
       generate_audio: Boolean(qs("#generate-audio")?.checked),
       generation_mode:
@@ -560,23 +585,20 @@
       secondsRange.value = String(seconds);
     }
 
-    const fps = qs('[name="fps"]', generationForm);
-    if (
-      fps &&
-      [...fps.options].some((option) => option.value === String(saved.fps))
-    ) {
-      fps.value = String(saved.fps);
+    const fps = qs("#fps-range", generationForm);
+    if (fps && saved.fps !== undefined && saved.fps !== null) {
+      const value = Math.max(6, Math.min(32, Math.round(Number(saved.fps) || 24)));
+      fps.value = String(value);
     }
 
-    const normalizedProfile =
-      LEGACY_PROFILE_MAP[String(saved.profile || "")] ||
-      String(saved.profile || "steps8");
-    const profile = qs(
-      `[name="profile"][value="${CSS.escape(normalizedProfile)}"]`,
-      generationForm
-    );
-    if (profile) {
-      profile.checked = true;
+    const stepsInput = qs("#steps-range", generationForm);
+    if (stepsInput) {
+      let value = Number(saved.steps);
+      if (!Number.isFinite(value)) {
+        value = LEGACY_PROFILE_STEPS[String(saved.profile || "")] || 8;
+      }
+      value = Math.max(6, Math.min(24, Math.round(value / 2) * 2));
+      stepsInput.value = String(value);
     }
 
     const seed = qs('[name="seed"]', generationForm);
@@ -951,16 +973,6 @@
       qs("#reference-task").value = "timeline_guides";
     }
 
-    qsa('[name="profile"]', generationForm).forEach((input) => {
-      const small = input.closest("label")?.querySelector("small");
-      if (!small) return;
-      if (mode === "frames") {
-        small.textContent = ["steps4", "steps8"].includes(input.value) ? "Turbo" : "Base";
-      } else {
-        small.textContent = input.value === "steps4" ? "Ref Turbo" : "Base";
-      }
-    });
-
     const note = qs("#reference-mode-note");
     if (note) {
       note.textContent =
@@ -1162,6 +1174,19 @@
 
   qs("#reset-settings").addEventListener("click", clearAppStorageAndReset);
 
+  const normalizeGpuName = (name, fallback) => {
+    const value = String(name || fallback || "");
+    if (value.includes("3090")) return "RTX3090";
+    if (value.includes("2080")) return "RTX2080";
+    return value.replace("NVIDIA GeForce ", "").replaceAll(" ", "");
+  };
+
+  const applyGpuState = (element, available, busy) => {
+    if (!element) return;
+    element.classList.remove("state-ok", "state-busy", "state-error");
+    element.classList.add(!available ? "state-error" : busy ? "state-busy" : "state-ok");
+  };
+
   const renderSystem = (state) => {
     const gpu = state.system?.gpu;
     const secondaryGpu = state.system?.secondary_gpu;
@@ -1172,24 +1197,20 @@
     const globalRunning = Number(state.global_counts?.running || 0);
     const globalQueued = Number(state.global_counts?.queued || 0);
 
+    const primaryBusy = Number(gpu?.utilization || 0) > 5;
+    const secondaryBusy = Number(secondaryGpu?.utilization || 0) > 5;
     const comfyPill = qs("#comfy-status");
-    const comfyDot = qs(".status-dot", comfyPill);
-    comfyDot.className = `status-dot ${comfy ? "ok" : "error"}`;
-    comfyPill.title = comfy ? "ComfyUI доступен" : "ComfyUI недоступен";
-
     const comfySecondaryPill = qs("#comfy-secondary-status");
-    if (comfySecondaryPill) {
-      const comfySecondaryDot = qs(".status-dot", comfySecondaryPill);
-      comfySecondaryDot.className = `status-dot ${comfySecondary ? "ok" : "error"}`;
-      comfySecondaryPill.title = comfySecondary
-        ? "H3 secondary доступен на RTX 2080 Ti"
-        : "H3 secondary недоступен";
+    if (comfyPill) {
+      comfyPill.textContent = "RTX3090";
+      comfyPill.title = !comfy ? "RTX3090 недоступна" : primaryBusy ? "RTX3090 занята" : "RTX3090 свободна";
+      applyGpuState(comfyPill, Boolean(comfy && gpu), primaryBusy);
     }
-
-    const active = qs("#active-status");
-    active.innerHTML = globalRunning
-      ? `${icon("bolt")}<span>GPU занят</span>`
-      : `${icon("check")}<span>GPU свободен</span>`;
+    if (comfySecondaryPill) {
+      comfySecondaryPill.textContent = "RTX2080";
+      comfySecondaryPill.title = !comfySecondary ? "RTX2080 недоступна" : secondaryBusy ? "RTX2080 занята" : "RTX2080 свободна";
+      applyGpuState(comfySecondaryPill, Boolean(comfySecondary && secondaryGpu), secondaryBusy);
+    }
 
     qs("#sidebar-queue-count").textContent = String(running + queued);
     qs("#mobile-queue-count").textContent = String(running + queued);
@@ -1197,19 +1218,15 @@
     qs("#metric-queue").textContent = String(globalRunning + globalQueued);
 
     const miniDot = qs("#gpu-status-dot");
+    const primaryMini = miniDot?.closest(".gpu-mini");
     if (gpu) {
       const gpuBusy = Number(gpu.utilization || 0) > 5;
-      miniDot.className = `status-dot ${comfy ? (gpuBusy ? "busy" : "ok") : "error"}`;
-      qs("#gpu-mini-name").textContent = (gpu.name || "RTX 3090").replace(
-        "NVIDIA GeForce ",
-        ""
-      );
+      if (miniDot) miniDot.className = "status-dot";
+      applyGpuState(primaryMini, Boolean(comfy), gpuBusy);
+      qs("#gpu-mini-name").textContent = normalizeGpuName(gpu.name, "RTX3090");
       qs("#gpu-mini-value").textContent =
         `${gpu.memory_used_mb} / ${gpu.memory_total_mb} MB`;
-      qs("#metric-gpu").textContent = (gpu.name || "RTX 3090").replace(
-        "NVIDIA GeForce ",
-        ""
-      );
+      qs("#metric-gpu").textContent = normalizeGpuName(gpu.name, "RTX3090");
       qs("#metric-vram").textContent =
         `${(gpu.memory_used_mb / 1024).toFixed(1)} / ${(
           gpu.memory_total_mb / 1024
@@ -1217,7 +1234,8 @@
       qs("#metric-util").textContent = `${gpu.utilization}%`;
       qs("#metric-temp").textContent = `${gpu.temperature} °C`;
     } else {
-      miniDot.className = "status-dot error";
+      if (miniDot) miniDot.className = "status-dot";
+      applyGpuState(primaryMini, false, false);
       qs("#gpu-mini-value").textContent = "nvidia-smi недоступен";
       qs("#metric-gpu").textContent = "Нет данных";
       qs("#metric-vram").textContent = "—";
@@ -1226,18 +1244,15 @@
     }
 
     const secondaryMiniDot = qs("#gpu-secondary-status-dot");
+    const secondaryMini = secondaryMiniDot?.closest(".gpu-mini");
     if (secondaryGpu) {
       const secondaryBusy = Number(secondaryGpu.utilization || 0) > 5;
-      secondaryMiniDot.className =
-        `status-dot ${comfySecondary ? (secondaryBusy ? "busy" : "ok") : "error"}`;
-      qs("#gpu-secondary-mini-name").textContent = (
-        secondaryGpu.name || "RTX 2080 Ti"
-      ).replace("NVIDIA GeForce ", "");
+      if (secondaryMiniDot) secondaryMiniDot.className = "status-dot";
+      applyGpuState(secondaryMini, Boolean(comfySecondary), secondaryBusy);
+      qs("#gpu-secondary-mini-name").textContent = normalizeGpuName(secondaryGpu.name, "RTX2080");
       qs("#gpu-secondary-mini-value").textContent =
         `${secondaryGpu.memory_used_mb} / ${secondaryGpu.memory_total_mb} MB`;
-      qs("#metric-secondary-gpu").textContent = (
-        secondaryGpu.name || "RTX 2080 Ti"
-      ).replace("NVIDIA GeForce ", "");
+      qs("#metric-secondary-gpu").textContent = normalizeGpuName(secondaryGpu.name, "RTX2080");
       qs("#metric-secondary-vram").textContent =
         `${(secondaryGpu.memory_used_mb / 1024).toFixed(1)} / ${(
           secondaryGpu.memory_total_mb / 1024
@@ -1245,7 +1260,8 @@
       qs("#metric-secondary-util").textContent = `${secondaryGpu.utilization}%`;
       qs("#metric-secondary-temp").textContent = `${secondaryGpu.temperature} °C`;
     } else {
-      secondaryMiniDot.className = "status-dot error";
+      if (secondaryMiniDot) secondaryMiniDot.className = "status-dot";
+      applyGpuState(secondaryMini, false, false);
       qs("#gpu-secondary-mini-value").textContent = "nvidia-smi недоступен";
       qs("#metric-secondary-gpu").textContent = "Нет данных";
       qs("#metric-secondary-vram").textContent = "—";
@@ -1291,9 +1307,11 @@
         if (meta.width && meta.height) {
           details.push(`${meta.width}×${meta.height}`);
         }
-        if (meta.profile) {
-          const profile = PROFILE_LABELS[meta.profile] || meta.profile;
-          details.push(profile);
+        if (meta.steps) {
+          details.push(`${meta.steps} шагов`);
+        } else if (meta.profile) {
+          const legacySteps = LEGACY_PROFILE_STEPS[meta.profile];
+          details.push(legacySteps ? `${legacySteps} шагов` : meta.profile);
         }
         if (meta.fps) details.push(`${meta.fps} FPS`);
         if (meta.generate_audio) details.push("H3 Audio");
@@ -2354,7 +2372,11 @@
     button.addEventListener("click", () => guideDialog?.close());
   });
 
-  const profileLabel = (value) => PROFILE_LABELS[value] || value || "—";
+  const stepsLabel = (meta) => {
+    if (meta?.steps) return String(meta.steps);
+    const legacy = LEGACY_PROFILE_STEPS[String(meta?.profile || "")];
+    return legacy ? String(legacy) : "—";
+  };
 
   const openMediaInfo = (mediaId) => {
     const item = (lastState?.media || []).find((media) => media.id === mediaId);
@@ -2377,7 +2399,7 @@
       ],
       ["Длительность задания", meta.seconds ? `${meta.seconds} сек` : "—"],
       ["FPS", meta.fps ?? "—"],
-      ["Профиль", profileLabel(meta.profile)],
+      ["Шаги", stepsLabel(meta)],
       ["Режим H3", meta.generation_mode || "frames"],
       ["Задача референсов", meta.reference_task || "—"],
       ["Размер референса", meta.ref_image_size || "—"],
