@@ -116,8 +116,17 @@ def _site_users() -> tuple[SiteUser, ...]:
         if users:
             return users
 
-    # Backward-compatible numbered env config. Adding SITE_USER4_PASSWORD,
-    # SITE_USER5_PASSWORD, ... now requires no source-code changes.
+    users_file = _data_dir / ".site_users.json"
+    try:
+        file_users = _valid_site_users(
+            json.loads(users_file.read_text(encoding="utf-8"))
+        )
+    except (FileNotFoundError, TypeError, ValueError, json.JSONDecodeError):
+        file_users = ()
+
+    # Backward-compatible numbered env config. Numbered entries extend/override
+    # the local users file, so adding SITE_USER4_* does not make existing
+    # auto-generated user1..user3 disappear.
     numbered_payload: dict[str, dict[str, str]] = {}
     for index in range(1, 101):
         password = os.getenv(f"SITE_USER{index}_PASSWORD", "").strip()
@@ -133,17 +142,24 @@ def _site_users() -> tuple[SiteUser, ...]:
             "label": label,
             "password": password,
         }
-    users = _valid_site_users(numbered_payload)
-    if users:
-        return users
 
-    users_file = _data_dir / ".site_users.json"
-    try:
-        users = _valid_site_users(json.loads(users_file.read_text(encoding="utf-8")))
+    if numbered_payload:
+        merged_payload: dict[str, dict[str, object]] = {
+            user.id: {
+                "id": user.id,
+                "label": user.label,
+                "password": user.password,
+                "enabled": True,
+            }
+            for user in file_users
+        }
+        merged_payload.update(numbered_payload)
+        users = _valid_site_users(merged_payload)
         if users:
             return users
-    except (FileNotFoundError, TypeError, ValueError, json.JSONDecodeError):
-        pass
+
+    if file_users:
+        return file_users
 
     # First-run compatibility: create the same three local profiles as before,
     # but store them in the new arbitrary-user format.
