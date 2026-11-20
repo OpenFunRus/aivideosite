@@ -14,31 +14,36 @@
 
 ## V2 — новый интерфейс рядом с V1
 
-20 ноября 2026 утверждён отдельный task-first дизайн V2.
+20 ноября 2026 утверждён и реализован отдельный task-first V2. V1 сохранён для сравнения и fallback.
 
-- V1 остаётся на `/` и не удаляется.
+- V1 остаётся на `/`.
 - V2 открывается на `/v2`.
-- V2 использует отдельные `app/templates/v2.html`, `app/static/v2.css`, `app/static/v2.js` и не подключает старые V1 CSS/JS.
-- Утверждённый экран `Создать`: prompt + magic wand, масштабируемый Character selector, first/last frame previews, кнопки 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 sec, 8/12/16 steps, seed, sound.
-- Character selector: поиск, Все / Выбранные / Недавние, прокрутка, выбранные chips; при выборе учитываются H3 reference budgets.
-- Magic wand уже вызывает существующий локальный Qwen через `/api/assistant/control` только для улучшения prompt; старый режим автозаполнения формы в V2 не возвращается.
-- Отдельная вкладка `Инструкция`: обучение по V2 + MiniMax H3.
-- Кнопка ChatGPT copy-paste динамически объединяет `app/static/v2-chatgpt-site-guide.txt` + актуальный `app/static/h3-prompting-guide-ai.txt`.
-- Остальные V2-разделы пока являются shell placeholders и реализуются поэтапно по `docs/v2/PLAN.md`.
-- Кнопка генерации V2 подключена через отдельный упрощённый `POST /api/v2/generate`, который мапит V2 quality/ratio/duration/steps/seed/sound/Characters/first-last в существующий `/api/generate` pipeline и общую очередь.
-- V2 quality mapping выполняется на backend: 480 → short side 480, 720 → 736, 1080 → 1088, размеры округляются вверх до сетки 32; например 720p 16:9 → 1312×736.
-- V2 Create: без Characters используется FL2VA frames path; с Characters используется Ref2VA reference path. Из-за реального разделения этих H3 Easy modes V2 явно запрещает смешивать exact first/last кадры с Characters в одной задаче, а не игнорирует одну из conditioning-веток.
-- Runtime H3-проверка Stage 3 остаётся за пользователем на Ubuntu VM.
-- После первой визуальной проверки Stage 2 переработан: обе боковые панели на desktop являются компактными hover-rails. Слева по умолчанию видны только иконки навигации, справа только иконка Characters; при наведении соответствующая колонка расширяется, а центральная область ресайзится.
-- Character selector перенесён из центральной формы в правый rail: поиск, Все / Выбранные / Недавние, выбранные chips и сетка персонажей находятся там.
-- Убраны видимый статус «Черновик сохранён» и служебная надпись у кнопки Generate.
-- Textarea prompt больше не имеет стандартного browser resize-handle; добавлены стилизованные scrollbar для страницы и внутренних скроллируемых областей.
-- GPU chips теперь разделяют model / VRAM / LOAD визуально, вместо слитной строки.
-- Центральный Create workspace больше не ограничен старым max-width; пустое пространство справа убрано, вертикальная плотность формы уменьшена.
-- Mobile navigation дополнительно переделана: нижняя икон-панель удалена в пользу fixed top bar с hamburger слева, брендом по центру и отдельной кнопкой Characters справа. Hamburger открывает левый drawer, Characters — правый drawer, оба закрываются по backdrop/выбору раздела.
-- После следующей desktop-проверки hover-rails отменены: на desktop левая навигация и правая Characters-панель теперь постоянно открыты и имеют одинаковую компактную ширину 238px. Персонажи справа показываются строго по одному в строку; выбор персонажа больше не может свернуть колонку. Навигационные иконки слева выровнены через фиксированную icon-column внутри каждого пункта, чтобы active background и содержимое были геометрически центрированы.
-- На mobile верхний page title / eyebrow / GPU status центрированы как единый блок.
-- Важное техническое ограничение текущего backend: FL2VA first/last и Ref2VA Characters пока разделены режимами. Не обещать их одновременное conditioning до отдельного решения на Stage 3.
+- V2 имеет отдельные template/CSS/JS: `v2.html`, `v2.css`, `v2-workspaces.css`, `v2.js`, `v2-workspaces.js`.
+- Desktop: постоянные компактные левая навигация и правая Characters-панель по 238 px. Справа один Character на строку.
+- Mobile: fixed top bar, hamburger для основного drawer и отдельная кнопка Characters; page title/GPU status центрированы.
+- Скроллы стилизованы под интерфейс; старый видимый статус черновика удалён.
+
+### Реализованные V2 workspace
+
+- **Создать**: prompt + magic wand, Characters, first/last previews, 480/720/1080, 1:1/16:9/9:16, 5/10/15 sec, 8/12/16 steps, seed, sound. `POST /api/v2/generate` мапит упрощённую форму в существующий H3 pipeline и общую очередь.
+- **Продолжить**: ролик из Library или upload, автоматический ffprobe размеров, округление H3-размеров вверх до ×32, Characters, Ref2VA `video_continuation`, magic wand.
+- **По аудио**: Digital Human, driving audio, Character и/или visual reference, упрощённые настройки и magic wand.
+- **Продолжить клип**: previous video + master audio + start time. Backend FFmpeg вырезает только нужный аудиосегмент; результат сохраняет `audio_start/audio_end`, чтобы следующий сегмент начинался с нужной позиции.
+- **Библиотека**: видео, metadata/prompt/settings, download/delete, Continue, next clip, отправка в Editor. Первые 40 preview, затем «Показать ещё».
+- **Очередь**: личные jobs, progress/stage/timers, Cancel/Retry/Delete/Result; отдельно показана общая занятость RTX3090/RTX2080 и пользователь текущей H3-задачи.
+- **Монтаж**: persistent per-user browser project, Library → последовательный Video 1 timeline, drag reorder, trim, split, clip volume, video/audio fade in/out, отдельный Music track с offset/trim/length/volume, background FFmpeg export в Library.
+- **Чат**: отдельный streaming Qwen3-8B chat, Thinking, per-user browser history, 32k context meter; backend резервирует output и удаляет из model request самые старые полные user+assistant turns. Для token count используется llama.cpp `/tokenize`, при недоступности — conservative fallback.
+- **Система**: GPU/VRAM/load/temp, active user/job, Qwen target/state, оба ComfyUI, RAM, CPU load, disk.
+- **Инструкция**: обучение по V2/H3 и copy-paste контекст для ChatGPT. Кнопка объединяет `v2-chatgpt-site-guide.txt` с актуальным `h3-prompting-guide-ai.txt`.
+
+### Важные технические решения V2
+
+- quality mapping на backend: 480 → short side 480, 720 → 736, 1080 → 1088; размеры округляются **вверх** до сетки ×32. Например 1280×720 continuation → 1280×736.
+- Exact FL2VA first/last anchors и Ref2VA Characters — разные MiniMaxH3Easy modes. В Create V2 их смешивание явно блокируется, вместо молчаливого игнорирования одного conditioning path.
+- Queue/Library/dual-GPU worker/SQLite/ComfyUI архитектура не дублируются: V2 переиспользует рабочий backend V1.
+- Editor сейчас является последовательным Video 1 timeline + отдельный Music track. Multiple composited visual layers не имитируются.
+- V2 user config больше не фиксирован на трёх профилях: поддерживаются `SITE_USERS_JSON` и произвольные `SITE_USER<N>_...` entries.
+- Runtime H3, Digital Human, FFmpeg editor, Qwen context и полный визуальный responsive pass ещё должны быть проверены пользователем на реальной Ubuntu VM.
 
 Подробный план: `docs/v2/PLAN.md`.
 
@@ -359,46 +364,51 @@ app/static/icons.svg
 
 ---
 
-## 8. Авторизация / три пользователя
+## 8. Авторизация / пользователи
 
-Сайт использует три password-only профиля. Поле логина не требуется: каждый пароль однозначно соответствует одному `user_id`.
+Авторизация password-only: поле логина не требуется, каждый уникальный пароль однозначно соответствует одному `user_id`.
 
-При первом запуске без явных паролей приложение генерирует три уникальных шестизначных числовых пароля и сохраняет их локально:
+Количество пользователей больше не зафиксировано в source code.
+
+Поддерживаются три способа конфигурации:
+
+1. `SITE_USERS_JSON` — произвольный JSON list/dict с полями `id`, `label`/ `name`, `password`, optional `enabled`.
+2. Нумерованные env-переменные `SITE_USER<N>_PASSWORD`, optional `SITE_USER<N>_ID`, `SITE_USER<N>_NAME`. Код сканирует N=1..100, поэтому добавление user4/user5 не требует frontend/backend правок.
+3. Локальный `data/.site_users.json`; старый словарь `user1/user2/user3` остаётся совместимым.
+
+Если ни один пользователь явно не задан и файла нет, first run по-прежнему создаёт три уникальных шестизначных password-only профиля и сохраняет их в:
 
 ```text
 /opt/ai/aivideosite/data/.site_users.json
 ```
 
-Права файла: `0600`. Он не попадает в Git, потому что `data/` игнорируется.
+Файл получает права `0600`.
 
-Посмотреть пароли:
-
-```bash
-cat /opt/ai/aivideosite/data/.site_users.json
-```
-
-Опциональные override в `.env`:
+Пример numbered env:
 
 ```dotenv
-SITE_USER1_NAME=Пользователь 1
-SITE_USER1_PASSWORD=
-SITE_USER2_NAME=Пользователь 2
-SITE_USER2_PASSWORD=
-SITE_USER3_NAME=Пользователь 3
-SITE_USER3_PASSWORD=
+SITE_USER1_ID=user1
+SITE_USER1_NAME=OpenFun
+SITE_USER1_PASSWORD=123456
+SITE_USER2_ID=user2
+SITE_USER2_NAME=User 2
+SITE_USER2_PASSWORD=654321
+SITE_USER4_ID=editor
+SITE_USER4_NAME=Editor
+SITE_USER4_PASSWORD=451923
 ```
-
-Если задавать пароли через env, должны быть заполнены все три и значения должны быть уникальны. Legacy `SITE_PASSWORD` больше не используется.
 
 Изоляция данных:
 
 - `jobs.owner_id` — личная очередь/история;
 - `media.owner_id` — личная библиотека;
-- старые rows при миграции получают `owner_id='user1'`;
-- все media/job API проверяют владельца;
-- browser localStorage имеет user-specific prefix;
-- GPU worker и фактическая очередь выполнения общие для всех пользователей;
-- UI показывает личный счётчик задач, но общую занятость GPU/общую очередь.
+- Characters фильтруются по owner;
+- browser drafts/chat/editor localStorage имеют user-specific prefix;
+- media/job API проверяют владельца;
+- GPU worker и физическая очередь общие;
+- V2 Queue показывает глобальную занятость GPU и label активного пользователя, но не отдаёт чужую полную job payload.
+
+Legacy `SITE_PASSWORD` больше не используется.
 
 Session secret:
 
@@ -406,13 +416,7 @@ Session secret:
 SESSION_SECRET=auto
 ```
 
-При `auto` приложение создаёт постоянный случайный secret:
-
-```text
-data/.session_secret
-```
-
-Сессия HttpOnly. Сайт рассчитан на LAN / HTTP.
+При `auto` приложение создаёт постоянный случайный secret в `data/.session_secret`. Сайт рассчитан на LAN / HTTP.
 
 ---
 
