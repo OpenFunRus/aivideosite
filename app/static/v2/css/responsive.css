@@ -812,7 +812,7 @@ html {
   .v2-app.left-open,
   .v2-app.right-open,
   .v2-app.left-open.right-open {
-    grid-template-columns: 238px minmax(0, 1fr) 238px;
+    grid-template-columns: 238px minmax(0, 1fr) 300px;
     transition: none;
   }
 
@@ -920,7 +920,7 @@ html {
 
   .v2-character-rail,
   .v2-app.right-open .v2-character-rail {
-    width: 238px;
+    width: 300px;
     padding: 18px 12px 14px;
     overflow: hidden;
   }
@@ -956,7 +956,7 @@ html {
 
   .v2-character-panel,
   .v2-app.right-open .v2-character-panel {
-    width: 214px;
+    width: 276px;
     height: calc(100vh - 86px);
     opacity: 1;
     transform: none;
@@ -1059,3 +1059,11 @@ html {
 }
 
 
+
+@media (min-width:821px) and (max-width:1100px){
+  .v2-app,.v2-app.left-open,.v2-app.right-open,.v2-app.left-open.right-open{grid-template-columns:218px minmax(0,1fr) 270px}
+  .v2-character-rail,.v2-app.right-open .v2-character-rail{width:270px}
+  .v2-character-panel,.v2-app.right-open .v2-character-panel{width:246px}
+  .v2-character-add{padding-inline:8px}
+  .v2-character-add span{display:none}
+}
