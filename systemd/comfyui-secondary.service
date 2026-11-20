@@ -1,5 +1,5 @@
 [Unit]
-Description=ComfyUI MiniMax H3 secondary on RTX 2080 Ti
+Description=ComfyUI MiniMax H3 secondary on RTX2080
 After=network-online.target
 Wants=network-online.target
 
