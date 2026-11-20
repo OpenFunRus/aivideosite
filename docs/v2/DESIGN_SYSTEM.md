@@ -91,9 +91,9 @@
 - Текущий backend честно поддерживает **одну последовательную видеодорожку V1 + одну Music-дорожку**. Не рисовать рабочие V2/A1/A2 до расширения FFmpeg export.
 - Библиотека имеет поиск, реальные preview через `/media/{id}`, выбор элемента и «Добавить»; двойной клик также добавляет ролик.
 - Viewer использует собственный transport: предыдущий/следующий клип, ±1 сек, play/pause, project scrub и громкость preview. Позиция считается относительно всего последовательного проекта.
-- Timeline имеет ruler, playhead, drag-reorder клипов, Snap 0.5s и zoom 8–32 px/s. Длина каждого клипа на шкале соответствует его реальной effective duration.
+- Timeline имеет ruler, playhead, **pointer drag-reorder** клипов (не HTML5 `draggable`, потому что внутри клипа есть `<video>`), Snap 0.5s и zoom 8–32 px/s. Клип не должен выделять текст/preview при захвате. Длина каждого клипа на шкале соответствует его реальной effective duration.
 - Inspector содержит вкладки «Клип / Аудио / Инфо». В «Клип» остаются только реально экспортируемые параметры: trim start/duration, split, volume, fade in/out. В «Аудио» — Music file, offset, trim, length, volume.
-- Toolbar: selection, split, delete, undo/redo, snap, zoom. Горячие клавиши: Space play/pause, Delete удаление, Ctrl/Cmd+Z undo, Ctrl/Cmd+Y или Cmd/Ctrl+Shift+Z redo.
+- Toolbar: selection, split, delete, undo/redo, snap, zoom. У выбранного клипа также появляется компактная красная корзина. Удаление должно работать кнопкой toolbar, корзиной на клипе и клавишами Delete/Backspace. Горячие клавиши: Space play/pause, Delete/Backspace удаление, Ctrl/Cmd+Z undo, Ctrl/Cmd+Y или Cmd/Ctrl+Shift+Z redo.
 - Проект автоматически хранится per-user в localStorage. «Сохранить» выгружает JSON, «Открыть» импортирует JSON. Бинарный Music-файл в JSON не встраивается и после перезагрузки/импорта выбирается заново.
 - Экспорт сохраняет существующий контракт `POST /api/editor/export`: последовательные clips + optional Music file. UI не должен обещать compositing, overlays или несколько независимых audio/video lanes, пока backend этого не поддерживает.
 - Основные файлы: `views/editor.html`, `css/workspaces/editor.css`, `js/workspaces/editor.js`.
