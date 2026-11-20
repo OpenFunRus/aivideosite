@@ -713,6 +713,42 @@ def _extract_h3_prompt_text(content: str) -> str:
 
 _V2_WAND_WORKSPACES = {"create", "continue", "audio", "clip"}
 
+def _v2_wand_system() -> str:
+    return (
+        "You are the dedicated MiniMax H3 Magic Wand for AI Video Site V2. "
+        "Return ONLY the final H3 prompt text. No JSON, no Markdown fences, no explanation. "
+        "The output MUST contain exactly these three fields in this exact order: "
+        "integrated_multimodal_description, overall_soundscape, non_diegetic_music. "
+        "Write H3 production instructions in English, but keep exact dialogue, lyrics and exact visible text "
+        "in their requested language. Preserve every concrete user fact exactly: numeric age/count, direction, "
+        "handedness, props, weather, requested actions, camera request and exact dialogue. Do not invent extra "
+        "sounds, actions, people, objects, weather events, emotions, music or a specific source for an unspecified noise. "
+        "[Shot 1] has no timestamp. Every later camera cut/switch starts a new [Shot N] with an exact increasing "
+        "timestamp that fits CURRENT_GENERATOR_STATE.seconds. If music was not requested, non_diegetic_music: N/A. "
+        "If CURRENT_GENERATOR_STATE.generate_audio is false, both sound fields are exactly N/A. "
+        "Never output subject_definitions, summary, retention_analysis or detailed_description; the backend owns Ref2VA mapping. "
+        "Follow the workspace-specific user instruction and the H3 reference guide below.\n\n"
+        + H3_EXPERT_GUIDE
+    )
+
+
+def _generate_v2_wand_prompt(
+    messages: Any,
+    *,
+    settings_payload: dict[str, Any],
+    thinking: bool,
+) -> str:
+    payload = _chat_payload(
+        messages,
+        settings=settings_payload,
+        system_prompt=_v2_wand_system(),
+        stream=False,
+        max_tokens=2800 if thinking else 1800,
+        temperature=0.08,
+        thinking=thinking,
+    )
+    return _extract_h3_prompt_text(_request_plain_content(payload))
+
 def _int(value: Any, minimum: int, maximum: int) -> int | None:
     try:
         number = int(round(float(value)))
