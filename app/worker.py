@@ -472,16 +472,30 @@ class JobWorker(threading.Thread):
                     f"Could not determine duration for '{source['title']}'."
                 )
             volume = max(0.0, min(2.0, float(spec.get("volume", 1.0))))
+            trim_start = max(0.0, min(float(duration) - 0.05, float(spec.get("trim_start") or 0.0)))
+            requested_duration = max(0.0, float(spec.get("trim_duration") or 0.0))
+            clip_duration = (
+                min(requested_duration, float(duration) - trim_start)
+                if requested_duration > 0
+                else float(duration) - trim_start
+            )
+            clip_duration = max(0.05, clip_duration)
+            fade_in = max(0.0, min(float(spec.get("fade_in") or 0.0), clip_duration / 2.0))
+            fade_out = max(0.0, min(float(spec.get("fade_out") or 0.0), clip_duration / 2.0))
             sources.append(
                 {
                     "media": source,
                     "path": source_path,
-                    "duration": float(duration),
+                    "source_duration": float(duration),
+                    "duration": clip_duration,
+                    "trim_start": trim_start,
+                    "fade_in": fade_in,
+                    "fade_out": fade_out,
                     "volume": volume,
                     "has_audio": probe_has_audio(source_path),
                 }
             )
-            total_duration += float(duration)
+            total_duration += clip_duration
 
         output_size = probe_video_size(sources[0]["path"])
         if output_size is None:
@@ -512,21 +526,46 @@ class JobWorker(threading.Thread):
         concat_parts: list[str] = []
         for index, source in enumerate(sources):
             duration = source["duration"]
+            trim_start = source["trim_start"]
+            fade_in = source["fade_in"]
+            fade_out = source["fade_out"]
+            video_filters = [
+                f"trim=start={trim_start:.6f}:duration={duration:.6f}",
+                "setpts=PTS-STARTPTS",
+                f"scale={width}:{height}:force_original_aspect_ratio=decrease",
+                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black",
+                "setsar=1",
+                "fps=24",
+                "format=yuv420p",
+            ]
+            if fade_in > 0:
+                video_filters.append(f"fade=t=in:st=0:d={fade_in:.6f}")
+            if fade_out > 0:
+                video_filters.append(
+                    f"fade=t=out:st={max(0.0, duration - fade_out):.6f}:d={fade_out:.6f}"
+                )
             filters.append(
-                f"[{index}:v:0]"
-                f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
-                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,"
-                "setsar=1,setpts=PTS-STARTPTS,fps=24,format=yuv420p"
-                f"[v{index}]"
+                f"[{index}:v:0]" + ",".join(video_filters) + f"[v{index}]"
             )
             if source["has_audio"] and source["volume"] > 0:
+                audio_filters = [
+                    f"atrim=start={trim_start:.6f}:duration={duration:.6f}",
+                    "asetpts=PTS-STARTPTS",
+                    "aresample=48000",
+                    "aformat=sample_fmts=fltp:channel_layouts=stereo",
+                    f"volume={source['volume']:.4f}",
+                ]
+                if fade_in > 0:
+                    audio_filters.append(f"afade=t=in:st=0:d={fade_in:.6f}")
+                if fade_out > 0:
+                    audio_filters.append(
+                        f"afade=t=out:st={max(0.0, duration - fade_out):.6f}:d={fade_out:.6f}"
+                    )
+                audio_filters.extend(
+                    ["apad", f"atrim=duration={duration:.6f}"]
+                )
                 filters.append(
-                    f"[{index}:a:0]"
-                    "aresample=48000,"
-                    "aformat=sample_fmts=fltp:channel_layouts=stereo,"
-                    f"volume={source['volume']:.4f},"
-                    f"apad,atrim=duration={duration:.6f},asetpts=PTS-STARTPTS"
-                    f"[a{index}]"
+                    f"[{index}:a:0]" + ",".join(audio_filters) + f"[a{index}]"
                 )
             else:
                 filters.append(
@@ -634,6 +673,10 @@ class JobWorker(threading.Thread):
                         source["media"]["id"] for source in sources
                     ],
                     "clip_volumes": [source["volume"] for source in sources],
+                    "clip_trim_starts": [source["trim_start"] for source in sources],
+                    "clip_durations": [source["duration"] for source in sources],
+                    "clip_fade_ins": [source["fade_in"] for source in sources],
+                    "clip_fade_outs": [source["fade_out"] for source in sources],
                     "audio_track": use_audio_track,
                     "audio_offset": (
                         float(audio_settings.get("offset") or 0.0)
@@ -707,6 +750,39 @@ def _prompt_title(prompt: str) -> str:
     if len(compact) <= 64:
         return compact or "MiniMax H3"
     return compact[:61].rstrip() + "..."
+
+
+def probe_video_size(path: Path) -> tuple[int, int] | None:
+    try:
+        result = subprocess.run(
+            [
+                str(settings.ffprobe_bin),
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "json",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        payload = json.loads(result.stdout)
+        streams = payload.get("streams") or []
+        if not streams:
+            return None
+        width = int(streams[0].get("width") or 0)
+        height = int(streams[0].get("height") or 0)
+        if width < 2 or height < 2:
+            return None
+        return width, height
+    except Exception:
+        return None
 
 
 def probe_has_audio(path: Path) -> bool:
