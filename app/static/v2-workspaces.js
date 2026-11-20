@@ -198,6 +198,7 @@
           '<button type="button" data-library-action="open"><svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>Открыть</button>' +
           '<a href="/media/' + encodeURIComponent(item.id) + '?download=1"><svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>Скачать</a>' +
           '<button type="button" data-library-action="continue">Продолжить</button>' +
+          '<button type="button" data-library-action="clip">След. клип</button>' +
           '<button type="button" data-library-action="editor"><svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg>Монтаж</button>' +
           '<button class="danger" type="button" data-library-action="delete"><svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg></button>' +
           "</div></div></article>"
@@ -222,6 +223,17 @@
       if (select) select.value = item.id;
       applyLibrarySource("continue", item);
       setView("continue");
+    } else if (action === "clip") {
+      const select = qs("#v2-clip-library");
+      if (select) select.value = item.id;
+      applyLibrarySource("clip", item);
+      const nextStart = Number(item.meta?.v2_context?.audio_end);
+      if (Number.isFinite(nextStart) && nextStart >= 0) {
+        const input = qs("#v2-clip-audio-start");
+        if (input) input.value = String(nextStart);
+        updateClipRange();
+      }
+      setView("clip");
     } else if (action === "editor") {
       addEditorClip(item);
       setView("editor");
@@ -628,7 +640,12 @@
     data.set("steps", settingValue("clip-steps", "12"));
     data.set("seed", qs("#v2-clip-seed")?.value || "");
     data.set("character_ids", JSON.stringify(selectedCharacterIds()));
-    await submitForm(form, "/api/v2/clip", data, qs('button[type="submit"]', form));
+    const result = await submitForm(form, "/api/v2/clip", data, qs('button[type="submit"]', form));
+    if (result && Number.isFinite(Number(result.audio_end))) {
+      const input = qs("#v2-clip-audio-start");
+      if (input) input.value = String(result.audio_end);
+      updateClipRange();
+    }
   });
 
   /* Chat */
