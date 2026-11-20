@@ -1665,3 +1665,8 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .character-edit-dialog textarea{min-height:130px}
 @media(max-width:1150px){.reference-file-row{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.character-grid{grid-template-columns:1fr}.character-card{grid-template-columns:92px minmax(0,1fr)}.reference-file-row{grid-template-columns:1fr}.modern-upload-footer{align-items:flex-start;flex-direction:column}.modern-upload-count{text-align:left}.help-tip::after{left:0;transform:translate(0,4px)}.help-tip:hover::after,.help-tip:focus-visible::after{transform:translate(0,0)}}
+
+input[type="number"]{-moz-appearance:textfield}
+input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.generation-mode-switch label>span{position:relative;padding-right:36px}
+.generation-mode-switch .mode-help-tip{position:absolute;top:8px;right:8px}
