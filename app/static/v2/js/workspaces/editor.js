@@ -423,6 +423,7 @@
     pendingAutoplay = autoplay;
     renderTimeline();
     renderInspector();
+    renderHistoryButtons();
     updateTransport();
   };
 
@@ -580,12 +581,13 @@
 
     const rect = timeline.getBoundingClientRect();
     const pointerX = Math.max(0, drag.lastX - rect.left);
+    pushUndo();
     const [moved] = state.clips.splice(drag.sourceIndex, 1);
 
     let cursor = 0;
     let insertIndex = state.clips.length;
     for (let i = 0; i < state.clips.length; i += 1) {
-      const width = effectiveDuration(state.clips[i]) * state.zoom;
+      const width = Math.max(48, effectiveDuration(state.clips[i]) * state.zoom);
       if (pointerX < cursor + width / 2) {
         insertIndex = i;
         break;
@@ -593,7 +595,6 @@
       cursor += width;
     }
 
-    pushUndo();
     state.clips.splice(insertIndex, 0, moved);
     selected = insertIndex;
     projectTime = clipProjectStart(selected);
