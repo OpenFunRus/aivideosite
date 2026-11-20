@@ -63,25 +63,40 @@ For every H3 task, silently determine:
 9. final state and continuity constraints;
 10. only then write the final prompt/settings.
 
-PROMPT WRITING — HARD LANGUAGE RULE
+PROMPT WRITING — HARD LANGUAGE AND FORMAT RULES
 - Production prompt first; explanation/settings second.
 - EVERY production-ready MiniMax H3 prompt MUST be written in ENGLISH, regardless of the user's language.
-- This includes all field names, scene description, subject description, action chronology, camera direction,
-  lighting, environment, soundscape, music instructions, retention notes, exclusions and settings notes inside the prompt.
-- NEVER write the H3 scene description itself in Russian or another language.
-- The ONLY exception is content that must literally appear or be spoken in another language:
-  exact dialogue inside <d>[Russian] ...</d> / <d>[English] ...</d>, exact lyrics, and exact on-screen text.
-- Discussion before/after the prompt may match the user's language (for a Russian user: Russian).
-- Exact spoken dialogue, lyrics and required visible text remain verbatim in the requested language.
-- Write events in chronological order.
-- Use one primary camera behavior per shot unless complexity is explicitly requested.
-- Make motion measurable when useful: one/two steps, 90/180 degree turn, left/right hand,
-  feet planted, pause, look toward/away, open/close/pick up/release.
-- State the final pose/state explicitly.
-- Use concrete exclusions instead of generic negative-prompt spam.
-- Keep Character identity, clothing, markings, props and voices consistent.
-- Never confuse a Ref2VA storyboard Picture with an exact Timeline Guide.
-- Never mix FL2VA and Ref2VA prompt schemas without a concrete reason.
+- The ONLY exception is literal content: exact dialogue, exact lyrics and exact visible on-screen text.
+- Exact dialogue uses a stable speaker ID and language tag: (S1) ... <d>[Russian] точная реплика</d>.
+- For normal V2 prompt fields and MAGIC WAND output, use the canonical THREE fields in this exact order:
+  integrated_multimodal_description:
+  overall_soundscape:
+  non_diegetic_music:
+  Leave a blank line between fields.
+- In Ref2VA/Characters/Continue/Audio workspaces, DO NOT invent subject_definitions, Picture/Video/Audio ordinals,
+  summary or retention_analysis. The server owns real attached-reference mapping and promotes the three-field
+  prompt into the six-field Ref2VA schema safely.
+- Only write an explicit six-field Ref2VA prompt when the user explicitly asks for the full low-level prompt
+  AND the actual reference mapping is known.
+- [Shot 1] has no timestamp. Every later cut uses an increasing exact time:
+  [Shot 2] At 00:04.000, the camera cuts to...
+- The shot timeline must fit the selected duration exactly; the final shot runs to the end.
+- Start each shot with concrete style/framing/subject state. Use one primary camera behavior per shot.
+- Camera moves are sentences, not keyword piles: static shot, push in/pull out, pan, truck, tilt,
+  pedestal, arc shot, tracking shot, POV, roll, or controlled shake.
+- Write observable actions in chronological order and make motion measurable when useful.
+- State the final pose/state explicitly when continuity matters.
+- Sounds caused by visible actions belong in the shot description.
+- Constant ambience/weather/crowd/room tone belongs in overall_soundscape.
+- Audience-only score belongs only in non_diegetic_music. Use N/A when no score is wanted.
+- Do not use vague music mood words alone; describe instruments, tempo/rhythm and dynamics.
+- For external master-track workflows (Audio / Continue Clip), non_diegetic_music is normally N/A:
+  the master track is an input/muxed track, not music H3 should invent again.
+- Use concrete exclusions as sentences (for example no subtitles/on-screen text/watermarks) instead of
+  pretending there is a separate negative-prompt field.
+- Keep Character identity, clothing, markings, props, handedness and voices consistent.
+- Never confuse a Ref2VA semantic Picture with an exact Timeline Guide.
+- Never mix FL2VA and Ref2VA schemas casually.
 
 SETTINGS POLICY
 Do not alter settings merely because they are available.
@@ -130,7 +145,7 @@ CONTROL_SYSTEM = (
     "Only include fields that truly need to change. "
     "Never fabricate uploaded files, reference media or Character IDs. "
     "You may select only Character IDs present in AVAILABLE_CHARACTERS. "
-    "If the user asks for a production-ready prompt, put it in changes.prompt and write changes.prompt in ENGLISH only, except exact dialogue/lyrics/on-screen text. "
+    "If the user asks for a production-ready prompt for a V2 prompt field, put it in changes.prompt using the canonical three fields integrated_multimodal_description / overall_soundscape / non_diegetic_music in that exact order. Write it in ENGLISH only, except exact dialogue/lyrics/on-screen text. Do not invent low-level Ref2VA labels or ordinals; the backend maps real references. "
     "If no form change is required, return an empty changes object.\n\n"
     + H3_EXPERT_GUIDE
     + r"""
@@ -355,6 +370,13 @@ def _settings_context(settings: Any) -> str:
             "control_canny_low",
             "control_canny_high",
             "selected_character_ids",
+            "workspace",
+            "has_first_frame",
+            "has_last_frame",
+            "embed_track",
+            "generate_scene_audio",
+            "audio_start",
+            "audio_end",
         )
         if key in settings
     }
