@@ -48,14 +48,14 @@
         <div class="gpu-mini">
           <span class="status-dot" id="gpu-status-dot"></span>
           <div>
-            <span id="gpu-mini-name">RTX 3090 · primary</span>
+            <span id="gpu-mini-name">RTX3090</span>
             <small id="gpu-mini-value">проверка...</small>
           </div>
         </div>
         <div class="gpu-mini">
           <span class="status-dot" id="gpu-secondary-status-dot"></span>
           <div>
-            <span id="gpu-secondary-mini-name">RTX 2080 Ti · secondary</span>
+            <span id="gpu-secondary-mini-name">RTX2080</span>
             <small id="gpu-secondary-mini-value">проверка...</small>
           </div>
         </div>
@@ -82,18 +82,8 @@
         </div>
       </div>
       <div class="topbar-status">
-        <span class="status-pill" id="comfy-status">
-          <span class="status-dot"></span>
-          H3 · 8188
-        </span>
-        <span class="status-pill" id="comfy-secondary-status">
-          <span class="status-dot"></span>
-          H3 secondary · 8189
-        </span>
-        <span class="status-pill" id="active-status">
-          <svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>
-          <span>GPU свободен</span>
-        </span>
+        <span class="status-pill gpu-status-pill" id="comfy-status">RTX3090</span>
+        <span class="status-pill gpu-status-pill" id="comfy-secondary-status">RTX2080</span>
       </div>
     </header>
 
@@ -113,7 +103,7 @@
                 <span class="panel-kicker" id="generator-mode-kicker">MiniMax H3 FL2VA</span>
                 <h3>Сцена</h3>
               </div>
-              <span class="badge badge-blue">RTX 3090 · primary</span>
+              <span class="badge badge-blue">RTX3090 · primary</span>
             </div>
 
             <label class="field">
@@ -385,59 +375,24 @@
               <span class="field-help">1–30 сек. Чем длиннее ролик, тем больше время генерации и риск артефактов.</span>
             </label>
 
-            <label class="field">
-              <span class="field-label">FPS</span>
-              <select name="fps">
-                <option value="12">12 FPS</option>
-                <option value="16">16 FPS</option>
-                <option value="20">20 FPS</option>
-                <option value="24" selected>24 FPS · рекомендуется</option>
-                <option value="25">25 FPS</option>
-                <option value="30">30 FPS</option>
-              </select>
-              <span class="field-help">24 FPS — штатный вариант. Более высокий FPS генерирует больше кадров.</span>
+            <label class="field range-field fps-field">
+              <span class="field-label field-label-row">
+                <span>FPS</span>
+                <strong id="fps-value">24</strong>
+              </span>
+              <input class="quality-range" id="fps-range" name="fps" type="range" min="6" max="32" step="1" value="24">
+              <div class="range-scale" aria-hidden="true"><span>6</span><span>24</span><span>32</span></div>
+              <span class="field-help">6–32 FPS. 24 — рекомендуемое значение; 6–11 и 26–32 отмечены красным.</span>
             </label>
 
-            <label class="field">
-              <span class="field-label">Шаги</span>
-              <div class="segmented segmented-five">
-                <label>
-                  <input type="radio" name="profile" value="steps4">
-                  <span>
-                    <strong>4</strong>
-                    <small>Turbo</small>
-                  </span>
-                </label>
-                <label>
-                  <input type="radio" name="profile" value="steps8" checked>
-                  <span>
-                    <strong>8</strong>
-                    <small>Turbo</small>
-                  </span>
-                </label>
-                <label>
-                  <input type="radio" name="profile" value="steps12">
-                  <span>
-                    <strong>12</strong>
-                    <small>Base</small>
-                  </span>
-                </label>
-                <label>
-                  <input type="radio" name="profile" value="steps16">
-                  <span>
-                    <strong>16</strong>
-                    <small>Base</small>
-                  </span>
-                </label>
-                <label>
-                  <input type="radio" name="profile" value="steps20">
-                  <span>
-                    <strong>20</strong>
-                    <small>Base</small>
-                  </span>
-                </label>
-              </div>
-              <span class="field-help">4/8 — Turbo LoRA для быстрых прогонов; 12/16/20 — базовая модель. Профиль 30 шагов удалён.</span>
+            <label class="field range-field steps-field">
+              <span class="field-label field-label-row">
+                <span>Шаги</span>
+                <strong id="steps-value">8</strong>
+              </span>
+              <input class="quality-range" id="steps-range" name="steps" type="range" min="6" max="24" step="2" value="8">
+              <div class="range-scale" aria-hidden="true"><span>6</span><span>16</span><span>24</span></div>
+              <span class="field-help">6–24 с шагом 2. 6–10 зелёные, 12–16 жёлтые, 18–24 красные.</span>
             </label>
 
             <label class="field">
@@ -480,7 +435,7 @@
           </article>
           <article class="metric-card">
             <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-activity"></use></svg></span>
-            <div><small>RTX 3090 · загрузка</small><strong id="metric-util">—</strong><span id="metric-temp">—</span></div>
+            <div><small>RTX3090 · загрузка</small><strong id="metric-util">—</strong><span id="metric-temp">—</span></div>
           </article>
           <article class="metric-card">
             <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span>
@@ -488,7 +443,7 @@
           </article>
           <article class="metric-card">
             <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-activity"></use></svg></span>
-            <div><small>RTX 2080 Ti · загрузка</small><strong id="metric-secondary-util">—</strong><span id="metric-secondary-temp">—</span></div>
+            <div><small>RTX2080 · загрузка</small><strong id="metric-secondary-util">—</strong><span id="metric-secondary-temp">—</span></div>
           </article>
           <article class="metric-card">
             <span class="metric-icon"><svg class="icon"><use href="/static/icons.svg#icon-database"></use></svg></span>
