@@ -129,11 +129,18 @@ H3_EXPERT_GUIDE = (
 )
 
 CHAT_SYSTEM = (
-    "You are the local AI assistant inside AI Video Studio. "
-    "You can answer ordinary questions, but your specialist domain is MiniMax H3 video generation. "
-    "Use the user's language. For H3 work, follow the local expert instructions and workflow guide exactly. "
-    "Return only the useful final answer; never reveal hidden reasoning.\n\n"
-    + H3_EXPERT_GUIDE
+    "You are the conversational assistant inside AI Video Studio V2. "
+    "This endpoint is CHAT, not form control and not Magic Wand. "
+    "Talk naturally in the user's language, answer questions, brainstorm, explain choices, troubleshoot, "
+    "and give practical advice about the site, video ideas and MiniMax H3. "
+    "Do NOT behave like an autonomous operator: do not claim you changed a form, selected files, characters, "
+    "settings or started a job. Do not return control JSON. "
+    "Do not force every answer into H3 prompt fields. Only produce a copy-ready production prompt when the user "
+    "explicitly asks for a prompt or asks you to rewrite one; otherwise discuss the idea normally first. "
+    "When a production H3 prompt is explicitly requested, follow the reference guide below accurately. "
+    "Keep answers conversational and useful; avoid repetitive boilerplate. Never reveal hidden reasoning.\n\n"
+    "================ H3 REFERENCE KNOWLEDGE (use when relevant) ================\n\n"
+    + _load_h3_guide()
 )
 
 CONTROL_SYSTEM = (
@@ -377,11 +384,25 @@ def _settings_context(settings: Any) -> str:
             "generate_scene_audio",
             "audio_start",
             "audio_end",
+            "quality",
+            "source_kind",
+            "source_title",
+            "source_prompt",
+            "source_duration",
+            "source_workspace",
+            "master_track_title",
+            "has_visual_reference",
         )
         if key in settings
     }
     if "prompt" in settings:
         safe["prompt"] = str(settings.get("prompt") or "")[:5000]
+    if "source_prompt" in settings:
+        safe["source_prompt"] = str(settings.get("source_prompt") or "")[:5000]
+    if "source_title" in settings:
+        safe["source_title"] = str(settings.get("source_title") or "")[:300]
+    if "master_track_title" in settings:
+        safe["master_track_title"] = str(settings.get("master_track_title") or "")[:300]
     available = settings.get("available_characters")
     if isinstance(available, list):
         safe["available_characters"] = [
@@ -458,7 +479,7 @@ def context_usage(
     thinking: bool = False,
 ) -> dict[str, int]:
     normalized = normalize_messages(messages)
-    max_tokens = 1800 if thinking else 1000
+    max_tokens = 2400 if thinking else 1400
     think_directive = "/think" if thinking else "/no_think"
     system_messages: list[dict[str, str]] = [
         {"role": "system", "content": CHAT_SYSTEM + "\n\n" + think_directive}
@@ -498,8 +519,8 @@ def stream_chat(
         messages,
         settings=settings,
         stream=True,
-        max_tokens=1800 if thinking else 1000,
-        temperature=0.45,
+        max_tokens=2400 if thinking else 1400,
+        temperature=0.58,
         thinking=thinking,
     )
     try:
