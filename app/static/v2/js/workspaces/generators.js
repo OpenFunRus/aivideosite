@@ -206,7 +206,11 @@
   });
 
   continueUploadTab?.addEventListener("click", () => {
+    if (continueLibrary) continueLibrary.value = "";
     setContinueSourceMode("upload");
+    clearContinueSourceVisual();
+    if (continueUploadHint) continueUploadHint.hidden = false;
+    if (continueLibraryPicker) continueLibraryPicker.hidden = true;
     continueUpload?.click();
   });
 
