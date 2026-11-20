@@ -188,6 +188,7 @@
     }
     saveDraft();
     closeMobileDrawers();
+    window.dispatchEvent(new CustomEvent("v2:viewchange", { detail: { view } }));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -745,6 +746,22 @@
   refreshCharacters();
   refreshSystem();
   setInterval(refreshSystem, 8000);
+
+  window.AIVideoV2 = {
+    state,
+    userId,
+    qs,
+    qsa,
+    fetchJson,
+    showToast,
+    escapeHtml,
+    copyText,
+    setView,
+    refreshSystem,
+    refreshCharacters,
+    currentAssistantSettings,
+    selectedCharacters,
+  };
 
   window.addEventListener("beforeunload", () => {
     state.uploadUrls.forEach((url) => URL.revokeObjectURL(url));
