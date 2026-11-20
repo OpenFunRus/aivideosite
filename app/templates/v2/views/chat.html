@@ -1,8 +1,33 @@
 <section class="v2-view" data-v2-view="chat">
-      <div class="v2-chat-page">
-        <div class="v2-workspace-toolbar"><p>Обычный локальный чат. Старые ходы автоматически перестают отправляться модели, когда 32k заполняется.</p><div class="v2-head-actions v2-chat-toolbar-actions"><label class="v2-thinking-toggle"><input id="v2-chat-thinking" type="checkbox"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-brain"></use></svg><span>Режим размышления</span></label><button class="v2-secondary-button v2-chat-new-button" id="v2-chat-clear" type="button"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-plus"></use></svg>Новый чат</button></div></div>
-        <div class="v2-context-meter"><div><span>Контекст</span><strong id="v2-chat-context-label">— / 32k</strong></div><div class="v2-context-track"><span id="v2-chat-context-fill"></span></div><small id="v2-chat-context-note">Считаем активный контекст модели</small></div>
-        <div class="v2-chat-messages" id="v2-chat-messages"></div>
-        <form class="v2-chat-composer" id="v2-chat-form"><div class="v2-chat-input-wrap"><textarea id="v2-chat-input" rows="2" placeholder="Напиши сообщение…" aria-label="Сообщение"></textarea><span class="v2-chat-input-hint">Enter — отправить · Shift+Enter — новая строка</span></div><button class="v2-primary-button v2-chat-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-arrow-up"></use></svg></button></form>
+  <div class="v2-chat-page">
+    <div class="v2-workspace-toolbar">
+      <p>Обычный локальный чат. Старые ходы автоматически перестают отправляться модели, когда 32k заполняется.</p>
+      <div class="v2-head-actions v2-chat-toolbar-actions">
+        <label class="v2-thinking-toggle">
+          <input id="v2-chat-thinking" type="checkbox">
+          <span class="v2-thinking-switch" aria-hidden="true"><span></span></span>
+          <span class="v2-thinking-label">Thinking</span>
+        </label>
+        <button class="v2-secondary-button v2-chat-new-button" id="v2-chat-clear" type="button">
+          <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-plus"></use></svg>
+          Новый чат
+        </button>
       </div>
-    </section>
+    </div>
+    <div class="v2-context-meter">
+      <div><span>Контекст</span><strong id="v2-chat-context-label">— / 32k</strong></div>
+      <div class="v2-context-track"><span id="v2-chat-context-fill"></span></div>
+      <small id="v2-chat-context-note">Считаем активный контекст модели</small>
+    </div>
+    <div class="v2-chat-messages" id="v2-chat-messages"></div>
+    <form class="v2-chat-composer" id="v2-chat-form">
+      <div class="v2-chat-input-wrap">
+        <textarea id="v2-chat-input" rows="2" placeholder="Напиши сообщение…" aria-label="Сообщение"></textarea>
+        <span class="v2-chat-input-hint">Enter — отправить · Shift+Enter — новая строка</span>
+      </div>
+      <button class="v2-primary-button v2-chat-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение">
+        <svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M10 14l11-11"/><path d="M21 3l-7 18l-4-7l-7-4z"/></svg>
+      </button>
+    </form>
+  </div>
+</section>
