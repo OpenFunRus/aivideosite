@@ -375,6 +375,10 @@
   renderPromptCount();
 
   libraryTab?.addEventListener("click", () => {
+    if (selectedTrack?.id) {
+      setSourceMode("library");
+      return;
+    }
     clearTrack();
     setSourceMode("library");
   });
