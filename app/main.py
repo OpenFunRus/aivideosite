@@ -1637,7 +1637,11 @@ async def api_v2_audio(
 async def api_v2_clip(
     prompt: Annotated[str, Form()],
     source_media_id: Annotated[str, Form()] = "",
+    quality: Annotated[str, Form()] = "720",
+    ratio: Annotated[str, Form()] = "16:9",
     audio_start: Annotated[float, Form()] = 0.0,
+    embed_track: Annotated[bool, Form()] = True,
+    generate_scene_audio: Annotated[bool, Form()] = False,
     seconds: Annotated[int, Form()] = 10,
     steps: Annotated[int, Form()] = 12,
     seed: Annotated[str, Form()] = "",
@@ -1648,8 +1652,9 @@ async def api_v2_clip(
     user_id: str = Depends(require_user),
 ):
     _v2_validate_simple_settings(seconds, steps)
-    if audio_start < 0 or audio_start > 86400:
+    if not math.isfinite(audio_start) or audio_start < 0 or audio_start > 86400:
         raise HTTPException(400, "Позиция аудиотрека должна быть неотрицательной.")
+    width, height = _v2_resolution(quality, ratio)
     has_track_upload = master_audio is not None and bool(master_audio.filename)
     if bool(track_id.strip()) == bool(has_track_upload):
         raise HTTPException(
@@ -1661,7 +1666,7 @@ async def api_v2_clip(
     temporary_paths: list[Path] = []
     created_track_id: str | None = None
     try:
-        source_item, width, height = await _v2_source_video(
+        source_item, source_width, source_height = await _v2_source_video(
             source_media_id=source_media_id,
             source_video=source_video,
             user_id=user_id,
@@ -1683,10 +1688,14 @@ async def api_v2_clip(
                 "Начальная позиция находится за пределами master track.",
             )
 
+        audio_reserve = 1.0
+        segment_end = audio_start + float(seconds) + audio_reserve
+        if track_duration is not None:
+            segment_end = min(float(track_duration), segment_end)
         segment = await _v2_audio_segment(
             Path(str(track["path"])),
             start_seconds=audio_start,
-            duration=float(seconds),
+            duration=float(seconds) + audio_reserve,
         )
         temporary_paths.append(segment)
 
@@ -1702,25 +1711,33 @@ async def api_v2_clip(
                     "type": "audio",
                     "path": str(segment),
                     "temporary": True,
-                    "source_name": f"{track['title']} [{audio_start:g}-{audio_start + seconds:g}s]",
+                    "source_name": f"{track['title']} [{audio_start:g}-{segment_end:g}s]",
                     "role": "audio",
                     "retention": "fully_copy",
                     "note": (
                         f"Master-track segment from {audio_start:g}s to "
-                        f"{audio_start + seconds:g}s. Keep performance synchronized to it."
+                        f"{segment_end:g}s. Keep performance synchronized to it."
                     ),
                 },
             ]
         )
+        h3_prompt = prompt
+        if embed_track and generate_scene_audio:
+            h3_prompt = (
+                prompt.rstrip()
+                + "\n\nAudio instruction: generate only diegetic environmental and foley "
+                "sounds. Do not recreate the driving song, vocals or music; "
+                "the original track will be mixed separately."
+            )
         job_id = _v2_enqueue_reference_job(
             user_id=user_id,
-            prompt=prompt,
+            prompt=h3_prompt,
             width=width,
             height=height,
             seconds=seconds,
             steps=steps,
             seed=_v2_seed(seed),
-            generate_audio=True,
+            generate_audio=generate_scene_audio,
             generation_mode="reference",
             reference_task="video_continuation",
             items=items,
@@ -1730,6 +1747,20 @@ async def api_v2_clip(
                 "track_id": track["id"],
                 "audio_start": float(audio_start),
                 "audio_end": float(audio_start) + seconds,
+                "audio_reserve": audio_reserve,
+                "quality": str(quality),
+                "ratio": str(ratio),
+                "source_width": source_width,
+                "source_height": source_height,
+                "embed_track": bool(embed_track),
+                "generate_scene_audio": bool(generate_scene_audio),
+            },
+            final_audio={
+                "path": str(segment),
+                "embed_track": bool(embed_track),
+                "mix_scene_audio": bool(generate_scene_audio),
+                "track_volume": 1.0,
+                "scene_volume": 0.45,
             },
         )
         return {
@@ -1740,6 +1771,10 @@ async def api_v2_clip(
             "track_id": track["id"],
             "audio_start": audio_start,
             "audio_end": audio_start + seconds,
+            "quality": str(quality),
+            "ratio": str(ratio),
+            "embed_track": bool(embed_track),
+            "generate_scene_audio": bool(generate_scene_audio),
         }
     except Exception:
         for path in temporary_paths:

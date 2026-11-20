@@ -36,19 +36,36 @@
         </div>
         <div class="v2-clip-source-picker" id="v2-clip-track-picker"><select id="v2-clip-track" aria-label="Сохранённый master track"><option value="">Выберите сохранённый трек…</option></select></div>
         <div class="v2-clip-source-hint" id="v2-clip-track-upload-hint" hidden>Нажми «Загрузить файл» выше и выбери аудиодорожку.</div>
-        <audio id="v2-clip-audio-player" controls hidden></audio>
-        <label class="v2-field v2-clip-start-field"><span>Начало следующего сегмента, сек</span><input id="v2-clip-audio-start" type="number" min="0" step="0.1" value="0"></label>
-        <div class="v2-track-range" id="v2-clip-range">Будет использован отрезок 0–10 сек</div>
+        <div class="v2-clip-timeline" id="v2-clip-timeline" hidden>
+          <div class="v2-audio-timeline-row">
+            <button class="v2-audio-play" id="v2-clip-play" type="button" title="Прослушать фрагмент"><svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg></button>
+            <div class="v2-audio-wave-stage" id="v2-clip-wave-stage">
+              <canvas id="v2-clip-waveform"></canvas>
+              <div class="v2-audio-window" id="v2-clip-window"><span class="v2-audio-window-label" id="v2-clip-window-label">10 сек</span></div>
+            </div>
+            <strong class="v2-audio-total-time" id="v2-clip-total-time">00:00.0</strong>
+          </div>
+          <div class="v2-audio-range-info">
+            <span><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Начало <strong id="v2-clip-start-label">00:00.0</strong></span>
+            <span><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Конец <strong id="v2-clip-end-label">00:11.0</strong></span>
+          </div>
+        </div>
+        <input id="v2-clip-audio-start" type="hidden" value="0">
+        <div class="v2-track-range" id="v2-clip-range" hidden>Будет использован отрезок 0–10 сек</div>
       </section>
     </div>
 
     <section class="v2-generator-settings v2-clip-settings">
       <div class="v2-generator-settings-primary">
+        <div class="v2-generator-setting"><span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-adjustments"></use></svg>Качество</span><div class="v2-segmented" data-v2-setting="clip-quality"><button type="button" data-value="480">480p</button><button class="active" type="button" data-value="720">720p</button><button type="button" data-value="1080">1080p</button></div></div>
+        <div class="v2-generator-setting"><span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Формат</span><div class="v2-segmented" data-v2-setting="clip-ratio"><button type="button" data-value="1:1">1:1</button><button class="active" type="button" data-value="16:9">16:9</button><button type="button" data-value="9:16">9:16</button></div></div>
         <div class="v2-generator-setting"><span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Длительность</span><div class="v2-segmented" data-v2-setting="clip-seconds"><button type="button" data-value="5">5 сек</button><button class="active" type="button" data-value="10">10 сек</button><button type="button" data-value="15">15 сек</button></div></div>
         <div class="v2-generator-setting"><span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>Шаги</span><div class="v2-segmented" data-v2-setting="clip-steps"><button type="button" data-value="8">8</button><button class="active" type="button" data-value="12">12</button><button type="button" data-value="16">16</button></div></div>
       </div>
       <div class="v2-generator-settings-secondary v2-clip-settings-secondary">
         <label class="v2-field"><span>Seed</span><input id="v2-clip-seed" type="number" placeholder="Авто (-1)"></label>
+        <label class="v2-check v2-clip-sound-option" title="Добавить выбранный фрагмент песни в итоговое видео"><input id="v2-clip-embed-track" type="checkbox" checked><span class="v2-check-mark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span><span>Вклеить трек в видео</span></label>
+        <label class="v2-check v2-clip-sound-option" title="Генерировать дополнительные фоновые звуки H3"><input id="v2-clip-scene-sound" type="checkbox"><span class="v2-check-mark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span><span>Фоновые звуки H3</span></label>
         <button class="v2-primary-button v2-clip-submit" type="submit"><svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>Следующий фрагмент</button>
       </div>
     </section>

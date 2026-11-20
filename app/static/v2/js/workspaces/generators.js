@@ -429,9 +429,13 @@
     data.set("track_id", trackId);
     if (audio) data.set("master_audio", audio);
     data.set("audio_start", qs("#v2-clip-audio-start")?.value || "0");
+    data.set("quality", W.settingValue("clip-quality", "720"));
+    data.set("ratio", W.settingValue("clip-ratio", "16:9"));
     data.set("seconds", W.settingValue("clip-seconds", "10"));
     data.set("steps", W.settingValue("clip-steps", "12"));
     data.set("seed", qs("#v2-clip-seed")?.value || "");
+    data.set("embed_track", qs("#v2-clip-embed-track")?.checked ? "true" : "false");
+    data.set("generate_scene_audio", qs("#v2-clip-scene-sound")?.checked ? "true" : "false");
     data.set("character_ids", JSON.stringify(W.selectedCharacterIds()));
 
     const result = await W.submitForm("/api/v2/clip", data, qs('button[type="submit"]', form));
@@ -469,6 +473,9 @@
     if (select) select.value = item.id;
     setClipSourceMode("video", "library");
     applyLibrarySource("clip", item);
+    const context = item.meta?.v2_context || {};
+    if (context.quality) setWorkspaceSetting("clip-quality", context.quality);
+    if (context.ratio) setWorkspaceSetting("clip-ratio", context.ratio);
     const trackId = String(item.meta?.v2_context?.track_id || "");
     if (clipTrackSelect && trackId) {
       clipTrackSelect.value = trackId;

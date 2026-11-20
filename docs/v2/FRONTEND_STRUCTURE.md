@@ -52,6 +52,7 @@ One template per navigation item:
 - `js/workspaces/core.js` — shared workspace runtime, media/state refresh and common helpers.
 - `js/workspaces/generators.js` — Continue / Continue Clip shared generator flows.
 - `js/workspaces/audio.js` — dedicated Audio workspace: track source selection, waveform decoding/drawing, draggable fragment, preview playback, visual reference and submit.
+- `js/workspaces/clip-waveform.js` — Continue Clip waveform, preview playback and draggable master-track segment, integrated with the existing clip submission form.
 - `js/workspaces/library.js`
 - `js/workspaces/queue.js`
 - `js/workspaces/chat.js`
