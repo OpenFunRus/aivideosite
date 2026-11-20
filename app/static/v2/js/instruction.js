@@ -2,7 +2,7 @@
   "use strict";
   const api = window.AIVideoV2;
   if (!api) return;
-  const { qs, copyText, showToast } = api;
+  const { qs, qsa, copyText, showToast } = api;
 
   const copyFullChatGptGuide = async (button) => {
     if (button) button.disabled = true;
@@ -33,5 +33,18 @@
   ["#v2-copy-chatgpt", "#v2-copy-chatgpt-bottom"].forEach((selector) => {
     const button = qs(selector);
     button?.addEventListener("click", () => copyFullChatGptGuide(button));
+  });
+
+  qsa("[data-guide-copy]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const target = qs("#" + button.dataset.guideCopy);
+      if (!target) return;
+      try {
+        await copyText(target.textContent || "");
+        showToast("Пример промпта скопирован.");
+      } catch {
+        showToast("Не удалось скопировать пример.", "error");
+      }
+    });
   });
 })();
