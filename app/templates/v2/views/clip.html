@@ -1,33 +1,56 @@
 <section class="v2-view" data-v2-view="clip">
-      <form class="v2-workspace" id="v2-clip-form">
-        <div class="v2-workspace-intro"><p>Предыдущий ролик задаёт визуальную continuity, а сайт сам вырежет нужный отрезок master track.</p></div>
-        <div class="v2-workspace-grid">
-          <section class="v2-tool-card">
-            <div class="v2-card-title"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><strong>Предыдущий фрагмент</strong></div>
-            <label class="v2-field"><span>Из Библиотеки</span><select id="v2-clip-library"><option value="">Выберите ролик…</option></select></label>
-            <div class="v2-or"><span>или</span></div>
-            <label class="v2-file-button"><input id="v2-clip-upload" type="file" accept="video/*"><svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg><span>Загрузить видео</span></label>
-            <video class="v2-source-preview" id="v2-clip-preview" controls playsinline hidden></video>
-          </section>
-          <section class="v2-tool-card">
-            <div class="v2-card-title"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Master track</strong></div>
-            <label class="v2-field"><span>Сохранённый master track</span><select id="v2-clip-track"><option value="">Выберите сохранённый трек…</option></select></label>
-            <div class="v2-or"><span>или новый файл</span></div>
-            <label class="v2-audio-drop"><input id="v2-clip-audio" type="file" accept="audio/*"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg><strong>Выбрать полный трек</strong><small>Сайт сохранит track и вырежет только следующий сегмент</small></label>
-            <audio id="v2-clip-audio-player" controls hidden></audio>
-            <label class="v2-field"><span>Начало следующего сегмента, сек</span><input id="v2-clip-audio-start" type="number" min="0" step="0.1" value="0"></label>
-            <div class="v2-track-range" id="v2-clip-range">Будет использован отрезок 0–10 сек</div>
-          </section>
-        </div>
-        <section class="v2-tool-card v2-prompt-tool v2-tool-card-spaced">
-          <div class="v2-card-title"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg><strong>Следующий кадр клипа</strong></div>
-          <div class="v2-tool-textarea"><textarea id="v2-clip-prompt" maxlength="16000" placeholder="Опиши только следующий фрагмент: действие, камера, настроение. Continuity и аудио сохранятся автоматически."></textarea><button type="button" class="v2-inline-wand" data-v2-wand="clip"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></button></div>
-        </section>
-        <section class="v2-compact-settings">
-          <div><span>Длительность</span><div class="v2-mini-segment" data-v2-setting="clip-seconds"><button type="button" data-value="5">5 сек</button><button class="active" type="button" data-value="10">10 сек</button><button type="button" data-value="15">15 сек</button></div></div>
-          <div><span>Шаги</span><div class="v2-mini-segment" data-v2-setting="clip-steps"><button type="button" data-value="8">8</button><button class="active" type="button" data-value="12">12</button><button type="button" data-value="16">16</button></div></div>
-          <label class="v2-field v2-field-compact"><span>Seed</span><input id="v2-clip-seed" type="number" placeholder="Auto (-1)"></label>
-          <button class="v2-primary-button v2-workspace-submit" type="submit"><svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>Следующий фрагмент</button>
-        </section>
-      </form>
+  <form class="v2-workspace v2-generator-form v2-clip-workspace" id="v2-clip-form">
+    <div class="v2-workspace-intro"><p>Продолжи музыкальный клип — предыдущий ролик сохранит визуальную последовательность, а сайт возьмёт следующий фрагмент master track.</p></div>
+
+    <section class="v2-tool-card v2-prompt-panel">
+      <div class="v2-prompt-panel-head">
+        <label class="v2-card-title" for="v2-clip-prompt"><span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></span><strong>Что должно происходить в следующем фрагменте?</strong></label>
+        <span class="v2-prompt-counter" id="v2-clip-prompt-count">0 / 16 000</span>
+      </div>
+      <div class="v2-tool-textarea v2-prompt-panel-box">
+        <textarea id="v2-clip-prompt" maxlength="16000" placeholder="Опиши действие, движение камеры и настроение следующего фрагмента..."></textarea>
+        <button type="button" class="v2-inline-wand" data-v2-wand="clip" title="Улучшить под H3"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></button>
+      </div>
+      <p class="v2-help">ИИ сохранит визуальную последовательность с предыдущим роликом и учтёт следующий аудиофрагмент.</p>
     </section>
+
+    <div class="v2-clip-source-grid">
+      <section class="v2-tool-card v2-clip-source-card">
+        <div class="v2-clip-card-heading"><span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg></span><span><strong>Предыдущий фрагмент</strong><small>Выбери ролик из библиотеки или загрузи свой.</small></span></div>
+        <div class="v2-source-actions v2-clip-source-actions">
+          <button type="button" class="active" id="v2-clip-video-library-tab"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Из библиотеки</button>
+          <button type="button" id="v2-clip-video-upload-tab"><svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>Загрузить файл</button>
+          <input id="v2-clip-upload" type="file" accept="video/*" hidden>
+        </div>
+        <div class="v2-clip-source-picker" id="v2-clip-video-picker"><select id="v2-clip-library" aria-label="Видео из библиотеки"><option value="">Выберите ролик…</option></select></div>
+        <div class="v2-clip-source-hint" id="v2-clip-video-upload-hint" hidden>Нажми «Загрузить файл» выше и выбери видео.</div>
+        <video class="v2-clip-preview" id="v2-clip-preview" controls playsinline preload="metadata" hidden></video>
+      </section>
+
+      <section class="v2-tool-card v2-clip-source-card">
+        <div class="v2-clip-card-heading"><span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg></span><span><strong>Аудиодорожка</strong><small>Один master track используется для всех фрагментов клипа.</small></span></div>
+        <div class="v2-source-actions v2-clip-source-actions">
+          <button type="button" class="active" id="v2-clip-track-library-tab"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Из библиотеки</button>
+          <button type="button" id="v2-clip-track-upload-tab"><svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>Загрузить файл</button>
+          <input id="v2-clip-audio" type="file" accept="audio/*" hidden>
+        </div>
+        <div class="v2-clip-source-picker" id="v2-clip-track-picker"><select id="v2-clip-track" aria-label="Сохранённый master track"><option value="">Выберите сохранённый трек…</option></select></div>
+        <div class="v2-clip-source-hint" id="v2-clip-track-upload-hint" hidden>Нажми «Загрузить файл» выше и выбери аудиодорожку.</div>
+        <audio id="v2-clip-audio-player" controls hidden></audio>
+        <label class="v2-field v2-clip-start-field"><span>Начало следующего сегмента, сек</span><input id="v2-clip-audio-start" type="number" min="0" step="0.1" value="0"></label>
+        <div class="v2-track-range" id="v2-clip-range">Будет использован отрезок 0–10 сек</div>
+      </section>
+    </div>
+
+    <section class="v2-generator-settings v2-clip-settings">
+      <div class="v2-generator-settings-primary">
+        <div class="v2-generator-setting"><span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Длительность</span><div class="v2-segmented" data-v2-setting="clip-seconds"><button type="button" data-value="5">5 сек</button><button class="active" type="button" data-value="10">10 сек</button><button type="button" data-value="15">15 сек</button></div></div>
+        <div class="v2-generator-setting"><span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>Шаги</span><div class="v2-segmented" data-v2-setting="clip-steps"><button type="button" data-value="8">8</button><button class="active" type="button" data-value="12">12</button><button type="button" data-value="16">16</button></div></div>
+      </div>
+      <div class="v2-generator-settings-secondary v2-clip-settings-secondary">
+        <label class="v2-field"><span>Seed</span><input id="v2-clip-seed" type="number" placeholder="Авто (-1)"></label>
+        <button class="v2-primary-button v2-clip-submit" type="submit"><svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>Следующий фрагмент</button>
+      </div>
+    </section>
+  </form>
+</section>

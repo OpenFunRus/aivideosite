@@ -301,6 +301,7 @@
       const improved = result?.changes?.prompt;
       if (!improved) throw new Error(result?.message || "ИИ не вернул prompt.");
       target.value = String(improved).trim();
+      target.dispatchEvent(new Event("input", { bubbles: true }));
       showToast("Prompt улучшен под H3.");
     } catch (error) {
       showToast("Не удалось улучшить prompt: " + error.message, "error");
@@ -337,6 +338,37 @@
 
   const clipAudio = qs("#v2-clip-audio");
   const clipTrackSelect = qs("#v2-clip-track");
+  const clipPrompt = qs("#v2-clip-prompt");
+  const clipPromptCount = qs("#v2-clip-prompt-count");
+  const updateClipPromptCount = () => {
+    if (clipPromptCount && clipPrompt) {
+      clipPromptCount.textContent = clipPrompt.value.length.toLocaleString("ru-RU") + " / 16 000";
+    }
+  };
+  clipPrompt?.addEventListener("input", updateClipPromptCount);
+  updateClipPromptCount();
+
+  const setClipSourceMode = (kind, mode) => {
+    const library = mode !== "upload";
+    qs("#v2-clip-" + kind + "-library-tab")?.classList.toggle("active", library);
+    qs("#v2-clip-" + kind + "-upload-tab")?.classList.toggle("active", !library);
+    const picker = qs("#v2-clip-" + kind + "-picker");
+    const hint = qs("#v2-clip-" + kind + "-upload-hint");
+    if (picker) picker.hidden = !library;
+    if (hint) hint.hidden = library;
+  };
+  for (const [kind, inputId] of [["video", "v2-clip-upload"], ["track", "v2-clip-audio"]]) {
+    qs("#v2-clip-" + kind + "-library-tab")?.addEventListener("click", () => setClipSourceMode(kind, "library"));
+    qs("#v2-clip-" + kind + "-upload-tab")?.addEventListener("click", () => {
+      setClipSourceMode(kind, "upload");
+      qs("#" + inputId)?.click();
+    });
+    qs("#" + inputId)?.addEventListener("change", () => {
+      if (qs("#" + inputId)?.files?.length) setClipSourceMode(kind, "upload");
+    });
+  }
+  qs("#v2-clip-library")?.addEventListener("change", () => setClipSourceMode("video", "library"));
+  clipTrackSelect?.addEventListener("change", () => setClipSourceMode("track", "library"));
   clipTrackSelect?.addEventListener("change", () => {
     if (!clipTrackSelect.value) return;
     if (clipAudio) clipAudio.value = "";
@@ -435,10 +467,12 @@
     if (!item) return;
     const select = qs("#v2-clip-library");
     if (select) select.value = item.id;
+    setClipSourceMode("video", "library");
     applyLibrarySource("clip", item);
     const trackId = String(item.meta?.v2_context?.track_id || "");
     if (clipTrackSelect && trackId) {
       clipTrackSelect.value = trackId;
+      setClipSourceMode("track", "library");
       if (clipAudio) clipAudio.value = "";
     }
     const nextStart = Number(item.meta?.v2_context?.audio_end);
