@@ -1,6 +1,6 @@
 # AI Video Site V2 — product / UX / implementation plan
 
-> Status: design approved; Stage 2 V2 shell implementation started.
+> Status: Stage 2 shell approved; Stage 3 simplified Create implemented in code.
 >
 > Repository: `OpenFunRus/aivideosite`
 >
