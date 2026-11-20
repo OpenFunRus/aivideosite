@@ -27,7 +27,7 @@
 ### Реализованные V2 workspace
 
 - **Создать**: prompt + magic wand, Characters, first/last previews, 480/720/1080, 1:1/16:9/9:16, 5/10/15 sec, 8/12/16 steps, seed, sound. `POST /api/v2/generate` мапит упрощённую форму в существующий H3 pipeline и общую очередь.
-- **Продолжить**: ролик из Library или upload, автоматический ffprobe размеров, округление H3-размеров вверх до ×32, Characters, Ref2VA `video_continuation`, magic wand.
+- **Продолжить**: reference-style workspace — prompt сверху, источник отдельной карточкой, `Из библиотеки / Загрузить файл` на всю ширину, выбранный ролик с duration/resolution/size, кнопки 480/720/1080 + 1:1/16:9/9:16 + 5/10/15 sec + 8/12/16 steps. Source video автоматически задаёт ближайшие quality/ratio defaults, но пользователь может их изменить. Ref2VA `video_continuation`, Characters и magic wand сохранены.
 - **По аудио**: Digital Human, driving audio, Character и/или visual reference, упрощённые настройки и magic wand. Новый master track сохраняется per-user в `data/audio_tracks/<user_id>/` и затем доступен повторно.
 - **Продолжить клип**: previous video + сохранённый master track + start time. Backend FFmpeg вырезает только нужный аудиосегмент; результат сохраняет `track_id/audio_start/audio_end`, поэтому Library → «След. клип» автоматически восстанавливает тот же track и следующую позицию.
 - **Библиотека**: видео, metadata/prompt/settings, download/delete, Continue, next clip, отправка в Editor. Первые 40 preview, затем «Показать ещё».
