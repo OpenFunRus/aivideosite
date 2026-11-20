@@ -1,6 +1,8 @@
 /* Continue Clip: same components and spacing as Create / Continue / Audio. */
-.v2-clip-source-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.v2-clip-source-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
 .v2-clip-source-card{display:flex;flex-direction:column;gap:0}
+.v2-generator-form .v2-clip-source-actions button{display:flex;align-items:center;justify-content:center;gap:9px;min-width:0;line-height:1.2}
+.v2-generator-form .v2-clip-source-actions button .icon{display:block;width:17px;height:17px;flex:0 0 17px}
 .v2-clip-card-heading{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .v2-clip-card-heading>span:last-child{display:flex;flex-direction:column;gap:3px;min-width:0}
 .v2-clip-card-heading strong{font-size:14px;font-weight:750}
@@ -18,7 +20,6 @@
 .v2-generator-form .v2-clip-settings .v2-generator-settings-primary{grid-template-columns:repeat(2,minmax(0,1fr))}
 .v2-generator-form .v2-clip-settings .v2-generator-settings-secondary{display:grid;grid-template-columns:minmax(200px,270px) 1fr;gap:18px}
 .v2-clip-submit{justify-self:end;min-width:235px}
-@media(max-width:1180px){.v2-clip-source-grid{grid-template-columns:1fr}}
 @media(max-width:820px){
   .v2-generator-form .v2-clip-settings .v2-generator-settings-primary{grid-template-columns:1fr}
   .v2-generator-form .v2-clip-settings .v2-generator-settings-secondary{grid-template-columns:1fr}
