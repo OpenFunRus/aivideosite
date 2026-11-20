@@ -380,8 +380,6 @@
   });
 
   uploadTab?.addEventListener("click", () => {
-    clearTrack();
-    setSourceMode("upload");
     audioInput?.click();
   });
 
