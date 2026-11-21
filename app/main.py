@@ -382,6 +382,11 @@ async def api_update_character(
     character_id: str,
     name: Annotated[str, Form()],
     description: Annotated[str, Form()] = "",
+    images: list[UploadFile] | None = File(None),
+    keep_image_indices: Annotated[str, Form()] = "",
+    voice: UploadFile | None = File(None),
+    voice_preset: Annotated[str, Form()] = "",
+    remove_voice: Annotated[bool, Form()] = False,
     user_id: str = Depends(require_user),
 ):
     name = name.strip()
@@ -390,15 +395,133 @@ async def api_update_character(
         raise HTTPException(400, "Имя персонажа должно содержать 1–80 символов.")
     if len(description) > 2000:
         raise HTTPException(400, "Описание персонажа слишком длинное.")
-    character = db.update_character(
-        character_id,
-        user_id,
-        name=name,
-        description=description,
-    )
+
+    character = db.get_character(character_id, user_id)
     if character is None:
         raise HTTPException(404, "Персонаж не найден.")
-    return {"ok": True, "character": _character_public(character)}
+
+    existing_images = list(character.get("images") or [])
+    raw_keep_indices = keep_image_indices.strip()
+    if raw_keep_indices:
+        try:
+            parsed_keep_indices = json.loads(raw_keep_indices)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise HTTPException(400, "Некорректный список сохранённых изображений.") from exc
+        if not isinstance(parsed_keep_indices, list):
+            raise HTTPException(400, "Некорректный список сохранённых изображений.")
+        keep_indices: list[int] = []
+        seen_indices: set[int] = set()
+        for value in parsed_keep_indices:
+            if type(value) is not int or value < 0 or value >= len(existing_images):
+                raise HTTPException(400, "Некорректный индекс изображения персонажа.")
+            if value not in seen_indices:
+                seen_indices.add(value)
+                keep_indices.append(value)
+        keep_indices.sort()
+    else:
+        keep_indices = list(range(len(existing_images)))
+
+    uploads = [item for item in (images or []) if item.filename]
+    if len(keep_indices) + len(uploads) < 1:
+        raise HTTPException(400, "У персонажа должно остаться хотя бы одно изображение.")
+    if len(keep_indices) + len(uploads) > 4:
+        raise HTTPException(400, "Для одного персонажа можно сохранить до 4 изображений.")
+
+    voice_preset = voice_preset.strip()
+    has_custom_voice = voice is not None and bool(voice.filename)
+    if has_custom_voice and voice_preset:
+        raise HTTPException(400, "Выберите либо встроенный голос, либо свой аудиофайл.")
+    if remove_voice and (has_custom_voice or voice_preset):
+        raise HTTPException(400, "Нельзя одновременно удалить и заменить голос.")
+    if voice_preset and voice_preset not in VOICE_PRESETS:
+        raise HTTPException(400, "Неизвестный голосовой пресет.")
+
+    media_changed = (
+        keep_indices != list(range(len(existing_images)))
+        or bool(uploads)
+        or has_custom_voice
+        or bool(voice_preset)
+        or remove_voice
+    )
+    if media_changed and character_id in db.active_character_ids(user_id):
+        raise HTTPException(
+            409,
+            "Персонаж используется активной задачей. Референсы и голос можно менять после её завершения.",
+        )
+
+    target_dir = settings.character_dir / user_id / character_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    next_images = [existing_images[index] for index in keep_indices]
+    old_voice_file = character.get("voice_file")
+    next_voice_file = old_voice_file
+    created_paths: list[Path] = []
+    temp_paths: list[Path] = []
+
+    try:
+        for upload in uploads:
+            path = await save_upload(
+                upload,
+                kind="image",
+                max_bytes=settings.max_image_upload_bytes,
+            )
+            temp_paths.append(path)
+            destination = target_dir / f"image_{uuid.uuid4().hex[:12]}{path.suffix.lower()}"
+            shutil.move(str(path), str(destination))
+            temp_paths.remove(path)
+            created_paths.append(destination)
+            next_images.append(str(destination))
+
+        if remove_voice:
+            next_voice_file = None
+        elif has_custom_voice:
+            path = await save_upload(
+                voice,
+                kind="audio",
+                max_bytes=settings.max_audio_upload_bytes,
+            )
+            temp_paths.append(path)
+            destination = target_dir / f"voice_{uuid.uuid4().hex[:12]}{path.suffix.lower()}"
+            shutil.move(str(path), str(destination))
+            temp_paths.remove(path)
+            created_paths.append(destination)
+            next_voice_file = str(destination)
+        elif voice_preset:
+            preset_path = _voice_preset_path(voice_preset)
+            if not preset_path.is_file():
+                raise HTTPException(
+                    503,
+                    "Выбранный голосовой пресет ещё не подготовлен на сервере.",
+                )
+            destination = target_dir / f"voice_{uuid.uuid4().hex[:12]}.wav"
+            shutil.copy2(preset_path, destination)
+            created_paths.append(destination)
+            next_voice_file = str(destination)
+
+        updated = db.update_character(
+            character_id,
+            user_id,
+            name=name,
+            description=description,
+            images=next_images,
+            voice_file=next_voice_file,
+        )
+        if updated is None:
+            raise HTTPException(404, "Персонаж не найден.")
+    except Exception:
+        for path in temp_paths:
+            path.unlink(missing_ok=True)
+        for path in created_paths:
+            path.unlink(missing_ok=True)
+        raise
+
+    kept_paths = set(next_images)
+    for old_path in existing_images:
+        if old_path not in kept_paths:
+            Path(old_path).unlink(missing_ok=True)
+    if old_voice_file and old_voice_file != next_voice_file:
+        Path(old_voice_file).unlink(missing_ok=True)
+
+    return {"ok": True, "character": _character_public(updated)}
 
 
 @app.delete("/api/characters/{character_id}")
@@ -2302,13 +2425,19 @@ def _character_public(character: dict | None) -> dict:
     if not character:
         return {}
     images = character.get("images") or []
+    version = str(character.get("updated_at") or "")
+    image_urls = [
+        f"/characters/{character['id']}/image/{index}?v={version}"
+        for index in range(len(images))
+    ]
     return {
         "id": character["id"],
         "name": character["name"],
         "description": character.get("description") or "",
         "image_count": len(images),
+        "image_urls": image_urls,
         "voice": bool(character.get("voice_file")),
-        "preview_url": f"/characters/{character['id']}/image/0" if images else None,
+        "preview_url": image_urls[0] if image_urls else None,
         "created_at": character.get("created_at"),
         "updated_at": character.get("updated_at"),
     }

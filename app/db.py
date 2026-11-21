@@ -749,15 +749,25 @@ def update_character(
     *,
     name: str,
     description: str,
+    images: list[str],
+    voice_file: str | None,
 ) -> dict[str, Any] | None:
     with connect() as conn:
         cur = conn.execute(
             """
             UPDATE characters
-               SET name=?, description=?, updated_at=?
+               SET name=?, description=?, images_json=?, voice_file=?, updated_at=?
              WHERE id=? AND owner_id=?
             """,
-            (name, description, utcnow(), character_id, owner_id),
+            (
+                name,
+                description,
+                json.dumps(images, ensure_ascii=False),
+                voice_file,
+                utcnow(),
+                character_id,
+                owner_id,
+            ),
         )
         if cur.rowcount == 0:
             return None

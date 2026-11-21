@@ -45,8 +45,8 @@
     <div class="v2-character-create-head">
       <div>
         <span class="v2-kicker">CHARACTER REFERENCE</span>
-        <h2>Добавить персонажа</h2>
-        <p>Сохраните внешний вид один раз и используйте его в генераторах через правую панель.</p>
+        <h2 id="v2-character-form-title">Добавить персонажа</h2>
+        <p id="v2-character-form-subtitle">Сохраните внешний вид один раз и используйте его в генераторах через правую панель.</p>
       </div>
       <button class="v2-character-create-close" type="button" data-character-create-close aria-label="Закрыть">
         <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
@@ -104,6 +104,14 @@
           <span class="v2-character-voice-name" id="v2-character-voice-name">Выбрать файл</span>
         </label>
 
+        <div class="v2-character-current-voice" id="v2-character-current-voice" hidden>
+          <span class="v2-character-current-voice-copy">
+            <strong id="v2-character-current-voice-title">Текущий голос сохранён</strong>
+            <small id="v2-character-current-voice-status">Оставьте как есть или выберите новый голос выше.</small>
+          </span>
+          <button type="button" id="v2-character-current-voice-remove">Удалить голос</button>
+        </div>
+
         <div class="v2-character-voice-note" id="v2-character-voice-note">
           Preview: «Привет, это мой голос.»
         </div>
@@ -116,10 +124,15 @@
     </div>
 
     <div class="v2-character-create-actions">
+      <button class="v2-character-delete-button" id="v2-character-delete" type="button" hidden>
+        <svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg>
+        Удалить персонажа
+      </button>
+      <span class="v2-character-action-spacer"></span>
       <button class="v2-secondary-button" type="button" data-character-create-close>Отмена</button>
       <button class="v2-primary-button" id="v2-character-create-submit" type="submit">
-        <svg class="icon"><use href="/static/icons.svg#icon-plus"></use></svg>
-        Сохранить персонажа
+        <svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg>
+        <span id="v2-character-submit-label">Сохранить персонажа</span>
       </button>
     </div>
   </form>

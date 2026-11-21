@@ -19,7 +19,20 @@
   const voicePresetsRoot = qs("#v2-character-voice-presets");
   const voiceNote = qs("#v2-character-voice-note");
   const ownVoice = qs("#v2-character-own-voice");
+  const formTitle = qs("#v2-character-form-title");
+  const formSubtitle = qs("#v2-character-form-subtitle");
+  const submitLabel = qs("#v2-character-submit-label");
+  const deleteButton = qs("#v2-character-delete");
+  const currentVoice = qs("#v2-character-current-voice");
+  const currentVoiceTitle = qs("#v2-character-current-voice-title");
+  const currentVoiceStatus = qs("#v2-character-current-voice-status");
+  const currentVoiceRemove = qs("#v2-character-current-voice-remove");
   let createImageFiles = [];
+  let existingImageUrls = [];
+  let keptExistingImageIndices = new Set();
+  let editingCharacterId = "";
+  let existingVoice = false;
+  let removeExistingVoice = false;
   let voicePresets = [];
   let voicePresetsLoaded = false;
   let selectedVoicePreset = "";
@@ -42,16 +55,31 @@
   };
 
   const renderCreateImages = () => {
-    if (referenceCount) referenceCount.textContent = createImageFiles.length + " / 4";
+    const kept = Array.from(keptExistingImageIndices).sort((a, b) => a - b);
+    const total = kept.length + createImageFiles.length;
+    if (referenceCount) referenceCount.textContent = total + " / 4";
     if (!referencePreviews) return;
     clearCreatePreviewUrls();
-    referencePreviews.innerHTML = createImageFiles.map((file, index) => {
-      const url = URL.createObjectURL(file);
-      return '<div class="v2-character-reference-preview" data-character-preview-url="' + escapeHtml(url) + '">' +
-        '<img src="' + escapeHtml(url) + '" alt="Референс ' + (index + 1) + '">' +
-        '<button type="button" data-character-image-remove="' + index + '" aria-label="Убрать изображение">' +
+
+    const existingMarkup = kept.map((index) => {
+      const url = existingImageUrls[index] || "";
+      return '<div class="v2-character-reference-preview">' +
+        '<img src="' + escapeHtml(url) + '" alt="Сохранённый референс ' + (index + 1) + '">' +
+        '<span class="v2-character-reference-existing">Текущий</span>' +
+        '<button type="button" data-character-existing-image-remove="' + index + '" aria-label="Убрать изображение">' +
         '<svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button></div>';
     }).join("");
+
+    const newMarkup = createImageFiles.map((file, index) => {
+      const url = URL.createObjectURL(file);
+      return '<div class="v2-character-reference-preview" data-character-preview-url="' + escapeHtml(url) + '">' +
+        '<img src="' + escapeHtml(url) + '" alt="Новый референс ' + (index + 1) + '">' +
+        '<span class="v2-character-reference-existing new">Новый</span>' +
+        '<button type="button" data-character-new-image-remove="' + index + '" aria-label="Убрать изображение">' +
+        '<svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button></div>';
+    }).join("");
+
+    referencePreviews.innerHTML = existingMarkup + newMarkup;
     syncCreateImageInput();
   };
 
@@ -60,18 +88,21 @@
       file && (file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(file.name))
     );
     const next = append ? [...createImageFiles, ...incoming] : incoming;
+    const maxNew = Math.max(0, 4 - keptExistingImageIndices.size);
     const unique = [];
     const seen = new Set();
     next.forEach((file) => {
       const key = file.name + ":" + file.size + ":" + file.lastModified;
-      if (!seen.has(key) && unique.length < 4) {
+      if (!seen.has(key) && unique.length < maxNew) {
         seen.add(key);
         unique.push(file);
       }
     });
     createImageFiles = unique;
     renderCreateImages();
-    if (next.length > 4) showToast("Для персонажа можно сохранить максимум 4 изображения.", "error");
+    if (next.length > maxNew) {
+      showToast("Для персонажа можно сохранить максимум 4 изображения.", "error");
+    }
   };
 
   const renderVoicePresets = () => {
@@ -156,7 +187,9 @@
       if (voicePresetInput) voicePresetInput.value = id;
       if (createVoice) createVoice.value = "";
       if (voiceName) voiceName.textContent = "Выбрать файл";
+      removeExistingVoice = false;
       ownVoice?.classList.remove("selected");
+      renderCurrentVoice();
     }
 
     if (playingVoicePreset === id) {
@@ -193,14 +226,50 @@
     renderVoicePresets();
   });
 
+  const renderCurrentVoice = () => {
+    if (!currentVoice) return;
+    currentVoice.hidden = !(editingCharacterId && existingVoice);
+    if (currentVoice.hidden) return;
+
+    const replacementSelected = Boolean(selectedVoicePreset || createVoice?.files?.[0]);
+    currentVoice.classList.toggle("removed", removeExistingVoice);
+    currentVoice.classList.toggle("replacing", replacementSelected);
+
+    if (replacementSelected) {
+      if (currentVoiceTitle) currentVoiceTitle.textContent = "Текущий голос будет заменён";
+      if (currentVoiceStatus) currentVoiceStatus.textContent = "После сохранения будет использоваться выбранный выше голос.";
+    } else if (removeExistingVoice) {
+      if (currentVoiceTitle) currentVoiceTitle.textContent = "Текущий голос будет удалён";
+      if (currentVoiceStatus) currentVoiceStatus.textContent = "Нажмите «Оставить голос», чтобы отменить удаление.";
+    } else {
+      if (currentVoiceTitle) currentVoiceTitle.textContent = "Текущий голос сохранён";
+      if (currentVoiceStatus) currentVoiceStatus.textContent = "Оставьте как есть, удалите или выберите новый голос выше.";
+    }
+
+    if (currentVoiceRemove) {
+      currentVoiceRemove.disabled = replacementSelected;
+      currentVoiceRemove.textContent = removeExistingVoice ? "Оставить голос" : "Удалить голос";
+    }
+  };
+
   const resetCreateForm = () => {
     createForm?.reset();
     createImageFiles = [];
+    existingImageUrls = [];
+    keptExistingImageIndices = new Set();
+    editingCharacterId = "";
+    existingVoice = false;
+    removeExistingVoice = false;
     selectedVoicePreset = "";
     if (voicePresetInput) voicePresetInput.value = "";
     stopVoicePreview(false);
+    if (formTitle) formTitle.textContent = "Добавить персонажа";
+    if (formSubtitle) formSubtitle.textContent = "Сохраните внешний вид один раз и используйте его в генераторах через правую панель.";
+    if (submitLabel) submitLabel.textContent = "Сохранить персонажа";
+    if (deleteButton) deleteButton.hidden = true;
     renderCreateImages();
     renderVoicePresets();
+    renderCurrentVoice();
     ownVoice?.classList.remove("selected");
     if (voiceName) voiceName.textContent = "Выбрать файл";
     referenceDrop?.classList.remove("dragover");
@@ -211,6 +280,37 @@
     createDialog?.showModal();
     loadVoicePresets();
     requestAnimationFrame(() => qs("#v2-character-create-name")?.focus());
+  };
+
+  const openEditDialog = (characterId) => {
+    const character = state.characters.find((item) => String(item.id) === String(characterId));
+    if (!character) {
+      showToast("Персонаж не найден.", "error");
+      return;
+    }
+
+    resetCreateForm();
+    editingCharacterId = String(character.id);
+    existingImageUrls = Array.isArray(character.image_urls)
+      ? character.image_urls.slice(0, 4)
+      : (character.preview_url ? [character.preview_url] : []);
+    keptExistingImageIndices = new Set(existingImageUrls.map((_, index) => index));
+    existingVoice = Boolean(character.voice);
+
+    const nameInput = qs("#v2-character-create-name");
+    const descriptionInput = qs("#v2-character-create-description");
+    if (nameInput) nameInput.value = character.name || "";
+    if (descriptionInput) descriptionInput.value = character.description || "";
+    if (formTitle) formTitle.textContent = "Редактировать персонажа";
+    if (formSubtitle) formSubtitle.textContent = "Измените описание, референсы внешности и голос. Старые файлы сохранятся, пока вы их явно не уберёте.";
+    if (submitLabel) submitLabel.textContent = "Сохранить изменения";
+    if (deleteButton) deleteButton.hidden = false;
+
+    renderCreateImages();
+    renderCurrentVoice();
+    createDialog?.showModal();
+    loadVoicePresets();
+    requestAnimationFrame(() => nameInput?.focus());
   };
 
   qs("#v2-character-add")?.addEventListener("click", openCreateDialog);
@@ -228,10 +328,17 @@
 
   createImages?.addEventListener("change", () => setCreateImages(createImages.files, { append: true }));
   referencePreviews?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-character-image-remove]");
-    if (!button) return;
-    createImageFiles.splice(Number(button.dataset.characterImageRemove), 1);
-    renderCreateImages();
+    const existingButton = event.target.closest("[data-character-existing-image-remove]");
+    if (existingButton) {
+      keptExistingImageIndices.delete(Number(existingButton.dataset.characterExistingImageRemove));
+      renderCreateImages();
+      return;
+    }
+    const newButton = event.target.closest("[data-character-new-image-remove]");
+    if (newButton) {
+      createImageFiles.splice(Number(newButton.dataset.characterNewImageRemove), 1);
+      renderCreateImages();
+    }
   });
   ["dragenter", "dragover"].forEach((name) => {
     referenceDrop?.addEventListener(name, (event) => {
@@ -253,12 +360,43 @@
     const file = createVoice.files?.[0] || null;
     if (file) {
       selectedVoicePreset = "";
+      removeExistingVoice = false;
       if (voicePresetInput) voicePresetInput.value = "";
       stopVoicePreview(false);
       renderVoicePresets();
     }
     ownVoice?.classList.toggle("selected", Boolean(file));
     if (voiceName) voiceName.textContent = file?.name || "Выбрать файл";
+    renderCurrentVoice();
+  });
+
+  currentVoiceRemove?.addEventListener("click", () => {
+    if (!editingCharacterId || !existingVoice) return;
+    removeExistingVoice = !removeExistingVoice;
+    renderCurrentVoice();
+  });
+
+  deleteButton?.addEventListener("click", async () => {
+    if (!editingCharacterId) return;
+    const character = state.characters.find((item) => String(item.id) === editingCharacterId);
+    const label = character?.name ? " «" + character.name + "»" : "";
+    if (!window.confirm("Удалить персонажа" + label + "? Это удалит его референсы и голос.")) return;
+
+    deleteButton.disabled = true;
+    try {
+      await fetchJson("/api/characters/" + encodeURIComponent(editingCharacterId), { method: "DELETE" });
+      state.selectedCharacterIds.delete(editingCharacterId);
+      state.recentCharacterIds = state.recentCharacterIds.filter((id) => String(id) !== editingCharacterId);
+      createDialog?.close();
+      await refreshCharacters();
+      api.updateCreateCompatibility?.();
+      saveDraft();
+      showToast("Персонаж удалён.");
+    } catch (error) {
+      showToast("Не удалось удалить персонажа: " + error.message, "error");
+    } finally {
+      deleteButton.disabled = false;
+    }
   });
 
   createForm?.addEventListener("submit", async (event) => {
@@ -269,48 +407,86 @@
       qs("#v2-character-create-name")?.focus();
       return;
     }
-    if (createImageFiles.length < 1 || createImageFiles.length > 4) {
-      showToast("Добавьте от 1 до 4 изображений персонажа.", "error");
+
+    const imageCount = keptExistingImageIndices.size + createImageFiles.length;
+    if (imageCount < 1 || imageCount > 4) {
+      showToast("У персонажа должно быть от 1 до 4 изображений.", "error");
       return;
     }
 
     syncCreateImageInput();
     const submit = qs("#v2-character-create-submit");
     if (submit) submit.disabled = true;
+    const editedId = editingCharacterId;
+
     try {
       const data = new FormData();
       data.set("name", name);
       data.set("description", qs("#v2-character-create-description")?.value.trim() || "");
       createImageFiles.forEach((file) => data.append("images", file, file.name));
       const voice = createVoice?.files?.[0];
+
       if (selectedVoicePreset) {
         data.set("voice_preset", selectedVoicePreset);
       } else if (voice) {
         data.set("voice", voice, voice.name);
       }
-      const result = await fetchJson("/api/characters", {
-        method: "POST",
-        body: data,
-      });
+
+      let result;
+      if (editedId) {
+        data.set(
+          "keep_image_indices",
+          JSON.stringify(Array.from(keptExistingImageIndices).sort((a, b) => a - b))
+        );
+        data.set("remove_voice", removeExistingVoice ? "true" : "false");
+        result = await fetchJson("/api/characters/" + encodeURIComponent(editedId), {
+          method: "POST",
+          body: data,
+        });
+      } else {
+        result = await fetchJson("/api/characters", {
+          method: "POST",
+          body: data,
+        });
+      }
+
       createDialog?.close();
-      showToast("Персонаж сохранён.");
       await refreshCharacters();
-      const id = String(result?.character?.id || "");
-      if (id) {
-        const candidate = new Set(state.selectedCharacterIds);
-        candidate.add(id);
-        const budget = characterBudget(candidate);
-        if (budget.images <= 9 && budget.audios <= 3 && budget.total <= 15) {
-          state.selectedCharacterIds.add(id);
-          state.recentCharacterIds = [id, ...state.recentCharacterIds.filter((value) => value !== id)].slice(0, 30);
+
+      if (editedId) {
+        const budget = characterBudget(state.selectedCharacterIds);
+        if (
+          state.selectedCharacterIds.has(editedId) &&
+          (budget.images > 9 || budget.audios > 3 || budget.total > 15)
+        ) {
+          state.selectedCharacterIds.delete(editedId);
           renderSelectedCharacters();
           renderCharacterGrid();
-          api.updateCreateCompatibility?.();
-          saveDraft();
+          showToast("Из-за новых референсов персонаж снят с выбора: превышен лимит H3.", "error");
+        } else {
+          showToast("Персонаж обновлён.");
+        }
+        api.updateCreateCompatibility?.();
+        saveDraft();
+      } else {
+        showToast("Персонаж сохранён.");
+        const id = String(result?.character?.id || "");
+        if (id) {
+          const candidate = new Set(state.selectedCharacterIds);
+          candidate.add(id);
+          const budget = characterBudget(candidate);
+          if (budget.images <= 9 && budget.audios <= 3 && budget.total <= 15) {
+            state.selectedCharacterIds.add(id);
+            state.recentCharacterIds = [id, ...state.recentCharacterIds.filter((value) => value !== id)].slice(0, 30);
+            renderSelectedCharacters();
+            renderCharacterGrid();
+            api.updateCreateCompatibility?.();
+            saveDraft();
+          }
         }
       }
     } catch (error) {
-      showToast("Не удалось сохранить персонажа: " + error.message, "error");
+      showToast((editedId ? "Не удалось обновить персонажа: " : "Не удалось сохранить персонажа: ") + error.message, "error");
     } finally {
       if (submit) submit.disabled = false;
     }
@@ -430,23 +606,33 @@
     const total = qs("#v2-character-total");
     if (total) total.textContent = state.characters.length + " персонажей";
     if (characterEmpty) characterEmpty.hidden = list.length > 0;
+
     characterGrid.innerHTML = list.map((character) => {
-      const selected = state.selectedCharacterIds.has(String(character.id));
+      const id = String(character.id);
+      const selected = state.selectedCharacterIds.has(id);
       const image = character.preview_url
         ? '<img src="' + escapeHtml(character.preview_url) + '" alt="">'
         : '<span class="v2-user-avatar">' + escapeHtml(character.name.slice(0, 1).toUpperCase()) + "</span>";
       const meta = Number(character.image_count || 0) + " фото" + (character.voice ? " · голос" : "");
       return (
-        '<button class="v2-character-card' + (selected ? " selected" : "") + '" type="button" data-character-id="' + escapeHtml(character.id) + '">' +
-        image +
-        "<span><strong>" + escapeHtml(character.name) + "</strong><small>" + escapeHtml(meta) + "</small></span>" +
-        '<span class="v2-character-selectmark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>' +
-        "</button>"
+        '<div class="v2-character-card' + (selected ? " selected" : "") + '" data-character-id="' + escapeHtml(id) + '">' +
+          '<button class="v2-character-card-main" type="button" data-character-select="' + escapeHtml(id) + '">' +
+            image +
+            "<span><strong>" + escapeHtml(character.name) + "</strong><small>" + escapeHtml(meta) + "</small></span>" +
+            '<span class="v2-character-selectmark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>' +
+          "</button>" +
+          '<button class="v2-character-edit-button" type="button" data-character-edit="' + escapeHtml(id) + '" title="Редактировать персонажа" aria-label="Редактировать персонажа">' +
+            '<svg class="icon"><use href="/static/icons.svg#icon-settings"></use></svg>' +
+          "</button>" +
+        "</div>"
       );
     }).join("");
 
-    qsa("[data-character-id]", characterGrid).forEach((button) => {
-      button.addEventListener("click", () => toggleCharacter(button.dataset.characterId));
+    qsa("[data-character-select]", characterGrid).forEach((button) => {
+      button.addEventListener("click", () => toggleCharacter(button.dataset.characterSelect));
+    });
+    qsa("[data-character-edit]", characterGrid).forEach((button) => {
+      button.addEventListener("click", () => openEditDialog(button.dataset.characterEdit));
     });
   };
 
