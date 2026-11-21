@@ -282,7 +282,7 @@ async def voice_preset_preview(
         path = await asyncio.to_thread(_voice_preset_path, preset_id)
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
-    return FileResponse(path, media_type="audio/wav", filename=f"{preset_id}.wav")
+    return FileResponse(path, media_type="audio/wav")
 
 
 @app.get("/api/characters")
