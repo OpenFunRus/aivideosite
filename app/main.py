@@ -264,7 +264,7 @@ async def api_voice_presets(user_id: str = Depends(require_user)):
     return {
         "available": any(item["available"] for item in presets),
         "presets": presets,
-        "sample_text": "Привет, это мой голос. Hello, this is my voice.",
+        "sample_text": "Привет, это мой голос.",
     }
 
 
