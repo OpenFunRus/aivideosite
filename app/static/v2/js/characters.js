@@ -134,8 +134,8 @@
       voicePresets = Array.isArray(result.presets) ? result.presets : [];
       if (voiceNote) {
         voiceNote.textContent = result.available
-          ? "Встроенные синтетические пресеты разрешены для коммерческого использования. Preview-фраза английская — это только тембр; язык будущей реплики задаётся prompt."
-          : "На сервере FFmpeg без flite: встроенные пресеты недоступны. Можно загрузить свой голос.";
+          ? "Preview: «" + (result.sample_text || "Привет, это мой голос. Hello, this is my voice.") + "»"
+          : "Встроенные голоса ещё не подготовлены на сервере. Свой голос можно загрузить прямо сейчас.";
       }
     } catch (error) {
       voicePresets = [];
