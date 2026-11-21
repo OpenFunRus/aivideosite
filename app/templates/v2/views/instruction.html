@@ -52,7 +52,7 @@
         <div><h3>Что делает каждый раздел V2</h3><p>Описание соответствует текущему сайту, а не старой версии.</p></div>
       </div>
       <div class="v2-site-guide-grid">
-        <article><span>01</span><h4>Создать</h4><p>Новый ролик из текста. Можно использовать точный начальный/конечный кадр либо Characters. В текущем Create эти два типа conditioning вместе не смешиваются.</p><small>480 / 720 / 1080 · 1:1 / 16:9 / 9:16 · 5 / 10 / 15 сек</small></article>
+        <article><span>01</span><h4>Создать</h4><p>Новый ролик из текста. Точные начальный/конечный кадры можно использовать вместе с Characters: персонажи задают identity/voice, а кадры становятся exact Timeline Guides.</p><small>480 / 720 / 1080 · 1:1 / 16:9 / 9:16 · 5 / 10 / 15 сек</small></article>
         <article><span>02</span><h4>Продолжить</h4><p>Берёт предыдущий ролик из библиотеки или файла. Prompt описывает только продолжение; H3 должен сохранить конечную позу, направление, momentum, камеру и сцену.</p><small>Ref2VA video continuation</small></article>
         <article><span>03</span><h4>По аудио</h4><p>Master track — главный вход. Вы выбираете фрагмент waveform и описываете видимое исполнение: артикуляцию, жесты, танец, тело и камеру.</p><small>Отдельно: вклеить трек / фоновые звуки H3</small></article>
         <article><span>04</span><h4>Продолжить клип</h4><p>Следующий фрагмент того же музыкального клипа: предыдущий ролик + тот же master track + следующая позиция по времени.</p><small>Сохраняет визуальную и музыкальную continuity</small></article>
@@ -183,8 +183,8 @@ non_diegetic_music: [Instruments, tempo, rhythm and dynamics, or N/A].</pre>
       </div>
 
       <div class="v2-guide-callout">
-        <strong>Ограничение текущего Create</strong>
-        <p>В одном новом ролике используем либо точные first/last frame anchors, либо Characters/Ref2VA. Интерфейс специально не смешивает их молча.</p>
+        <strong>Characters + First/Last работают вместе</strong>
+        <p>Без Characters кадры остаются FL2VA anchors. Если выбран хотя бы один Character, Create переключается на Ref2VA: Character images/voice задают личность, а First/Last применяются отдельно как native exact Timeline Guides.</p>
       </div>
     </section>
 
@@ -260,7 +260,7 @@ non_diegetic_music: N/A</pre>
         <details><summary>Как сделать полную тишину от H3?</summary><p><code>overall_soundscape: N/A</code> и <code>non_diegetic_music: N/A</code>, плюс выключите генерацию H3-аудио там, где есть отдельная галка.</p></details>
         <details><summary>Как заставить героя говорить по-русски?</summary><p>Опишите голос один раз, задайте speaker ID и оставьте точную реплику внутри <code>&lt;d&gt;[Russian] ...&lt;/d&gt;</code>. Не переводите слова.</p></details>
         <details><summary>Как сохранить одно лицо?</summary><p>Использовать Character или изображение-reference. Текстовое описание внешности само по себе не является identity lock.</p></details>
-        <details><summary>Можно ли использовать Characters вместе с первым и последним кадром?</summary><p>В текущем V2 Create — нет. Мы специально блокируем смешивание exact FL2VA anchors и Ref2VA Characters.</p></details>
+        <details><summary>Можно ли использовать Characters вместе с первым и последним кадром?</summary><p>Да. В смешанном режиме Characters идут как Ref2VA identity/voice references, а первый и последний кадры — как exact Timeline Guides. Поэтому guide-картинки не занимают номера Picture у референсов персонажей.</p></details>
         <details><summary>Есть ли negative prompt?</summary><p>Отдельного negative-поля в нашем workflow нет. Ограничения пишутся обычными конкретными предложениями: «No subtitles, on-screen text, or watermarks.»</p></details>
         <details><summary>Нужно ли всегда делать несколько Shot?</summary><p>Нет. Если действие непрерывное, один Shot часто лучше. Склейка нужна только когда действительно меняется точка зрения, место, состояние или время.</p></details>
         <details><summary>Больше steps всегда лучше?</summary><p>Нет. 12 — хороший сбалансированный старт. 8 быстрее, 16 дороже по времени; качество движения и identity не растёт линейно только от числа steps.</p></details>

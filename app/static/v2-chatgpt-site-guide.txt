@@ -34,12 +34,13 @@ Visible controls:
 
 Important:
 - text only -> normal FL2VA/T2V path;
-- first/last images -> exact endpoint conditioning;
-- Characters -> semantic Ref2VA identity references;
-- current Create UI blocks combining exact first/last frames with Characters.
+- first/last images without Characters -> exact FL2VA endpoint conditioning;
+- Characters without first/last -> semantic Ref2VA identity/voice references;
+- Characters + first/last -> Ref2VA identity/voice references plus native exact Timeline Guides.
 
 Magic Wand should use three H3 fields and exact shot timing.
-With first/last images, prepend the matching H3 frame-alignment line.
+With first/last images and no Characters, prepend the matching FL2VA frame-alignment line.
+With Characters + first/last, do not invent Picture alignment labels for the guide images; backend attaches them separately as Timeline Guides.
 
 2. ПРОДОЛЖИТЬ
 -------------

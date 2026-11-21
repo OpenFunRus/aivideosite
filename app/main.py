@@ -1032,13 +1032,6 @@ async def api_v2_generate(
     has_first = first_frame is not None and bool(first_frame.filename)
     has_last = last_frame is not None and bool(last_frame.filename)
 
-    if selected_characters and (has_first or has_last):
-        raise HTTPException(
-            400,
-            "Точные начальный/конечный кадры FL2VA нельзя смешивать с Characters Ref2VA "
-            "в текущем H3 pipeline. Для одной генерации выберите либо кадры, либо персонажей.",
-        )
-
     seed_text = str(seed or "").strip()
     if seed_text:
         try:
@@ -1051,7 +1044,30 @@ async def api_v2_generate(
     else:
         seed_value = -1
 
-    generation_mode = "reference" if selected_characters else "frames"
+    has_exact_frames = has_first or has_last
+    if selected_characters and has_exact_frames:
+        generation_mode = "multiframe"
+    elif selected_characters:
+        generation_mode = "reference"
+    else:
+        generation_mode = "frames"
+
+    guide_uploads: list[UploadFile] = []
+    guide_specs: list[dict] = []
+    if generation_mode == "multiframe":
+        if has_first and first_frame is not None:
+            guide_uploads.append(first_frame)
+            guide_specs.append(
+                {"time": 0.0, "note": "Exact opening frame anchor."}
+            )
+        if has_last and last_frame is not None:
+            guide_uploads.append(last_frame)
+            guide_specs.append(
+                {
+                    "time": float(seconds),
+                    "note": "Exact ending frame anchor.",
+                }
+            )
 
     result = await api_generate(
         request=request,
@@ -1065,23 +1081,30 @@ async def api_v2_generate(
         generate_audio=generate_audio,
         generation_mode=generation_mode,
         keyframe_role="first",
-        reference_task="reference_generation",
+        reference_task=(
+            "timeline_guides"
+            if generation_mode == "multiframe"
+            else "reference_generation"
+        ),
         ref_image_size="match",
         character_ids=json.dumps(selected_characters),
         reference_manifest="{}",
-        guide_manifest="{}",
+        guide_manifest=json.dumps(
+            {"guides": guide_specs},
+            ensure_ascii=False,
+        ),
         control_mode="none",
         control_strength=1.0,
         control_start_percent=0.0,
         control_end_percent=1.0,
         control_canny_low=0.4,
         control_canny_high=0.8,
-        first_frame=first_frame,
-        last_frame=last_frame,
+        first_frame=first_frame if generation_mode == "frames" else None,
+        last_frame=last_frame if generation_mode == "frames" else None,
         reference_images=None,
         reference_videos=None,
         reference_audios=None,
-        guide_images=None,
+        guide_images=guide_uploads if generation_mode == "multiframe" else None,
         control_video=None,
         control_source_video=None,
         control_mask_video=None,
@@ -1095,6 +1118,9 @@ async def api_v2_generate(
         "seconds": seconds,
         "steps": steps,
         "generation_mode": generation_mode,
+        "uses_timeline_guides": generation_mode == "multiframe",
+        "has_first_frame": has_first,
+        "has_last_frame": has_last,
     }
     return result
 

@@ -329,9 +329,11 @@ Explicitly converge into the final frame state.
 D) LAST FRAME ONLY
 Use the matching last-frame alignment syntax and describe a plausible path into the final image.
 
-LOCAL V2 RESTRICTION:
-In the current Create UI, exact FL2VA first/last frames and Ref2VA Characters are not combined.
-The interface blocks that mixture rather than silently ignoring one conditioning path.
+LOCAL V2 COMBINATION RULE:
+- first/last without Characters -> FL2VA exact endpoint anchors.
+- Characters without first/last -> Ref2VA identity/voice references.
+- Characters + first/last -> Ref2VA plus native MiniMaxH3AddGuide exact timeline anchors.
+- In mixed mode, do not invent <Picture N> alignment labels for guide images: the backend attaches First/Last separately from Character reference numbering.
 
 ======================================================================
 10. CHARACTERS / REFERENCES — WHAT MATTERS HERE

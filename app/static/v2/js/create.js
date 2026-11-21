@@ -135,7 +135,8 @@
               "Один основной camera move на shot. Точные реплики оформляй как (S1) и <d>[Language] ...</d> без перевода. " +
               "Если generate_audio выключен — overall_soundscape: N/A и non_diegetic_music: N/A. " +
               "Если звук включён, но музыки не просили — non_diegetic_music: N/A. " +
-              "Если есть first/last frame, добавь перед тремя полями правильную alignment line из H3 guide. " +
+              "Если first/last frame используются БЕЗ Characters, добавь перед тремя полями правильную FL2VA alignment line из H3 guide. " +
+              "Если Characters и first/last frame выбраны одновременно, НЕ добавляй Picture alignment line: backend применит кадры отдельно как exact Timeline Guides. " +
               "Если выбраны Characters, не придумывай Picture/Subject ordinals и не пиши шесть Ref2VA-полей: backend добавит их сам. " +
               "Сохрани все конкретные факты буквально: если написано 35 лет — в результате тоже должно быть 35, а не диапазон возраста. " +
               "Точную реплику пиши один раз: только как (S1) <d>[Russian] ...</d>, не дублируй её обычными кавычками перед тегом. " +
@@ -149,7 +150,7 @@
             workspace: "create",
             generation_mode:
               (qs("#v2-first-frame")?.files?.[0] || qs("#v2-last-frame")?.files?.[0])
-                ? "frames"
+                ? (api.selectedCharacters?.()?.length ? "multiframe" : "frames")
                 : (api.selectedCharacters?.()?.length ? "reference" : "frames"),
             has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
             has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
@@ -184,25 +185,22 @@
     Boolean(firstFrameInput?.files?.length || lastFrameInput?.files?.length);
 
   const updateCreateCompatibility = () => {
-    const conflict = state.selectedCharacterIds.size > 0 && createHasFrames();
+    const mixed = state.selectedCharacterIds.size > 0 && createHasFrames();
     if (createWarning) {
-      createWarning.hidden = !conflict;
-      createWarning.textContent = conflict
-        ? "Точные начальный/конечный кадры и Characters используют разные H3 pipelines. Для одной генерации оставьте либо кадры, либо персонажей."
+      createWarning.hidden = !mixed;
+      createWarning.textContent = mixed
+        ? "Characters задают внешность и сохранённые голоса, а First/Last используются как точные Timeline Guides. Их можно применять вместе."
         : "";
     }
     if (generateButton && !generateButton.classList.contains("is-loading")) {
-      generateButton.disabled = conflict;
+      generateButton.disabled = false;
     }
-    return !conflict;
+    return true;
   };
 
   createForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!updateCreateCompatibility()) {
-      showToast("Нельзя одновременно использовать точные кадры и Characters.", "error");
-      return;
-    }
+    updateCreateCompatibility();
     const sourcePrompt = prompt?.value.trim() || "";
     if (!sourcePrompt) {
       showToast("Сначала напишите prompt.", "error");
