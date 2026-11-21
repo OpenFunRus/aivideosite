@@ -9,7 +9,7 @@ The V2 Character modal uses sixteen preset timbres generated with official Qwen3
 - Upstream: https://github.com/QwenLM/Qwen3-TTS
 - Model cards: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice and https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 - License declared by the model cards: Apache-2.0
-- Both model families support Russian and English.
+- Both model families support Russian. The site intentionally generates Russian-only reference samples.
 
 Preset voices used by the site:
 
@@ -20,11 +20,10 @@ Preset voices used by the site:
 
 The built-in speakers come from CustomVoice. The seven additional voices are synthesized once with VoiceDesign from explicit age/timbre/style descriptions. The site keeps existing WAV files and generates only missing presets.
 
-Every sample contains both:
+Every current sample contains only:
 - Russian: `Привет, это мой голос.`
-- English: `Hello, this is my voice.`
 
-CustomVoice samples are generated as Russian + English segments from the same built-in speaker. VoiceDesign samples use the combined bilingual sentence in one generation so both languages share the same designed timbre.
+The site intentionally does not mix Russian and English inside one voice reference because H3 may interpret the two-language pronunciation/timbre differences as part of the identity. A per-file version sidecar marks the current Russian-only preset format so old bilingual WAV files are regenerated automatically.
 
 ## Project behaviour
 
