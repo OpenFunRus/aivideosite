@@ -17,10 +17,11 @@ fi
 "$VENV/bin/python" -m pip install   "qwen-tts==0.1.1"   "transformers==4.57.3"   "accelerate>=1.0"   "soundfile>=0.13"   "numpy>=1.26"
 
 echo "Generating Qwen3-TTS voice presets on physical GPU $GPU..."
+echo "Existing WAV files are kept; only missing presets are generated."
 CUDA_VISIBLE_DEVICES="$GPU" HF_HOME="$HF_HOME"   "$VENV/bin/python" "$ROOT/scripts/generate_voice_presets.py"   --output-dir "$OUT"   --device cuda:0
 
 echo
-echo "Generated presets:"
+echo "Available presets (target: 16 = 8 male + 8 female):"
 ls -lh "$OUT"/*.wav
 echo
 echo "Restart aivideosite.service after generation if the Character modal is already open."
