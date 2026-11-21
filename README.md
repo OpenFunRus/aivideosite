@@ -99,6 +99,26 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
+### Подготовка встроенных голосов Qwen3-TTS
+
+V2 Character поддерживает 9 встроенных голосовых пресетов. Они не грузят TTS-модель во время обычной работы сайта: один раз создаются локальные русско-английские WAV и затем используются как обычные H3 voice references.
+
+Запускайте в момент, когда GPU 0 не занят H3:
+
+```bash
+cd /opt/ai/aivideosite
+bash scripts/setup_voice_presets.sh
+```
+
+По умолчанию используется физическая GPU 0. Для второй карты:
+
+```bash
+VOICE_PRESET_GPU=1 bash scripts/setup_voice_presets.sh
+```
+
+Скрипт создаёт изолированный runtime и кеш только внутри `data/`. ComfyUI venv не изменяется. После генерации должны появиться 9 файлов `data/voice_presets/*.wav`. Повторный запуск пересоздаёт samples теми же Qwen3-TTS timbres.
+
+
 Пользователи конфигурируются без жёсткого лимита «три профиля».
 
 Поддерживаются:
