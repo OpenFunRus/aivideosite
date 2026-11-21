@@ -2259,10 +2259,18 @@ VOICE_PRESETS = {
     "uncle_fu": {"name": "Uncle Fu", "tone": "низкий · зрелый", "gender": "male", "speaker": "Uncle_Fu"},
     "dylan": {"name": "Dylan", "tone": "молодой · естественный", "gender": "male", "speaker": "Dylan"},
     "eric": {"name": "Eric", "tone": "живой · слегка хриплый", "gender": "male", "speaker": "Eric"},
+    "viktor": {"name": "Viktor", "tone": "глубокий · кинематографичный", "gender": "male", "speaker": "VoiceDesign"},
+    "max": {"name": "Max", "tone": "молодой · энергичный", "gender": "male", "speaker": "VoiceDesign"},
+    "anton": {"name": "Anton", "tone": "хриплый · суровый", "gender": "male", "speaker": "VoiceDesign"},
+
     "vivian": {"name": "Vivian", "tone": "яркий · уверенный", "gender": "female", "speaker": "Vivian"},
     "serena": {"name": "Serena", "tone": "мягкий · тёплый", "gender": "female", "speaker": "Serena"},
     "ono_anna": {"name": "Anna", "tone": "лёгкий · игривый", "gender": "female", "speaker": "Ono_Anna"},
     "sohee": {"name": "Sohee", "tone": "тёплый · эмоциональный", "gender": "female", "speaker": "Sohee"},
+    "elena": {"name": "Elena", "tone": "зрелый · тёплый", "gender": "female", "speaker": "VoiceDesign"},
+    "mira": {"name": "Mira", "tone": "молодой · мягкий", "gender": "female", "speaker": "VoiceDesign"},
+    "vera": {"name": "Vera", "tone": "низкий · уверенный", "gender": "female", "speaker": "VoiceDesign"},
+    "alisa": {"name": "Alisa", "tone": "яркий · энергичный", "gender": "female", "speaker": "VoiceDesign"},
 }
 
 
