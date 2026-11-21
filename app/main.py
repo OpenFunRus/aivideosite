@@ -258,6 +258,33 @@ async def api_assistant_control(
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.get("/api/voice-presets")
+async def api_voice_presets(user_id: str = Depends(require_user)):
+    return {
+        "available": _voice_presets_supported(),
+        "presets": _voice_presets_public(),
+        "license": {
+            "name": "CMU ARCTIC / Flite",
+            "commercial_use": True,
+            "note": "Встроенные синтетические пресеты. Допускается коммерческое использование; сохраняйте attribution/license notice при распространении самих voice assets.",
+        },
+    }
+
+
+@app.get("/voice-presets/{preset_id}.wav")
+async def voice_preset_preview(
+    preset_id: str,
+    user_id: str = Depends(require_user),
+):
+    if preset_id not in VOICE_PRESETS:
+        raise HTTPException(404, "Голосовой пресет не найден.")
+    try:
+        path = await asyncio.to_thread(_voice_preset_path, preset_id)
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    return FileResponse(path, media_type="audio/wav", filename=f"{preset_id}.wav")
+
+
 @app.get("/api/characters")
 async def api_characters(user_id: str = Depends(require_user)):
     return {"characters": [_character_public(item) for item in db.list_characters(user_id)]}
@@ -269,6 +296,7 @@ async def api_create_character(
     description: Annotated[str, Form()] = "",
     images: list[UploadFile] | None = File(None),
     voice: UploadFile | None = File(None),
+    voice_preset: Annotated[str, Form()] = "",
     user_id: str = Depends(require_user),
 ):
     name = name.strip()
@@ -277,6 +305,13 @@ async def api_create_character(
         raise HTTPException(400, "Имя персонажа должно содержать 1–80 символов.")
     if len(description) > 2000:
         raise HTTPException(400, "Описание персонажа слишком длинное.")
+
+    voice_preset = voice_preset.strip()
+    has_custom_voice = voice is not None and bool(voice.filename)
+    if has_custom_voice and voice_preset:
+        raise HTTPException(400, "Выберите либо встроенный голос, либо свой аудиофайл.")
+    if voice_preset and voice_preset not in VOICE_PRESETS:
+        raise HTTPException(400, "Неизвестный голосовой пресет.")
 
     uploads = [item for item in (images or []) if item.filename]
     if not uploads:
@@ -303,7 +338,7 @@ async def api_create_character(
             temp_paths.remove(path)
             image_files.append(str(destination))
 
-        if voice is not None and voice.filename:
+        if has_custom_voice:
             path = await save_upload(
                 voice,
                 kind="audio",
@@ -313,6 +348,14 @@ async def api_create_character(
             destination = target_dir / f"voice{path.suffix.lower()}"
             shutil.move(str(path), str(destination))
             temp_paths.remove(path)
+            voice_file = str(destination)
+        elif voice_preset:
+            try:
+                preset_path = await asyncio.to_thread(_voice_preset_path, voice_preset)
+            except RuntimeError as exc:
+                raise HTTPException(503, str(exc)) from exc
+            destination = target_dir / "voice.wav"
+            shutil.copy2(preset_path, destination)
             voice_file = str(destination)
 
         db.insert_character(
@@ -2207,6 +2250,180 @@ def _cleanup_job_uploads(job: dict) -> None:
                 path.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+VOICE_PRESET_TEXT = (
+    "This is the selected character voice. Keep this voice consistent in every generated scene."
+)
+
+VOICE_PRESETS = {
+    "male01": {
+        "name": "Мужской 01",
+        "tone": "низкий · спокойный",
+        "gender": "male",
+        "voice": "rms",
+        "pitch": 0.92,
+        "speed": 0.96,
+    },
+    "male02": {
+        "name": "Мужской 02",
+        "tone": "ровный · уверенный",
+        "gender": "male",
+        "voice": "rms",
+        "pitch": 1.03,
+        "speed": 1.04,
+    },
+    "male03": {
+        "name": "Мужской 03",
+        "tone": "грубый · размеренный",
+        "gender": "male",
+        "voice": "awb",
+        "pitch": 0.96,
+        "speed": 0.93,
+    },
+    "male04": {
+        "name": "Мужской 04",
+        "tone": "молодой · живой",
+        "gender": "male",
+        "voice": "kal16",
+        "pitch": 1.06,
+        "speed": 1.05,
+    },
+    "female01": {
+        "name": "Женский 01",
+        "tone": "мягкий · тёплый",
+        "gender": "female",
+        "voice": "slt",
+        "pitch": 0.94,
+        "speed": 0.94,
+    },
+    "female02": {
+        "name": "Женский 02",
+        "tone": "спокойный · нейтральный",
+        "gender": "female",
+        "voice": "slt",
+        "pitch": 1.02,
+        "speed": 0.98,
+    },
+    "female03": {
+        "name": "Женский 03",
+        "tone": "светлый · высокий",
+        "gender": "female",
+        "voice": "slt",
+        "pitch": 1.08,
+        "speed": 1.04,
+    },
+    "female04": {
+        "name": "Женский 04",
+        "tone": "энергичный · быстрый",
+        "gender": "female",
+        "voice": "slt",
+        "pitch": 1.04,
+        "speed": 1.12,
+    },
+}
+
+_voice_preset_support_cache: bool | None = None
+_voice_preset_lock = threading.Lock()
+
+
+def _voice_presets_supported() -> bool:
+    global _voice_preset_support_cache
+    if _voice_preset_support_cache is not None:
+        return _voice_preset_support_cache
+    try:
+        result = subprocess.run(
+            [str(settings.ffmpeg_bin), "-hide_banner", "-filters"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = (result.stdout or "") + "\n" + (result.stderr or "")
+        _voice_preset_support_cache = result.returncode == 0 and " flite " in output
+    except Exception:
+        _voice_preset_support_cache = False
+    return _voice_preset_support_cache
+
+
+def _voice_preset_path(preset_id: str) -> Path:
+    preset = VOICE_PRESETS.get(preset_id)
+    if preset is None:
+        raise ValueError("Неизвестный пресет голоса.")
+    if not _voice_presets_supported():
+        raise RuntimeError("FFmpeg собран без фильтра flite; встроенные голоса недоступны.")
+
+    target_dir = settings.data_dir / "voice_presets"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{preset_id}.wav"
+    if target.is_file() and target.stat().st_size > 1024:
+        return target
+
+    with _voice_preset_lock:
+        if target.is_file() and target.stat().st_size > 1024:
+            return target
+
+        pitch = float(preset["pitch"])
+        speed = float(preset["speed"])
+        rate = max(8000, int(round(24000 * pitch)))
+        tempo = max(0.5, min(2.0, speed / pitch))
+        audio_filter = (
+            f"aresample=24000,asetrate={rate},aresample=24000,"
+            f"atempo={tempo:.6f}"
+        )
+        source = (
+            "flite=text='"
+            + VOICE_PRESET_TEXT
+            + "':voice="
+            + str(preset["voice"])
+        )
+        temporary = target.with_suffix(".tmp.wav")
+        result = subprocess.run(
+            [
+                str(settings.ffmpeg_bin),
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                source,
+                "-af",
+                audio_filter,
+                "-ac",
+                "1",
+                "-ar",
+                "24000",
+                str(temporary),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0 or not temporary.is_file():
+            temporary.unlink(missing_ok=True)
+            detail = (result.stderr or "").strip().splitlines()
+            tail = detail[-1] if detail else "unknown FFmpeg error"
+            raise RuntimeError(f"Не удалось создать голосовой пресет: {tail}")
+        temporary.replace(target)
+    return target
+
+
+def _voice_presets_public() -> list[dict]:
+    available = _voice_presets_supported()
+    return [
+        {
+            "id": preset_id,
+            "name": str(preset["name"]),
+            "tone": str(preset["tone"]),
+            "gender": str(preset["gender"]),
+            "available": available,
+            "preview_url": f"/voice-presets/{preset_id}.wav" if available else None,
+        }
+        for preset_id, preset in VOICE_PRESETS.items()
+    ]
 
 
 def _character_public(character: dict | None) -> dict:
