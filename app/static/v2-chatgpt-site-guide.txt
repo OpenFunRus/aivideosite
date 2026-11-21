@@ -105,7 +105,7 @@ A Character can contain:
 - 1–4 reference appearance images;
 - description notes;
 - optional saved voice;
-- voice can be one of 9 built-in Qwen3-TTS timbres (5 male / 4 female, bilingual Russian+English preview) or a user-uploaded audio file.
+- voice can be one of 16 built-in Qwen3-TTS timbres (8 male / 8 female, bilingual Russian+English preview) or a user-uploaded audio file.
 
 Face/identity consistency requires attached visual references; text alone is not an identity lock.
 Magic Wand must not invent Character IDs or reference ordinals.
