@@ -81,15 +81,34 @@
         <div class="v2-character-reference-previews" id="v2-character-reference-previews"></div>
       </div>
 
-      <label class="v2-character-voice-field">
-        <span class="v2-character-voice-icon"><svg class="icon"><use href="/static/icons.svg#icon-microphone"></use></svg></span>
-        <span class="v2-character-voice-copy">
-          <strong>Референс голоса</strong>
-          <small>Необязательно · один аудиофайл</small>
-        </span>
-        <input id="v2-character-create-voice" name="voice" type="file" accept="audio/*">
-        <span class="v2-character-voice-name" id="v2-character-voice-name">Выбрать файл</span>
-      </label>
+      <div class="v2-character-voice-block">
+        <div class="v2-character-voice-title">
+          <div>
+            <strong>Голос персонажа</strong>
+            <small>Необязательно · выберите встроенный пресет или загрузите свой голос</small>
+          </div>
+          <span class="v2-character-voice-license">для YouTube / commercial</span>
+        </div>
+
+        <input id="v2-character-create-voice-preset" name="voice_preset" type="hidden" value="">
+        <div class="v2-character-voice-presets" id="v2-character-voice-presets">
+          <div class="v2-character-voice-loading">Загрузка голосов…</div>
+        </div>
+
+        <label class="v2-character-voice-field v2-character-own-voice" id="v2-character-own-voice">
+          <span class="v2-character-voice-icon"><svg class="icon"><use href="/static/icons.svg#icon-microphone"></use></svg></span>
+          <span class="v2-character-voice-copy">
+            <strong>Свой голос</strong>
+            <small>Любой поддерживаемый аудиофайл</small>
+          </span>
+          <input id="v2-character-create-voice" name="voice" type="file" accept="audio/*">
+          <span class="v2-character-voice-name" id="v2-character-voice-name">Выбрать файл</span>
+        </label>
+
+        <div class="v2-character-voice-note" id="v2-character-voice-note">
+          Встроенные голоса синтетические; при выборе пресета он сохраняется в Character как обычный voice reference.
+        </div>
+      </div>
     </div>
 
     <div class="v2-character-create-note">
