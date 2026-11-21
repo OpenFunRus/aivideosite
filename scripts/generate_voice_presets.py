@@ -108,8 +108,7 @@ def _missing(output_dir: Path, ids: list[str], force: bool) -> list[str]:
     ]
 
 
-def _release(model: object | None) -> None:
-    del model
+def _release_cuda_cache() -> None:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -168,7 +167,8 @@ def main() -> None:
                     args.pause_ms,
                 )
         finally:
-            _release(custom_model)
+            del custom_model
+            _release_cuda_cache()
     else:
         print("CustomVoice presets already exist; skipping the 0.6B model.")
 
@@ -191,7 +191,8 @@ def main() -> None:
                 )
                 _write_wav(target, wavs[0], int(sr))
         finally:
-            _release(design_model)
+            del design_model
+            _release_cuda_cache()
     else:
         print("VoiceDesign presets already exist; skipping the 1.7B model.")
 
