@@ -2285,9 +2285,9 @@ VOICE_PRESETS = {
         "name": "Мужской 04",
         "tone": "молодой · живой",
         "gender": "male",
-        "voice": "kal16",
-        "pitch": 1.06,
-        "speed": 1.05,
+        "voice": "rms",
+        "pitch": 1.09,
+        "speed": 1.08,
     },
     "female01": {
         "name": "Женский 01",
