@@ -15,7 +15,16 @@
   const referencePreviews = qs("#v2-character-reference-previews");
   const referenceCount = qs("#v2-character-reference-count");
   const voiceName = qs("#v2-character-voice-name");
+  const voicePresetInput = qs("#v2-character-create-voice-preset");
+  const voicePresetsRoot = qs("#v2-character-voice-presets");
+  const voiceNote = qs("#v2-character-voice-note");
+  const ownVoice = qs("#v2-character-own-voice");
   let createImageFiles = [];
+  let voicePresets = [];
+  let voicePresetsLoaded = false;
+  let selectedVoicePreset = "";
+  let playingVoicePreset = "";
+  let voicePreviewAudio = null;
 
 
   const syncCreateImageInput = () => {
@@ -65,10 +74,134 @@
     if (next.length > 4) showToast("Для персонажа можно сохранить максимум 4 изображения.", "error");
   };
 
+  const renderVoicePresets = () => {
+    if (!voicePresetsRoot) return;
+    if (!voicePresets.length) {
+      voicePresetsRoot.innerHTML = '<div class="v2-character-voice-loading">Встроенные голоса недоступны.</div>';
+      return;
+    }
+
+    const group = (gender, title) => {
+      const items = voicePresets.filter((item) => item.gender === gender);
+      return (
+        '<div class="v2-character-voice-group"><span class="v2-character-voice-group-title">' +
+        escapeHtml(title) +
+        '</span><div class="v2-character-voice-grid">' +
+        items.map((item) => {
+          const selected = selectedVoicePreset === String(item.id);
+          const playing = playingVoicePreset === String(item.id);
+          const disabled = item.available === false;
+          return (
+            '<button class="v2-character-voice-preset' +
+            (selected ? ' selected' : '') +
+            (playing ? ' playing' : '') +
+            '" type="button" data-voice-preset="' + escapeHtml(item.id) + '"' +
+            (disabled ? ' disabled' : '') + '>' +
+            '<span class="v2-character-voice-play">' + (playing ? '■' : '▶') + '</span>' +
+            '<span class="v2-character-voice-preset-copy"><strong>' + escapeHtml(item.name) +
+            '</strong><small>' + escapeHtml(item.tone || '') + '</small></span>' +
+            '<span class="v2-character-voice-check"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>' +
+            '</button>'
+          );
+        }).join('') +
+        '</div></div>'
+      );
+    };
+
+    voicePresetsRoot.innerHTML =
+      group("male", "Мужские") +
+      group("female", "Женские");
+  };
+
+  const stopVoicePreview = (rerender = true) => {
+    if (voicePreviewAudio) {
+      voicePreviewAudio.pause();
+      voicePreviewAudio.currentTime = 0;
+      voicePreviewAudio = null;
+    }
+    playingVoicePreset = "";
+    if (rerender) renderVoicePresets();
+  };
+
+  const loadVoicePresets = async () => {
+    if (voicePresetsLoaded) {
+      renderVoicePresets();
+      return;
+    }
+    voicePresetsLoaded = true;
+    try {
+      const result = await fetchJson("/api/voice-presets");
+      voicePresets = Array.isArray(result.presets) ? result.presets : [];
+      if (voiceNote) {
+        voiceNote.textContent = result.available
+          ? "Встроенные синтетические пресеты разрешены для коммерческого использования. Выбранный голос сохраняется как обычный H3 voice reference."
+          : "На сервере FFmpeg без flite: встроенные пресеты недоступны. Можно загрузить свой голос.";
+      }
+    } catch (error) {
+      voicePresets = [];
+      if (voiceNote) voiceNote.textContent = "Не удалось загрузить встроенные голоса. Свой аудиофайл по-прежнему доступен.";
+    }
+    renderVoicePresets();
+  };
+
+  voicePresetsRoot?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-voice-preset]");
+    if (!button || button.disabled) return;
+    const id = String(button.dataset.voicePreset || "");
+    const preset = voicePresets.find((item) => String(item.id) === id);
+    if (!preset) return;
+
+    if (selectedVoicePreset !== id) {
+      selectedVoicePreset = id;
+      if (voicePresetInput) voicePresetInput.value = id;
+      if (createVoice) createVoice.value = "";
+      if (voiceName) voiceName.textContent = "Выбрать файл";
+      ownVoice?.classList.remove("selected");
+    }
+
+    if (playingVoicePreset === id) {
+      stopVoicePreview();
+      return;
+    }
+
+    stopVoicePreview(false);
+    if (!preset.preview_url) {
+      renderVoicePresets();
+      return;
+    }
+
+    playingVoicePreset = id;
+    voicePreviewAudio = new Audio(preset.preview_url);
+    voicePreviewAudio.preload = "auto";
+    voicePreviewAudio.addEventListener("ended", () => {
+      voicePreviewAudio = null;
+      playingVoicePreset = "";
+      renderVoicePresets();
+    }, { once: true });
+    voicePreviewAudio.addEventListener("error", () => {
+      voicePreviewAudio = null;
+      playingVoicePreset = "";
+      renderVoicePresets();
+      showToast("Не удалось воспроизвести голосовой пресет.", "error");
+    }, { once: true });
+    voicePreviewAudio.play().catch(() => {
+      voicePreviewAudio = null;
+      playingVoicePreset = "";
+      renderVoicePresets();
+      showToast("Браузер не разрешил воспроизведение голоса.", "error");
+    });
+    renderVoicePresets();
+  });
+
   const resetCreateForm = () => {
     createForm?.reset();
     createImageFiles = [];
+    selectedVoicePreset = "";
+    if (voicePresetInput) voicePresetInput.value = "";
+    stopVoicePreview(false);
     renderCreateImages();
+    renderVoicePresets();
+    ownVoice?.classList.remove("selected");
     if (voiceName) voiceName.textContent = "Выбрать файл";
     referenceDrop?.classList.remove("dragover");
   };
@@ -76,6 +209,7 @@
   const openCreateDialog = () => {
     resetCreateForm();
     createDialog?.showModal();
+    loadVoicePresets();
     requestAnimationFrame(() => qs("#v2-character-create-name")?.focus());
   };
 
@@ -87,6 +221,7 @@
     if (event.target === createDialog) createDialog.close();
   });
   createDialog?.addEventListener("close", () => {
+    stopVoicePreview(false);
     clearCreatePreviewUrls();
     createImageFiles = [];
   });
@@ -115,7 +250,15 @@
   });
 
   createVoice?.addEventListener("change", () => {
-    if (voiceName) voiceName.textContent = createVoice.files?.[0]?.name || "Выбрать файл";
+    const file = createVoice.files?.[0] || null;
+    if (file) {
+      selectedVoicePreset = "";
+      if (voicePresetInput) voicePresetInput.value = "";
+      stopVoicePreview(false);
+      renderVoicePresets();
+    }
+    ownVoice?.classList.toggle("selected", Boolean(file));
+    if (voiceName) voiceName.textContent = file?.name || "Выбрать файл";
   });
 
   createForm?.addEventListener("submit", async (event) => {
@@ -140,7 +283,11 @@
       data.set("description", qs("#v2-character-create-description")?.value.trim() || "");
       createImageFiles.forEach((file) => data.append("images", file, file.name));
       const voice = createVoice?.files?.[0];
-      if (voice) data.set("voice", voice, voice.name);
+      if (selectedVoicePreset) {
+        data.set("voice_preset", selectedVoicePreset);
+      } else if (voice) {
+        data.set("voice", voice, voice.name);
+      }
       const result = await fetchJson("/api/characters", {
         method: "POST",
         body: data,
