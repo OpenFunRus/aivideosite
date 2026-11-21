@@ -124,6 +124,32 @@ def _cuda_dtype(device: str) -> torch.dtype:
     return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
 
 
+def _load_model(model_id: str, device: str, dtype: torch.dtype) -> Qwen3TTSModel:
+    try:
+        return Qwen3TTSModel.from_pretrained(
+            model_id,
+            device_map=device,
+            dtype=dtype,
+        )
+    except torch.OutOfMemoryError as exc:
+        free_text = ""
+        if str(device).startswith("cuda") and torch.cuda.is_available():
+            try:
+                free_bytes, total_bytes = torch.cuda.mem_get_info()
+                free_text = (
+                    f" CUDA reports {free_bytes / 1024**2:.0f} MiB free "
+                    f"of {total_bytes / 1024**2:.0f} MiB."
+                )
+            except Exception:
+                pass
+        raise SystemExit(
+            "ERROR: CUDA out of memory while loading Qwen3-TTS."
+            + free_text
+            + " Wait for H3/ComfyUI to release the GPU or rerun with "
+              "VOICE_PRESET_GPU=<other physical GPU index>."
+        ) from exc
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate Russian-only Qwen3-TTS Character voice presets.")
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -142,11 +168,7 @@ def main() -> None:
 
     if custom_missing:
         print(f"Loading {args.custom_model} on {args.device} ({dtype})...")
-        custom_model = Qwen3TTSModel.from_pretrained(
-            args.custom_model,
-            device_map=args.device,
-            dtype=dtype,
-        )
+        custom_model = _load_model(args.custom_model, args.device, dtype)
         try:
             for preset_id in custom_missing:
                 speaker = CUSTOM_SPEAKERS[preset_id]
@@ -167,11 +189,7 @@ def main() -> None:
 
     if design_missing:
         print(f"Loading {args.design_model} on {args.device} ({dtype})...")
-        design_model = Qwen3TTSModel.from_pretrained(
-            args.design_model,
-            device_map=args.device,
-            dtype=dtype,
-        )
+        design_model = _load_model(args.design_model, args.device, dtype)
         try:
             for preset_id in design_missing:
                 target = args.output_dir / f"{preset_id}.wav"
