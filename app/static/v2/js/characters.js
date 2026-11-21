@@ -134,7 +134,7 @@
       voicePresets = Array.isArray(result.presets) ? result.presets : [];
       if (voiceNote) {
         voiceNote.textContent = result.available
-          ? "Preview: «" + (result.sample_text || "Привет, это мой голос. Hello, this is my voice.") + "»"
+          ? "Preview: «" + (result.sample_text || "Привет, это мой голос.") + "»"
           : "Встроенные голоса ещё не подготовлены на сервере. Свой голос можно загрузить прямо сейчас.";
       }
     } catch (error) {
