@@ -515,11 +515,18 @@ async def api_update_character(
         raise
 
     kept_paths = set(next_images)
-    for old_path in existing_images:
-        if old_path not in kept_paths:
-            Path(old_path).unlink(missing_ok=True)
+    obsolete_paths = [
+        Path(old_path)
+        for old_path in existing_images
+        if old_path not in kept_paths
+    ]
     if old_voice_file and old_voice_file != next_voice_file:
-        Path(old_voice_file).unlink(missing_ok=True)
+        obsolete_paths.append(Path(old_voice_file))
+    for obsolete_path in obsolete_paths:
+        try:
+            obsolete_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     return {"ok": True, "character": _character_public(updated)}
 
