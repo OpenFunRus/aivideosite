@@ -117,11 +117,16 @@
         <div class="v2-editor-inspector-pane" data-editor-pane="audio">
           <div class="v2-editor-inspector-section open">
             <div class="v2-editor-section-title">Музыкальная дорожка</div>
-            <label class="v2-editor-audio-file">
-              <input id="v2-editor-audio" type="file" accept="audio/*">
-              <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-music"></use></svg>
-              <span id="v2-editor-audio-name">Выбрать аудио</span>
-            </label>
+            <div class="v2-editor-audio-source-row">
+              <label class="v2-editor-audio-file">
+                <input id="v2-editor-audio" type="file" accept="audio/*">
+                <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-music"></use></svg>
+                <span id="v2-editor-audio-name">Выбрать аудио</span>
+              </label>
+              <button class="v2-editor-audio-remove" id="v2-editor-audio-remove" type="button" title="Удалить Music-дорожку" aria-label="Удалить Music-дорожку" disabled>
+                <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-trash"></use></svg>
+              </button>
+            </div>
             <label><span>Позиция, сек</span><input id="v2-editor-audio-offset" type="number" min="0" step="0.1" value="0"></label>
             <label><span>Обрезать с, сек</span><input id="v2-editor-audio-trim" type="number" min="0" step="0.1" value="0"></label>
             <label><span>Длина, сек</span><input id="v2-editor-audio-length" type="number" min="0" step="0.1" value="0"></label>
