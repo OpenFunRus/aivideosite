@@ -104,7 +104,8 @@ Right rail contains reusable Characters.
 A Character can contain:
 - 1–4 reference appearance images;
 - description notes;
-- optional saved voice.
+- optional saved voice;
+- voice can be one of 8 built-in synthetic presets (4 male / 4 female, previewable) or a user-uploaded audio file.
 
 Face/identity consistency requires attached visual references; text alone is not an identity lock.
 Magic Wand must not invent Character IDs or reference ordinals.
