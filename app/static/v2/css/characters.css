@@ -91,7 +91,6 @@
 .v2-character-voice-title strong,.v2-character-voice-title small{display:block}
 .v2-character-voice-title strong{font-size:12px}
 .v2-character-voice-title small{margin-top:4px;color:#7f899f;font-size:10px;line-height:1.45}
-.v2-character-voice-license{flex:0 0 auto;padding:5px 8px;border:1px solid #38574a;border-radius:999px;background:#12241d;color:#7bd69f;font-size:9px;font-weight:700;white-space:nowrap}
 .v2-character-voice-presets{display:grid;gap:12px}
 .v2-character-voice-loading{padding:16px;border:1px dashed #3b4359;border-radius:10px;color:#7f899f;font-size:10px;text-align:center}
 .v2-character-voice-group{display:grid;gap:7px}
@@ -114,4 +113,4 @@
 .v2-character-own-voice{margin-top:12px}
 .v2-character-own-voice.selected{border-color:#7657ef;background:#211a3d;box-shadow:0 0 0 2px rgba(118,87,239,.12)}
 .v2-character-voice-note{margin-top:9px;color:#737e95;font-size:9px;line-height:1.5}
-@media(max-width:620px){.v2-character-voice-title{flex-direction:column}.v2-character-voice-grid{grid-template-columns:1fr}.v2-character-voice-license{align-self:flex-start}}
+@media(max-width:620px){.v2-character-voice-title{flex-direction:column}.v2-character-voice-grid{grid-template-columns:1fr}}
