@@ -277,12 +277,38 @@
     updateTransport();
   };
 
+  const hasAudioTrack = () => Boolean(audioFile || state.audio.file_name);
+
   const updateAudioName = () => {
     const label = qs("#v2-editor-audio-name");
-    if (!label) return;
-    if (audioFile) label.textContent = audioFile.name;
-    else if (state.audio.file_name) label.textContent = state.audio.file_name + " · выбрать файл заново";
-    else label.textContent = "Выбрать аудио";
+    const hasAudio = hasAudioTrack();
+    if (label) {
+      if (audioFile) label.textContent = audioFile.name;
+      else if (state.audio.file_name) label.textContent = state.audio.file_name + " · выбрать файл заново";
+      else label.textContent = "Выбрать аудио";
+    }
+    const removeButton = qs("#v2-editor-audio-remove");
+    if (removeButton) removeButton.disabled = !hasAudio;
+    [
+      "#v2-editor-audio-offset",
+      "#v2-editor-audio-trim",
+      "#v2-editor-audio-length",
+      "#v2-editor-audio-volume",
+    ].forEach((selector) => {
+      const input = qs(selector);
+      if (input) input.disabled = !hasAudio;
+    });
+  };
+
+  const removeAudioTrack = () => {
+    if (!hasAudioTrack()) return;
+    audioFile = null;
+    const input = qs("#v2-editor-audio");
+    if (input) input.value = "";
+    state.audio = { ...DEFAULT_STATE.audio };
+    normalize();
+    renderTimeline();
+    showToast("Music-дорожка удалена. Проект можно экспортировать без неё.");
   };
 
   const renderMusicLane = () => {
@@ -300,7 +326,9 @@
     const left = state.audio.offset * state.zoom;
     const width = Math.max(70, duration * state.zoom);
     root.innerHTML = '<div class="v2-editor-music-block" style="left:' + left + 'px;width:' + width +
-      'px"><span>♫ ' + escapeHtml(audioFile?.name || state.audio.file_name || "Музыка") + '</span></div>';
+      'px"><span>♫ ' + escapeHtml(audioFile?.name || state.audio.file_name || "Музыка") +
+      '</span><button class="v2-editor-music-remove" type="button" data-editor-audio-remove title="Удалить Music-дорожку" aria-label="Удалить Music-дорожку">' +
+      '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-trash"></use></svg></button></div>';
   };
 
   const renderInfo = () => {
@@ -747,6 +775,11 @@
       save();
       renderMusicLane();
     });
+  });
+
+  qs("#v2-editor-audio-remove")?.addEventListener("click", removeAudioTrack);
+  qs("#v2-editor-music-lane")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-editor-audio-remove]")) removeAudioTrack();
   });
 
   qs("#v2-editor-audio")?.addEventListener("change", (event) => {
