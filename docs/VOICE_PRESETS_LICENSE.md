@@ -1,38 +1,37 @@
 # Built-in Character voice presets
 
-The V2 Character modal offers built-in synthetic voice-reference presets.
+The V2 Character modal uses nine preset timbres generated with the official Qwen3-TTS CustomVoice model.
 
-## Source
+## Source model
 
-The current preset implementation uses FFmpeg's `flite` audio source with CMU voices:
+- Model: `Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice`
+- Upstream: https://github.com/QwenLM/Qwen3-TTS
+- Model card: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
+- License declared by the model card: Apache-2.0
+- Supported languages include Russian and English.
 
-- `rms` — male;
-- `awb` — male;
-- `slt` — female.
+Preset speakers used by the site:
 
-Additional UI presets are pitch/speed variants of those same source voices. The repository does **not** bundle the original CMU voice databases; the site's installed FFmpeg/libflite provides them at runtime.
+- male: Ryan, Aiden, Uncle_Fu, Dylan, Eric;
+- female: Vivian, Serena, Ono_Anna, Sohee.
 
-References:
+The model documentation states that every built-in speaker can speak any supported language. The site generates two short segments for every preset and joins them into one reference WAV:
 
-- CMU ARCTIC project: http://www.festvox.org/cmu_arctic/
-- FFmpeg flite filter: https://ffmpeg.org/ffmpeg-filters.html#flite
+- Russian: `Привет, это мой голос.`
+- English: `Hello, this is my voice.`
 
-## Commercial use
+## Project behaviour
 
-The CMU ARCTIC voice licence states that the voice is free for use for any purpose, commercial or otherwise, subject to its copyright/notice/modification conditions.
-
-Keep this document with the project so the origin and licence basis of the built-in pack remain traceable.
-
-## Application behaviour
-
-- The backend lazily synthesizes a short preview/reference WAV and caches it under `data/voice_presets/`.
-- Saving a Character with a preset copies that WAV into the Character directory as `voice.wav`.
-- From that point onward it is handled by the existing H3 `voice_file` reference pipeline.
-- If the server FFmpeg build has no `flite` filter, built-in presets are reported unavailable and custom voice upload remains available.
-- The English preview sentence is only a timbre/reference sample; the generated character can still speak another language when the H3 prompt requests it.
+- `scripts/setup_voice_presets.sh` creates an isolated runtime under `data/qwen-tts-venv/`.
+- Hugging Face model cache is stored under `data/huggingface/`.
+- Generated WAV files are stored under `data/voice_presets/`.
+- The normal web app does not load Qwen3-TTS and does not consume TTS VRAM during ordinary use.
+- Saving a Character with a preset copies the selected WAV into the Character directory as `voice.wav`.
+- H3 then treats it through the existing Character `voice_file` reference pipeline.
+- The web UI intentionally does not display licensing text on the voice cards.
 
 ## User-uploaded voices
 
-This licence note covers only the built-in CMU/Flite preset source. It does not grant any rights to voices or audio uploaded by users. Users must have the necessary rights/permissions for their own recordings, voice clones, performances and resulting publications.
+This note only documents the built-in preset source. It does not grant rights to third-party recordings or voice clones uploaded by users. Users are responsible for having the necessary rights/permissions for their own audio.
 
 This file records the project's technical/licensing basis and is not legal advice.
