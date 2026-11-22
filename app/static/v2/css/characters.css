@@ -142,7 +142,7 @@
 
 
 /* Character rail card grid — add first, selected next, remaining alphabetical */
-.v2-character-rail .v2-character-grid{gap:9px;margin-top:14px;padding-right:3px}
+.v2-character-rail .v2-character-grid{column-gap:10px;row-gap:12px;margin-top:14px;padding:0 6px 12px 4px}
 .v2-character-rail .v2-character-card,
 .v2-character-rail .v2-character-add-card{aspect-ratio:1/1;min-height:0;border-radius:12px}
 .v2-character-rail .v2-character-card{position:relative;padding:0;border:1px solid #30364a;background:#11141d;overflow:hidden}
