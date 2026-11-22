@@ -1015,38 +1015,70 @@ html {
   }
 
   .v2-character-rail .v2-character-grid {
-    grid-template-columns: 1fr !important;
-    gap: 7px;
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+    gap: 9px;
     padding: 0 2px 8px 0;
   }
 
-  .v2-character-rail .v2-character-card {
+  .v2-character-rail .v2-character-card,
+  .v2-character-rail .v2-character-add-card {
     width: 100%;
-    min-height: 58px;
-    grid-template-columns: 42px minmax(0,1fr) 18px;
-    gap: 8px;
-    padding: 7px;
-    border-radius: 11px;
+    height: 150px;
+    min-height: 150px;
+    padding: 0;
+    border-radius: 12px;
   }
 
-  .v2-character-rail .v2-character-card img {
-    width: 42px;
-    height: 42px;
-    border-radius: 9px;
+  .v2-character-rail .v2-character-card-main {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 38px 8px 12px;
+  }
+
+  .v2-character-rail .v2-character-card img,
+  .v2-character-rail .v2-character-card-main>.v2-user-avatar {
+    width: 72px;
+    height: 72px;
+    flex: 0 0 72px;
+    border-radius: 12px;
   }
 
   .v2-character-rail .v2-character-card strong {
     display: block;
+    width: 100%;
     font-size: 11px;
-    line-height: 1.25;
+    line-height: 1.2;
+    text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .v2-character-rail .v2-character-card small {
-    font-size: 9px;
-    line-height: 1.25;
+  .v2-character-rail .v2-character-selectmark {
+    left: 8px;
+    top: 8px;
+    right: auto;
+    bottom: auto;
+    width: 24px;
+    height: 24px;
+  }
+
+  .v2-character-rail .v2-character-edit-button {
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+  }
+
+  .v2-character-rail .v2-character-add-card {
+    justify-content: center;
+    gap: 10px;
   }
 
   .v2-character-rail .v2-character-dialog-foot {
@@ -1061,9 +1093,10 @@ html {
 
 
 @media (min-width:821px) and (max-width:1100px){
-  .v2-app,.v2-app.left-open,.v2-app.right-open,.v2-app.left-open.right-open{grid-template-columns:218px minmax(0,1fr) 270px}
-  .v2-character-rail,.v2-app.right-open .v2-character-rail{width:270px}
-  .v2-character-panel,.v2-app.right-open .v2-character-panel{width:246px}
-  .v2-character-add{padding-inline:8px}
-  .v2-character-add span{display:none}
+  .v2-app,.v2-app.left-open,.v2-app.right-open,.v2-app.left-open.right-open{grid-template-columns:218px minmax(0,1fr) 300px}
+  .v2-character-rail,.v2-app.right-open .v2-character-rail{width:300px}
+  .v2-character-panel,.v2-app.right-open .v2-character-panel{width:276px}
+  .v2-character-rail .v2-character-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .v2-character-rail .v2-character-card,.v2-character-rail .v2-character-add-card{height:142px;min-height:142px}
+  .v2-character-rail .v2-character-card img,.v2-character-rail .v2-character-card-main>.v2-user-avatar{width:66px;height:66px;flex-basis:66px}
 }
