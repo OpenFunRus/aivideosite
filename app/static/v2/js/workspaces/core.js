@@ -79,6 +79,9 @@
   W.selectedCharacterIds = () =>
     Array.from(api.state.selectedCharacterIds || []).map(String);
 
+  W.mutedCharacterIds = () =>
+    (api.mutedCharacterIds?.() || []).map(String);
+
   W.settingValue = (name, fallback = "") => {
     const group = qs('[data-v2-setting="' + name + '"]');
     return qs("button.active", group)?.dataset.value || fallback;

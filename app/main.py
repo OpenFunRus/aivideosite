@@ -583,6 +583,7 @@ async def api_generate(
     reference_task: Annotated[str, Form()] = "reference_generation",
     ref_image_size: Annotated[str, Form()] = "match",
     character_ids: Annotated[str, Form()] = "[]",
+    muted_character_ids: Annotated[str, Form()] = "[]",
     reference_manifest: Annotated[str, Form()] = "{}",
     guide_manifest: Annotated[str, Form()] = "{}",
     control_mode: Annotated[str, Form()] = "none",
@@ -741,6 +742,7 @@ async def api_generate(
             if not isinstance(raw_character_ids, list):
                 raise HTTPException(400, "Некорректный список персонажей.")
 
+            muted_characters = set(_v2_character_ids(muted_character_ids))
             seen_characters: set[str] = set()
             for value in raw_character_ids:
                 character_id = str(value).strip()
@@ -768,7 +770,7 @@ async def api_generate(
                         }
                     )
                 voice_path = character.get("voice_file")
-                if voice_path:
+                if voice_path and character_id not in muted_characters:
                     path = Path(voice_path)
                     if not path.is_file():
                         raise HTTPException(409, f"У персонажа «{character['name']}» отсутствует файл голоса.")
@@ -1018,6 +1020,7 @@ async def api_v2_generate(
     seed: Annotated[str, Form()] = "",
     generate_audio: Annotated[bool, Form()] = True,
     character_ids: Annotated[str, Form()] = "[]",
+    muted_character_ids: Annotated[str, Form()] = "[]",
     first_frame: UploadFile | None = File(None),
     last_frame: UploadFile | None = File(None),
     user_id: str = Depends(require_user),
@@ -1088,6 +1091,7 @@ async def api_v2_generate(
         ),
         ref_image_size="match",
         character_ids=json.dumps(selected_characters),
+        muted_character_ids=json.dumps(_v2_character_ids(muted_character_ids)),
         reference_manifest="{}",
         guide_manifest=json.dumps(
             {"guides": guide_specs},
@@ -1150,8 +1154,10 @@ def _v2_character_references(
     user_id: str,
     *,
     include_voice: bool,
+    muted_character_ids: set[str] | None = None,
 ) -> list[dict]:
     items: list[dict] = []
+    muted = muted_character_ids or set()
     for character_id in character_ids:
         character = db.get_character(character_id, user_id)
         if character is None:
@@ -1176,7 +1182,7 @@ def _v2_character_references(
                     "character_description": character.get("description") or "",
                 }
             )
-        if include_voice and character.get("voice_file"):
+        if include_voice and character_id not in muted and character.get("voice_file"):
             path = Path(str(character["voice_file"]))
             if not path.is_file():
                 raise HTTPException(
@@ -1596,6 +1602,7 @@ async def api_v2_continue(
     seed: Annotated[str, Form()] = "",
     generate_audio: Annotated[bool, Form()] = True,
     character_ids: Annotated[str, Form()] = "[]",
+    muted_character_ids: Annotated[str, Form()] = "[]",
     source_video: UploadFile | None = File(None),
     user_id: str = Depends(require_user),
 ):
@@ -1615,6 +1622,7 @@ async def api_v2_continue(
             selected,
             user_id,
             include_voice=True,
+            muted_character_ids=set(_v2_character_ids(muted_character_ids)),
         )
         items.append(source_item)
         job_id = _v2_enqueue_reference_job(

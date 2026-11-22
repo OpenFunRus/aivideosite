@@ -217,6 +217,7 @@
     formData.set("seed", state.draft.seed.trim());
     formData.set("generate_audio", state.draft.audio ? "true" : "false");
     formData.set("character_ids", JSON.stringify(Array.from(state.selectedCharacterIds)));
+    formData.set("muted_character_ids", JSON.stringify(api.mutedCharacterIds?.() || []));
     if (firstFrameInput?.files?.[0]) formData.set("first_frame", firstFrameInput.files[0]);
     if (lastFrameInput?.files?.[0]) formData.set("last_frame", lastFrameInput.files[0]);
 

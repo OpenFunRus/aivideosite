@@ -265,6 +265,27 @@
   color:#fff;
 }
 .v2-character-rail .v2-character-selectmark .icon{width:14px;height:14px}
+.v2-character-rail .v2-character-voice-button{
+  position:absolute;
+  z-index:5;
+  left:40px;
+  top:8px;
+  width:26px;
+  height:26px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:1px solid rgba(116,126,153,.62);
+  border-radius:8px;
+  background:rgba(13,16,25,.76);
+  backdrop-filter:blur(5px);
+  color:#d7dbea;
+  cursor:pointer;
+}
+.v2-character-rail .v2-character-voice-button:hover:not(:disabled){border-color:#8b72e8;background:rgba(40,31,70,.9);color:#fff}
+.v2-character-rail .v2-character-voice-button.muted{color:#ff9aa8;border-color:rgba(145,72,88,.78);background:rgba(45,20,27,.8)}
+.v2-character-rail .v2-character-voice-button.no-voice{opacity:.52;color:#858da0;border-color:rgba(91,99,120,.55);background:rgba(13,16,25,.7);cursor:not-allowed}
+.v2-character-rail .v2-character-voice-button .icon{width:14px;height:14px}
 .v2-character-rail .v2-character-edit-button{
   position:absolute;
   z-index:5;

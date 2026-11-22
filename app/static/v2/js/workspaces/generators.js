@@ -281,6 +281,7 @@
 
   const currentWorkspaceAssistantSettings = (kind) => {
     const selected_character_ids = W.selectedCharacterIds();
+    const muted_character_ids = W.mutedCharacterIds();
     if (kind === "continue") {
       return {
         workspace: "continue",
@@ -293,6 +294,7 @@
         seed: Number(qs("#v2-continue-seed")?.value || -1),
         generate_audio: Boolean(qs("#v2-continue-audio")?.checked),
         selected_character_ids,
+        muted_character_ids,
         ...librarySourceContext("#v2-continue-library", "#v2-continue-upload"),
       };
     }
@@ -310,6 +312,7 @@
         generate_scene_audio: Boolean(qs("#v2-audio-scene-sound")?.checked),
         generate_audio: Boolean(qs("#v2-audio-scene-sound")?.checked),
         selected_character_ids,
+        muted_character_ids,
         ...(W.audioAssistantContext?.() || {}),
       };
     }
@@ -335,6 +338,7 @@
         audio_end: audioStart + seconds,
         master_track_title: String(track?.title || qs("#v2-clip-audio")?.files?.[0]?.name || ""),
         selected_character_ids,
+        muted_character_ids,
         ...librarySourceContext("#v2-clip-library", "#v2-clip-upload"),
       };
     }
@@ -431,6 +435,7 @@
     data.set("seed", qs("#v2-continue-seed")?.value || "");
     data.set("generate_audio", qs("#v2-continue-audio")?.checked ? "true" : "false");
     data.set("character_ids", JSON.stringify(W.selectedCharacterIds()));
+    data.set("muted_character_ids", JSON.stringify(W.mutedCharacterIds()));
     await W.submitForm("/api/v2/continue", data, qs('button[type="submit"]', form));
   });
 

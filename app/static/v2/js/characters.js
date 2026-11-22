@@ -39,6 +39,9 @@
   let playingVoicePreset = "";
   let voicePreviewAudio = null;
 
+  if (!(state.mutedCharacterIds instanceof Set)) {
+    state.mutedCharacterIds = new Set();
+  }
 
   const syncCreateImageInput = () => {
     if (!createImages || typeof DataTransfer === "undefined") return;
@@ -494,18 +497,49 @@
   const selectedCharacters = () =>
     state.characters.filter((character) => state.selectedCharacterIds.has(String(character.id)));
 
-  const characterBudget = (ids) => {
+  const characterBudget = (ids, mutedIds = state.mutedCharacterIds) => {
     const set = ids instanceof Set ? ids : new Set(ids);
+    const muted = mutedIds instanceof Set ? mutedIds : new Set(mutedIds || []);
     return state.characters.reduce(
       (acc, character) => {
-        if (!set.has(String(character.id))) return acc;
+        const id = String(character.id);
+        if (!set.has(id)) return acc;
+        const voiceActive = Boolean(character.voice) && !muted.has(id);
         acc.images += Number(character.image_count || 0);
-        acc.audios += character.voice ? 1 : 0;
-        acc.total += Number(character.image_count || 0) + (character.voice ? 1 : 0);
+        acc.audios += voiceActive ? 1 : 0;
+        acc.total += Number(character.image_count || 0) + (voiceActive ? 1 : 0);
         return acc;
       },
       { images: 0, audios: 0, total: 0 }
     );
+  };
+
+  const mutedCharacterIds = () => Array.from(state.mutedCharacterIds).map(String);
+
+  const toggleCharacterVoice = (characterId) => {
+    const id = String(characterId);
+    const character = state.characters.find((item) => String(item.id) === id);
+    if (!character?.voice) return;
+
+    if (state.mutedCharacterIds.has(id)) {
+      const candidateMuted = new Set(state.mutedCharacterIds);
+      candidateMuted.delete(id);
+      const budget = characterBudget(state.selectedCharacterIds, candidateMuted);
+      if (budget.audios > 3 || budget.total > 15) {
+        showToast(
+          "Нельзя включить голос: лимит H3 — до 3 audio refs и 15 reference media.",
+          "error"
+        );
+        return;
+      }
+      state.mutedCharacterIds.delete(id);
+    } else {
+      state.mutedCharacterIds.add(id);
+    }
+
+    renderCharacterGrid();
+    api.updateCreateCompatibility?.();
+    saveDraft();
   };
 
   const renderSelectedCharacters = () => {
@@ -626,6 +660,14 @@
     const characterCards = list.map((character) => {
       const id = String(character.id);
       const selected = state.selectedCharacterIds.has(id);
+      const hasVoice = Boolean(character.voice);
+      const muted = !hasVoice || state.mutedCharacterIds.has(id);
+      const voiceTitle = !hasVoice
+        ? "У персонажа нет сохранённого голоса"
+        : muted
+          ? "Включить голос персонажа"
+          : "Заглушить голос персонажа";
+      const voiceIcon = muted ? "icon-volume-off" : "icon-volume";
       const image = character.preview_url
         ? '<img src="' + escapeHtml(character.preview_url) + '" alt="">'
         : '<span class="v2-user-avatar">' + escapeHtml(character.name.slice(0, 1).toUpperCase()) + "</span>";
@@ -635,6 +677,9 @@
             '<span class="v2-character-selectmark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>' +
             image +
             "<strong>" + escapeHtml(character.name) + "</strong>" +
+          "</button>" +
+          '<button class="v2-character-voice-button' + (muted ? " muted" : "") + (!hasVoice ? " no-voice" : "") + '" type="button" data-character-voice-toggle="' + escapeHtml(id) + '" title="' + escapeHtml(voiceTitle) + '" aria-label="' + escapeHtml(voiceTitle) + '"' + (!hasVoice ? " disabled" : "") + '>' +
+            '<svg class="icon"><use href="/static/icons.svg#' + voiceIcon + '"></use></svg>' +
           "</button>" +
           '<button class="v2-character-edit-button" type="button" data-character-edit="' + escapeHtml(id) + '" title="Редактировать персонажа" aria-label="Редактировать персонажа">' +
             '<svg class="icon"><use href="/static/icons.svg#icon-settings"></use></svg>' +
@@ -649,6 +694,9 @@
     qsa("[data-character-select]", characterGrid).forEach((button) => {
       button.addEventListener("click", () => toggleCharacter(button.dataset.characterSelect));
     });
+    qsa("[data-character-voice-toggle]", characterGrid).forEach((button) => {
+      button.addEventListener("click", () => toggleCharacterVoice(button.dataset.characterVoiceToggle));
+    });
     qsa("[data-character-edit]", characterGrid).forEach((button) => {
       button.addEventListener("click", () => openEditDialog(button.dataset.characterEdit));
     });
@@ -661,6 +709,9 @@
       const valid = new Set(state.characters.map((item) => String(item.id)));
       state.selectedCharacterIds = new Set(
         Array.from(state.selectedCharacterIds).filter((id) => valid.has(String(id)))
+      );
+      state.mutedCharacterIds = new Set(
+        Array.from(state.mutedCharacterIds).filter((id) => valid.has(String(id)))
       );
       renderSelectedCharacters();
       renderCharacterGrid();
@@ -678,6 +729,7 @@
     seed: state.draft.seed.trim() ? Number(state.draft.seed) : -1,
     generate_audio: Boolean(state.draft.audio),
     selected_character_ids: Array.from(state.selectedCharacterIds),
+    muted_character_ids: mutedCharacterIds(),
     available_characters: state.characters.map((item) => ({
       id: item.id,
       name: item.name,
@@ -691,6 +743,8 @@
 
   Object.assign(api, {
     selectedCharacters,
+    mutedCharacterIds,
+    characterBudget,
     refreshCharacters,
     currentCreateAssistantSettings,
     currentAssistantSettings: currentCreateAssistantSettings,
