@@ -139,3 +139,26 @@
 .v2-character-current-voice.removed strong{color:#ff8d9b}
 .v2-character-current-voice.replacing{border-color:#56478f;background:#19172b}
 @media(max-width:620px){.v2-character-action-spacer{display:none}.v2-character-current-voice{align-items:stretch;flex-direction:column}.v2-character-current-voice button{width:100%}}
+
+
+/* Character rail card grid — add first, selected next, remaining alphabetical */
+.v2-character-rail .v2-character-grid{gap:10px;margin-top:14px;padding-right:3px}
+.v2-character-rail .v2-character-card,
+.v2-character-rail .v2-character-add-card{min-height:148px;border-radius:14px}
+.v2-character-rail .v2-character-card{position:relative;padding:0;border:1px solid #30364a;background:#191d29;overflow:hidden}
+.v2-character-rail .v2-character-card:hover{border-color:#545d7c}
+.v2-character-rail .v2-character-card.selected{border-color:#815fff;box-shadow:0 0 0 2px rgba(117,87,255,.14),0 10px 24px rgba(74,48,160,.16)}
+.v2-character-rail .v2-character-card-main{width:100%;min-height:148px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:9px;padding:38px 10px 13px;border:0;background:transparent;color:inherit;cursor:pointer;text-align:center}
+.v2-character-rail .v2-character-card img{width:78px;height:78px;border-radius:14px;object-fit:cover;background:#0d0f16}
+.v2-character-rail .v2-character-card-main>.v2-user-avatar{width:78px;height:78px;display:grid;place-items:center;border-radius:14px;background:#252a39;font-size:26px}
+.v2-character-rail .v2-character-card strong{width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:1.2}
+.v2-character-rail .v2-character-selectmark{left:10px;right:auto;top:10px;bottom:auto;width:25px;height:25px;border-radius:7px;border:1px solid #596078;background:#151925;color:transparent}
+.v2-character-rail .v2-character-card.selected .v2-character-selectmark{background:#7657ff;border-color:#9a83ff;color:#fff}
+.v2-character-rail .v2-character-selectmark .icon{width:15px;height:15px}
+.v2-character-rail .v2-character-edit-button{right:9px;top:9px;width:27px;height:27px;border-radius:8px}
+.v2-character-rail .v2-character-edit-button .icon{width:14px;height:14px}
+.v2-character-add-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:14px;border:1px dashed #7657c8;background:linear-gradient(145deg,#171a29,#121521);color:#c8b9ff;cursor:pointer}
+.v2-character-add-card:hover{border-color:#9a7cff;background:linear-gradient(145deg,#1d1932,#151724);color:#fff}
+.v2-character-add-card-icon{width:44px;height:44px;display:grid;place-items:center;border:1px solid #7657e8;border-radius:12px;background:#251d48;color:#b9a4ff;box-shadow:0 0 20px rgba(118,87,255,.12)}
+.v2-character-add-card-icon .icon{width:22px;height:22px}
+.v2-character-add-card strong{font-size:11px;font-weight:750;text-align:center}

@@ -8,10 +8,6 @@
       <strong>Персонажи</strong>
       <small>Выбор героев для генерации</small>
     </span>
-    <button class="v2-character-add" id="v2-character-add" type="button" title="Добавить персонажа">
-      <svg class="icon"><use href="/static/icons.svg#icon-plus"></use></svg>
-      <span>Добавить</span>
-    </button>
   </div>
 
   <div class="v2-character-panel">
@@ -20,15 +16,6 @@
       <input id="v2-character-search" type="search" placeholder="Поиск по имени...">
     </label>
 
-    <div class="v2-character-tabs">
-      <button class="active" type="button" data-character-tab="all">Все</button>
-      <button type="button" data-character-tab="selected">Выбранные <span id="v2-selected-tab-count">0</span></button>
-      <button type="button" data-character-tab="recent">Недавние</button>
-    </div>
-
-    <div class="v2-selected-characters v2-selected-characters-rail" id="v2-selected-characters">
-      <span class="v2-empty-inline">Персонажи не выбраны</span>
-    </div>
 
     <div class="v2-character-grid" id="v2-character-grid"></div>
     <div class="v2-character-empty" id="v2-character-empty" hidden>Персонажи не найдены.</div>

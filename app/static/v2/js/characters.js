@@ -313,7 +313,6 @@
     requestAnimationFrame(() => nameInput?.focus());
   };
 
-  qs("#v2-character-add")?.addEventListener("click", openCreateDialog);
   qsa("[data-character-create-close]").forEach((button) => {
     button.addEventListener("click", () => createDialog?.close());
   });
@@ -558,21 +557,32 @@
   };
 
   const filteredCharacters = () => {
-    const search = (characterSearch?.value || "").trim().toLowerCase();
-    let list = [...state.characters];
-    if (state.characterTab === "selected") {
-      list = list.filter((item) => state.selectedCharacterIds.has(String(item.id)));
-    } else if (state.characterTab === "recent") {
-      const order = new Map(state.recentCharacterIds.map((id, index) => [String(id), index]));
-      list = list
-        .filter((item) => order.has(String(item.id)))
-        .sort((a, b) => order.get(String(a.id)) - order.get(String(b.id)));
-    }
-    if (search) {
-      list = list.filter((item) =>
-        (String(item.name || "") + " " + String(item.description || "")).toLowerCase().includes(search)
+    const search = (characterSearch?.value || "").trim().toLocaleLowerCase("ru");
+    const selectedOrder = new Map(
+      Array.from(state.selectedCharacterIds).map((id, index) => [String(id), index])
+    );
+    const list = state.characters.filter((item) => {
+      if (!search) return true;
+      return (String(item.name || "") + " " + String(item.description || ""))
+        .toLocaleLowerCase("ru")
+        .includes(search);
+    });
+
+    list.sort((a, b) => {
+      const aId = String(a.id);
+      const bId = String(b.id);
+      const aSelected = selectedOrder.has(aId);
+      const bSelected = selectedOrder.has(bId);
+      if (aSelected && bSelected) {
+        return selectedOrder.get(aId) - selectedOrder.get(bId);
+      }
+      if (aSelected !== bSelected) return aSelected ? -1 : 1;
+      return String(a.name || "").localeCompare(
+        String(b.name || ""),
+        ["ru", "en"],
+        { sensitivity: "base", numeric: true }
       );
-    }
+    });
     return list;
   };
 
@@ -607,19 +617,24 @@
     if (total) total.textContent = state.characters.length + " персонажей";
     if (characterEmpty) characterEmpty.hidden = list.length > 0;
 
-    characterGrid.innerHTML = list.map((character) => {
+    const addCard =
+      '<button class="v2-character-add-card" type="button" data-character-add-card>' +
+        '<span class="v2-character-add-card-icon"><svg class="icon"><use href="/static/icons.svg#icon-plus"></use></svg></span>' +
+        '<strong>Добавить персонажа</strong>' +
+      '</button>';
+
+    const characterCards = list.map((character) => {
       const id = String(character.id);
       const selected = state.selectedCharacterIds.has(id);
       const image = character.preview_url
         ? '<img src="' + escapeHtml(character.preview_url) + '" alt="">'
         : '<span class="v2-user-avatar">' + escapeHtml(character.name.slice(0, 1).toUpperCase()) + "</span>";
-      const meta = Number(character.image_count || 0) + " фото" + (character.voice ? " · голос" : "");
       return (
         '<div class="v2-character-card' + (selected ? " selected" : "") + '" data-character-id="' + escapeHtml(id) + '">' +
           '<button class="v2-character-card-main" type="button" data-character-select="' + escapeHtml(id) + '">' +
-            image +
-            "<span><strong>" + escapeHtml(character.name) + "</strong><small>" + escapeHtml(meta) + "</small></span>" +
             '<span class="v2-character-selectmark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>' +
+            image +
+            "<strong>" + escapeHtml(character.name) + "</strong>" +
           "</button>" +
           '<button class="v2-character-edit-button" type="button" data-character-edit="' + escapeHtml(id) + '" title="Редактировать персонажа" aria-label="Редактировать персонажа">' +
             '<svg class="icon"><use href="/static/icons.svg#icon-settings"></use></svg>' +
@@ -628,6 +643,9 @@
       );
     }).join("");
 
+    characterGrid.innerHTML = addCard + characterCards;
+
+    qs("[data-character-add-card]", characterGrid)?.addEventListener("click", openCreateDialog);
     qsa("[data-character-select]", characterGrid).forEach((button) => {
       button.addEventListener("click", () => toggleCharacter(button.dataset.characterSelect));
     });
@@ -670,13 +688,6 @@
   });
 
   characterSearch?.addEventListener("input", renderCharacterGrid);
-  qsa("[data-character-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.characterTab = button.dataset.characterTab || "all";
-      qsa("[data-character-tab]").forEach((item) => item.classList.toggle("active", item === button));
-      renderCharacterGrid();
-    });
-  });
 
   Object.assign(api, {
     selectedCharacters,

@@ -428,7 +428,7 @@ html {
     width: 322px;
   }
   .v2-character-rail .v2-character-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
   }
 }
 
