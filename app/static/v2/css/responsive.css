@@ -429,6 +429,9 @@ html {
   }
   .v2-character-rail .v2-character-grid {
     grid-template-columns: 1fr 1fr;
+    column-gap: 10px !important;
+    row-gap: 16px !important;
+    align-items: start;
   }
 }
 
@@ -1016,9 +1019,10 @@ html {
 
   .v2-character-rail .v2-character-grid {
     grid-template-columns: repeat(2,minmax(0,1fr)) !important;
-    column-gap: 10px;
-    row-gap: 10px;
-    padding: 0 6px 14px 4px;
+    column-gap: 10px !important;
+    row-gap: 16px !important;
+    padding: 0 6px 16px 4px;
+    align-items: start;
   }
 
   .v2-character-rail .v2-character-card,
@@ -1027,7 +1031,7 @@ html {
     aspect-ratio: 1 / 1;
     height: auto;
     min-height: 0;
-    margin-bottom: 6px;
+    margin: 0;
     padding: 0;
     border-radius: 12px;
   }
@@ -1106,6 +1110,6 @@ html {
   .v2-app,.v2-app.left-open,.v2-app.right-open,.v2-app.left-open.right-open{grid-template-columns:218px minmax(0,1fr) 300px}
   .v2-character-rail,.v2-app.right-open .v2-character-rail{width:300px}
   .v2-character-panel,.v2-app.right-open .v2-character-panel{width:276px}
-  .v2-character-rail .v2-character-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;column-gap:10px;row-gap:10px;padding-inline:4px 6px}
+  .v2-character-rail .v2-character-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;column-gap:10px!important;row-gap:16px!important;padding-inline:4px 6px;align-items:start}
   .v2-character-rail .v2-character-card,.v2-character-rail .v2-character-add-card{aspect-ratio:1/1;height:auto;min-height:0}
 }
