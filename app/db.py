@@ -49,6 +49,7 @@ def init_db() -> None:
                 description TEXT NOT NULL DEFAULT '',
                 images_json TEXT NOT NULL DEFAULT '[]',
                 voice_file TEXT,
+                voice_preset_id TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -83,6 +84,7 @@ def init_db() -> None:
         )
         _ensure_jobs_columns(conn)
         _ensure_owner_columns(conn)
+        _ensure_character_columns(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_jobs_owner_created "
             "ON jobs(owner_id, created_at DESC)"
@@ -119,6 +121,14 @@ def _ensure_owner_columns(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE media ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'user1'"
         )
+
+
+def _ensure_character_columns(conn: sqlite3.Connection) -> None:
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(characters)").fetchall()
+    }
+    if "voice_preset_id" not in columns:
+        conn.execute("ALTER TABLE characters ADD COLUMN voice_preset_id TEXT")
 
 
 def recover_interrupted_jobs() -> int:
@@ -697,6 +707,7 @@ def insert_character(
     description: str,
     images: list[str],
     voice_file: str | None,
+    voice_preset_id: str | None,
 ) -> None:
     now = utcnow()
     with connect() as conn:
@@ -704,8 +715,8 @@ def insert_character(
             """
             INSERT INTO characters(
                 id, owner_id, name, description, images_json, voice_file,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                voice_preset_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 character_id,
@@ -714,6 +725,7 @@ def insert_character(
                 description,
                 json.dumps(images, ensure_ascii=False),
                 voice_file,
+                voice_preset_id,
                 now,
                 now,
             ),
@@ -751,12 +763,14 @@ def update_character(
     description: str,
     images: list[str],
     voice_file: str | None,
+    voice_preset_id: str | None,
 ) -> dict[str, Any] | None:
     with connect() as conn:
         cur = conn.execute(
             """
             UPDATE characters
-               SET name=?, description=?, images_json=?, voice_file=?, updated_at=?
+               SET name=?, description=?, images_json=?, voice_file=?,
+                   voice_preset_id=?, updated_at=?
              WHERE id=? AND owner_id=?
             """,
             (
@@ -764,6 +778,7 @@ def update_character(
                 description,
                 json.dumps(images, ensure_ascii=False),
                 voice_file,
+                voice_preset_id,
                 utcnow(),
                 character_id,
                 owner_id,

@@ -32,6 +32,7 @@
   let keptExistingImageIndices = new Set();
   let editingCharacterId = "";
   let existingVoice = false;
+  let existingVoicePreset = "";
   let removeExistingVoice = false;
   let voicePresets = [];
   let voicePresetsLoaded = false;
@@ -185,7 +186,7 @@
     const preset = voicePresets.find((item) => String(item.id) === id);
     if (!preset) return;
 
-    if (selectedVoicePreset !== id) {
+    if (selectedVoicePreset !== id || removeExistingVoice) {
       selectedVoicePreset = id;
       if (voicePresetInput) voicePresetInput.value = id;
       if (createVoice) createVoice.value = "";
@@ -234,7 +235,10 @@
     currentVoice.hidden = !(editingCharacterId && existingVoice);
     if (currentVoice.hidden) return;
 
-    const replacementSelected = Boolean(selectedVoicePreset || createVoice?.files?.[0]);
+    const replacementSelected = Boolean(
+      createVoice?.files?.[0] ||
+      (selectedVoicePreset && selectedVoicePreset !== existingVoicePreset)
+    );
     currentVoice.classList.toggle("removed", removeExistingVoice);
     currentVoice.classList.toggle("replacing", replacementSelected);
 
@@ -262,6 +266,7 @@
     keptExistingImageIndices = new Set();
     editingCharacterId = "";
     existingVoice = false;
+    existingVoicePreset = "";
     removeExistingVoice = false;
     selectedVoicePreset = "";
     if (voicePresetInput) voicePresetInput.value = "";
@@ -299,6 +304,9 @@
       : (character.preview_url ? [character.preview_url] : []);
     keptExistingImageIndices = new Set(existingImageUrls.map((_, index) => index));
     existingVoice = Boolean(character.voice);
+    existingVoicePreset = String(character.voice_preset_id || "");
+    selectedVoicePreset = existingVoicePreset;
+    if (voicePresetInput) voicePresetInput.value = selectedVoicePreset;
 
     const nameInput = qs("#v2-character-create-name");
     const descriptionInput = qs("#v2-character-create-description");
@@ -428,7 +436,7 @@
       createImageFiles.forEach((file) => data.append("images", file, file.name));
       const voice = createVoice?.files?.[0];
 
-      if (selectedVoicePreset) {
+      if (selectedVoicePreset && (!editedId || selectedVoicePreset !== existingVoicePreset)) {
         data.set("voice_preset", selectedVoicePreset);
       } else if (voice) {
         data.set("voice", voice, voice.name);

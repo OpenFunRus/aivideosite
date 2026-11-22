@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import json
 import math
@@ -366,6 +367,7 @@ async def api_create_character(
             description=description,
             images=image_files,
             voice_file=voice_file,
+            voice_preset_id=voice_preset or None,
         )
     except Exception:
         for path in temp_paths:
@@ -453,7 +455,9 @@ async def api_update_character(
     target_dir.mkdir(parents=True, exist_ok=True)
     next_images = [existing_images[index] for index in keep_indices]
     old_voice_file = character.get("voice_file")
+    old_voice_preset_id = _character_voice_preset_id(character)
     next_voice_file = old_voice_file
+    next_voice_preset_id = old_voice_preset_id
     created_paths: list[Path] = []
     temp_paths: list[Path] = []
 
@@ -473,6 +477,7 @@ async def api_update_character(
 
         if remove_voice:
             next_voice_file = None
+            next_voice_preset_id = None
         elif has_custom_voice:
             path = await save_upload(
                 voice,
@@ -485,6 +490,7 @@ async def api_update_character(
             temp_paths.remove(path)
             created_paths.append(destination)
             next_voice_file = str(destination)
+            next_voice_preset_id = None
         elif voice_preset:
             preset_path = _voice_preset_path(voice_preset)
             if not preset_path.is_file():
@@ -496,6 +502,7 @@ async def api_update_character(
             shutil.copy2(preset_path, destination)
             created_paths.append(destination)
             next_voice_file = str(destination)
+            next_voice_preset_id = voice_preset
 
         updated = db.update_character(
             character_id,
@@ -504,6 +511,7 @@ async def api_update_character(
             description=description,
             images=next_images,
             voice_file=next_voice_file,
+            voice_preset_id=next_voice_preset_id,
         )
         if updated is None:
             raise HTTPException(404, "Персонаж не найден.")
@@ -2445,6 +2453,41 @@ def _voice_preset_path(preset_id: str) -> Path:
     return settings.data_dir / "voice_presets" / f"{preset_id}.wav"
 
 
+def _file_sha256(path: Path) -> bytes:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.digest()
+
+
+def _character_voice_preset_id(character: dict) -> str | None:
+    stored = str(character.get("voice_preset_id") or "").strip()
+    if stored in VOICE_PRESETS:
+        return stored
+
+    voice_value = character.get("voice_file")
+    if not voice_value:
+        return None
+    voice_path = Path(str(voice_value))
+    try:
+        if not voice_path.is_file():
+            return None
+        voice_size = voice_path.stat().st_size
+        voice_digest: bytes | None = None
+        for preset_id in VOICE_PRESETS:
+            preset_path = _voice_preset_path(preset_id)
+            if not preset_path.is_file() or preset_path.stat().st_size != voice_size:
+                continue
+            if voice_digest is None:
+                voice_digest = _file_sha256(voice_path)
+            if _file_sha256(preset_path) == voice_digest:
+                return preset_id
+    except OSError:
+        return None
+    return None
+
+
 def _voice_presets_public() -> list[dict]:
     result: list[dict] = []
     for preset_id, preset in VOICE_PRESETS.items():
@@ -2478,6 +2521,7 @@ def _character_public(character: dict | None) -> dict:
         "image_count": len(images),
         "image_urls": image_urls,
         "voice": bool(character.get("voice_file")),
+        "voice_preset_id": _character_voice_preset_id(character),
         "preview_url": image_urls[0] if image_urls else None,
         "created_at": character.get("created_at"),
         "updated_at": character.get("updated_at"),
