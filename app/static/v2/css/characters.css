@@ -161,13 +161,14 @@
   min-width:0;
   min-height:0!important;
   height:auto!important;
-  aspect-ratio:1/1!important;
   align-self:start;
   margin:0!important;
   padding:0!important;
   border-radius:12px;
   box-sizing:border-box;
 }
+.v2-character-rail .v2-character-card{aspect-ratio:auto!important}
+.v2-character-rail .v2-character-add-card{aspect-ratio:1/1!important}
 .v2-character-rail .v2-character-card{
   position:relative;
   border:1px solid #30364a;
@@ -180,11 +181,12 @@
   box-shadow:0 0 0 1px rgba(117,87,255,.34);
 }
 .v2-character-rail .v2-character-card-main{
-  position:absolute!important;
-  inset:0;
+  position:relative!important;
+  inset:auto!important;
   width:100%!important;
-  height:100%!important;
+  height:auto!important;
   min-height:0!important;
+  aspect-ratio:1/1!important;
   display:block!important;
   padding:0!important;
   border:0;
