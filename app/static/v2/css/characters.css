@@ -142,12 +142,12 @@
 
 
 /* Character rail card grid — add first, selected next, remaining alphabetical */
-.v2-character-rail .v2-character-grid{column-gap:10px;row-gap:12px;margin-top:14px;padding:0 6px 12px 4px}
+.v2-character-rail .v2-character-grid{column-gap:10px;row-gap:10px;margin-top:14px;padding:0 6px 14px 4px}
 .v2-character-rail .v2-character-card,
-.v2-character-rail .v2-character-add-card{aspect-ratio:1/1;min-height:0;border-radius:12px}
+.v2-character-rail .v2-character-add-card{aspect-ratio:1/1;min-height:0;margin-bottom:6px;border-radius:12px}
 .v2-character-rail .v2-character-card{position:relative;padding:0;border:1px solid #30364a;background:#11141d;overflow:hidden}
 .v2-character-rail .v2-character-card:hover{border-color:#545d7c}
-.v2-character-rail .v2-character-card.selected{border-color:#815fff;box-shadow:0 0 0 2px rgba(117,87,255,.14),0 10px 24px rgba(74,48,160,.16)}
+.v2-character-rail .v2-character-card.selected{border-color:#815fff;box-shadow:0 0 0 2px rgba(117,87,255,.14)}
 .v2-character-rail .v2-character-card-main{position:relative;width:100%;height:100%;min-height:0;display:block;padding:0;border:0;background:#11141d;color:inherit;cursor:pointer;text-align:center;overflow:hidden}
 .v2-character-rail .v2-character-card img{position:absolute;inset:0;width:100%;height:100%;border-radius:0;object-fit:cover;background:#0d0f16}
 .v2-character-rail .v2-character-card-main>.v2-user-avatar{position:absolute;inset:0;width:100%;height:100%;display:grid;place-items:center;border-radius:0;background:linear-gradient(145deg,#292f42,#171b28);font-size:34px}
