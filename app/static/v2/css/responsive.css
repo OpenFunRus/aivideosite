@@ -383,25 +383,6 @@ html {
   width: 30px;
   height: 30px;
 }
-.v2-character-rail .v2-character-grid {
-  flex: 1 1 auto;
-  min-height: 0;
-  grid-template-columns: 1fr 1fr;
-  padding: 0 2px 10px 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  align-content: start;
-}
-.v2-character-rail .v2-character-card {
-  grid-template-columns: 44px minmax(0,1fr) 18px;
-  min-height: 60px;
-  gap: 7px;
-  padding: 6px;
-}
-.v2-character-rail .v2-character-card img {
-  width: 44px;
-  height: 44px;
-}
 .v2-character-rail .v2-character-dialog-foot {
   flex: 0 0 auto;
   margin: 0;
@@ -426,12 +407,6 @@ html {
   }
   .v2-character-panel {
     width: 322px;
-  }
-  .v2-character-rail .v2-character-grid {
-    grid-template-columns: 1fr 1fr;
-    column-gap: 10px !important;
-    row-gap: 16px !important;
-    align-items: start;
   }
 }
 
@@ -714,10 +689,6 @@ html {
     width: 100%;
     height: calc(100vh - 138px);
   }
-  .v2-character-rail .v2-character-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .v2-main {
     padding: 82px 13px 28px;
   }
@@ -803,9 +774,6 @@ html {
     display: none;
   }
 
-  .v2-character-rail .v2-character-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 
@@ -977,124 +945,6 @@ html {
     font-size: 11px;
   }
 
-  .v2-character-rail .v2-character-tabs {
-    grid-template-columns: repeat(3, minmax(0,1fr));
-    gap: 5px;
-    padding: 10px 0 9px;
-  }
-
-  .v2-character-rail .v2-character-tabs button {
-    min-width: 0;
-    height: 34px;
-    padding: 0 5px;
-    font-size: 9px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .v2-selected-characters-rail {
-    max-height: 92px;
-    margin-bottom: 9px;
-    padding: 7px;
-  }
-
-  .v2-selected-characters-rail .v2-character-chip {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .v2-selected-characters-rail .v2-character-chip img {
-    width: 28px;
-    height: 28px;
-  }
-
-  .v2-selected-characters-rail .v2-character-chip strong {
-    min-width: 0;
-    flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .v2-character-rail .v2-character-grid {
-    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
-    column-gap: 10px !important;
-    row-gap: 16px !important;
-    padding: 0 6px 16px 4px;
-    align-items: start;
-  }
-
-  .v2-character-rail .v2-character-card,
-  .v2-character-rail .v2-character-add-card {
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    height: auto;
-    min-height: 0;
-    margin: 0;
-    padding: 0;
-    border-radius: 12px;
-  }
-
-  .v2-character-rail .v2-character-card-main {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    display: block;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  .v2-character-rail .v2-character-card img,
-  .v2-character-rail .v2-character-card-main>.v2-user-avatar {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 0;
-  }
-
-  .v2-character-rail .v2-character-card strong {
-    position: absolute;
-    z-index: 3;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: block;
-    width: 100%;
-    padding: 24px 7px 8px;
-    font-size: 11px;
-    line-height: 1.2;
-    text-align: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .v2-character-rail .v2-character-selectmark {
-    z-index: 4;
-    left: 8px;
-    top: 8px;
-    right: auto;
-    bottom: auto;
-    width: 24px;
-    height: 24px;
-  }
-
-  .v2-character-rail .v2-character-edit-button {
-    z-index: 5;
-    top: 8px;
-    right: 8px;
-    width: 26px;
-    height: 26px;
-  }
-
-  .v2-character-rail .v2-character-add-card {
-    justify-content: center;
-    gap: 10px;
-  }
-
   .v2-character-rail .v2-character-dialog-foot {
     padding-top: 9px;
   }
@@ -1110,6 +960,4 @@ html {
   .v2-app,.v2-app.left-open,.v2-app.right-open,.v2-app.left-open.right-open{grid-template-columns:218px minmax(0,1fr) 300px}
   .v2-character-rail,.v2-app.right-open .v2-character-rail{width:300px}
   .v2-character-panel,.v2-app.right-open .v2-character-panel{width:276px}
-  .v2-character-rail .v2-character-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;column-gap:10px!important;row-gap:16px!important;padding-inline:4px 6px;align-items:start}
-  .v2-character-rail .v2-character-card,.v2-character-rail .v2-character-add-card{aspect-ratio:1/1;height:auto;min-height:0}
 }
