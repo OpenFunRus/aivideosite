@@ -129,7 +129,7 @@
       qs("#v2-first-frame")?.files?.[0] ||
       qs("#v2-last-frame")?.files?.[0]
     );
-    const audioDrivesH3 = audioMode && hasPresets;
+    const audioDrivesH3 = audioMode && (hasPresets || hasFrames);
     button.disabled = true;
     showToast(audioMode ? "Локальный ИИ улучшает промт под аудиодорожку…" : "Локальный ИИ улучшает промт…");
     try {
@@ -137,8 +137,9 @@
         ? (
           audioDrivesH3
             ? (
-              "Это режим Digital Human с driving audio внутри единой страницы «Видео»: выбранные Characters/Locations/Misc дают semantic visual references. " +
-              "Master track передаётся модели как управляющее аудио: синхронизируй видимую артикуляцию, жесты и body motion с ним, но не проси H3 сочинять или повторять этот трек. " +
+              "Это режим Digital Human с driving audio внутри единой страницы «Видео»: visual reference берётся из выбранных Characters/Locations/Misc либо из First/Last кадра. " +
+              "Если semantic preset не выбран, backend повторно использует первый доступный endpoint-кадр как visual anchor и отдельно закрепляет First/Last точными Timeline Guides. " +
+              "Master track передаётся модели как управляющее аудио: синхронизируй видимую артикуляцию, пение, жесты и body motion с ним, но не проси H3 сочинять или повторять этот трек. " +
               "non_diegetic_music: N/A. Если generate_scene_audio выключен — overall_soundscape: N/A; если включен — только физические/фоновые звуки сцены. " +
               "First/Last при наличии backend закрепляет отдельно как exact native MiniMaxH3AddGuide anchors, поэтому не придумывай для них Picture labels и не добавляй FL2VA alignment line. "
             )
