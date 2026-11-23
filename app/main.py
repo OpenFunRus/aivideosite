@@ -2228,10 +2228,28 @@ async def api_v2_audio(
             ),
         }
 
-        # The master track only becomes H3 driving audio when a real semantic visual
-        # reference exists. Without one, keep ordinary FL2VA/text-to-video behavior:
-        # prompt-only, First, Last, or First -> Last, then mux the chosen track.
-        use_driving_audio = has_semantic_visual
+        # Digital Human needs at least one visual reference. Saved semantic presets
+        # satisfy that requirement directly; otherwise reuse the first available
+        # endpoint image (First preferred, otherwise Last) as the semantic visual anchor.
+        # The same endpoint image remains an exact native MiniMaxH3AddGuide below.
+        use_driving_audio = has_semantic_visual or bool(frame_paths)
+        if use_driving_audio and not has_semantic_visual:
+            anchor_guide = guides[0]
+            items.append(
+                {
+                    "type": "image",
+                    "path": frame_paths[0],
+                    "temporary": True,
+                    "source_name": anchor_guide["source_name"],
+                    "role": "composition",
+                    "retention": "partially_preserved",
+                    "note": (
+                        "Endpoint image also used as the required Digital Human visual "
+                        "reference. Exact endpoint anchoring is applied separately through "
+                        "MiniMaxH3AddGuide."
+                    ),
+                }
+            )
         if use_driving_audio:
             items.append(audio_item)
 
