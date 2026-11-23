@@ -1706,11 +1706,12 @@ async def api_v2_track_audio(
 @app.get("/api/v2/state")
 async def api_v2_state(
     media_page: int = Query(1, ge=1),
-    jobs_page: int = Query(1, ge=1),
     user_id: str = Depends(require_user),
 ):
     media_data = db.list_media_page(media_page, 40, owner_id=user_id)
-    jobs_data = db.list_jobs_page(jobs_page, 20, owner_id=user_id)
+    for old_job in db.prune_job_history(user_id, keep=20):
+        _cleanup_job_uploads(old_job)
+    jobs = db.list_jobs(20, owner_id=user_id)
     active_global = []
     for job in db.list_jobs(200):
         if job.get("status") not in {"queued", "running"}:
@@ -1742,10 +1743,7 @@ async def api_v2_state(
         "media_pagination": {
             key: media_data[key] for key in ("page", "page_size", "total", "pages")
         },
-        "jobs": jobs_data["items"],
-        "jobs_pagination": {
-            key: jobs_data[key] for key in ("page", "page_size", "total", "pages")
-        },
+        "jobs": jobs,
         "active_global": active_global,
         "counts": db.state_counts(user_id),
         "global_counts": db.state_counts(),

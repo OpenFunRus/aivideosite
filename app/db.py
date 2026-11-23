@@ -548,6 +548,37 @@ def list_jobs(
     return [_decode_job(row) for row in rows]
 
 
+def prune_job_history(
+    owner_id: str,
+    keep: int = 20,
+) -> list[dict[str, Any]]:
+    keep = max(1, int(keep))
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute(
+            """
+            SELECT *
+              FROM jobs
+             WHERE owner_id=?
+             ORDER BY created_at DESC
+             LIMIT -1 OFFSET ?
+            """,
+            (owner_id, keep),
+        ).fetchall()
+        removable = [
+            row
+            for row in rows
+            if row["status"] not in {"queued", "running"}
+        ]
+        if removable:
+            conn.executemany(
+                "DELETE FROM jobs WHERE id=? AND owner_id=?",
+                [(row["id"], owner_id) for row in removable],
+            )
+        conn.execute("COMMIT")
+    return [_decode_job(row) for row in removable]
+
+
 def list_jobs_page(
     page: int,
     page_size: int = PAGE_SIZE,

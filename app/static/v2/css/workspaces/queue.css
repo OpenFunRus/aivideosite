@@ -1,4 +1,4 @@
-/* Queue workspace — canonical V2 cards, GPU overview and paginated jobs. */
+/* Queue workspace — GPU overview and a rolling log of the latest 20 jobs. */
 .v2-queue-toolbar{margin:0 0 18px}
 .v2-queue-toolbar .v2-secondary-button{min-height:40px;font-size:12px}
 .v2-queue-toolbar .icon{width:17px;height:17px}
@@ -40,17 +40,11 @@
 .v2-job-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
 .v2-job-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:37px;padding:0 12px;border:1px solid #46506c;border-radius:10px;background:#222738;color:#e3e7f2;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer}
 .v2-job-actions button .icon{width:16px;height:16px}
-.v2-job-actions .v2-queue-stop,.v2-job-actions .v2-queue-delete{border-color:#83394b;background:transparent;color:#ff758c}
+.v2-job-actions .v2-queue-stop{border-color:#83394b;background:transparent;color:#ff758c}
 .v2-job-actions .v2-queue-delete{width:37px;padding:0;border-color:transparent}
 .v2-job-actions button:hover{background:#2b3248}
-.v2-job-actions .v2-queue-stop:hover,.v2-job-actions .v2-queue-delete:hover{background:rgba(175,50,72,.12)}
-.v2-queue-workspace .v2-empty-state[hidden],.v2-queue-pagination[hidden]{display:none!important}
-.v2-queue-pagination{display:flex;align-items:center;flex-direction:column;gap:11px;margin:28px 0 12px;color:#a0a8bc;font-size:11px}
-.v2-queue-pagination-buttons{display:flex;align-items:center;gap:7px}
-.v2-queue-pagination-buttons button{min-width:36px;height:36px;padding:0 9px;border:1px solid #343b52;border-radius:9px;background:#161a27;color:#d9deec;font-size:12px;cursor:pointer}
-.v2-queue-pagination-buttons button.active{border-color:#7657ff;background:linear-gradient(145deg,#7657ff,#5d3cd9);color:#fff}
-.v2-queue-pagination-buttons button:disabled{opacity:.45;cursor:not-allowed}
-.v2-queue-page-ellipsis{padding:0 5px;color:#9ca4b8}
+.v2-job-actions .v2-queue-stop:hover:hover{background:rgba(175,50,72,.12)}
+.v2-queue-workspace .v2-empty-state[hidden]{display:none!important}
 @media(max-width:1400px){
   .v2-job{grid-template-columns:40px minmax(140px,1.5fr) minmax(80px,.6fr) minmax(120px,.9fr) 75px auto;gap:10px}
   .v2-job-actions button{padding:0 9px}

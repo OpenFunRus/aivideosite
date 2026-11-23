@@ -7,7 +7,6 @@
   const W = {
     snapshot: null,
     allMedia: [],
-    queuePage: 1,
     refreshing: null,
     objectUrls: new Map(),
   };
@@ -154,7 +153,7 @@
     if (W.refreshing) return W.refreshing;
     W.refreshing = (async () => {
       try {
-        const statePromise = fetchJson("/api/v2/state?media_page=1&jobs_page=" + encodeURIComponent(W.queuePage));
+        const statePromise = fetchJson("/api/v2/state?media_page=1");
         const mediaPromise =
           includeMedia || !W.allMedia.length
             ? fetchJson("/api/editor/media")

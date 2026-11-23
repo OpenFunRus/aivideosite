@@ -30,7 +30,6 @@
     if (running) actions.push('<button class="v2-queue-stop" type="button" data-job-action="cancel">' + icon("x") + 'Остановить</button>');
     if (status === "failed") actions.push('<button type="button" data-job-action="retry">' + icon("refresh") + 'Повторить</button>');
     if (job.result_media_id) actions.push('<button class="v2-queue-result" type="button" data-job-action="open">' + icon("player-play") + 'Результат</button>');
-    if (!running) actions.push('<button class="v2-queue-delete" type="button" data-job-action="delete" aria-label="Удалить задачу" title="Удалить задачу">' + icon("trash") + '</button>');
     const subtitle = [job.stage || "H3", job.gpu_backend || ""].filter(Boolean).join(" · ");
     return '<article class="v2-job" data-job-id="' + escapeHtml(job.id) + '" data-status="' + escapeHtml(status) + '">' +
       '<span class="v2-job-icon">' + icon("video") + '</span>' +
@@ -39,28 +38,6 @@
       '<div class="v2-job-progress-info"><b>' + progress + '%</b><div class="v2-job-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + progress + '"><span style="width:' + progress + '%"></span></div></div>' +
       '<span class="v2-job-time">' + icon("clock") + escapeHtml(jobTime(job)) + '</span>' +
       '<div class="v2-job-actions">' + actions.join("") + '</div></article>';
-  };
-
-  const renderPages = (pagination) => {
-    const nav = qs("#v2-queue-pagination");
-    const root = qs("#v2-queue-pages");
-    if (!nav || !root) return;
-    const pages = Math.max(1, Number(pagination?.pages) || 1);
-    const current = Math.max(1, Number(pagination?.page) || 1);
-    W.queuePage = current;
-    nav.hidden = pages <= 1;
-    if (pages <= 1) { root.innerHTML = ""; return; }
-    const numbers = [...new Set([1, pages, current - 1, current, current + 1])]
-      .filter((value) => value >= 1 && value <= pages).sort((a, b) => a - b);
-    let prev = 0;
-    let html = '<button type="button" data-queue-page="' + (current - 1) + '" ' + (current === 1 ? "disabled" : "") + ' aria-label="Предыдущая страница">‹</button>';
-    for (const number of numbers) {
-      if (prev && number - prev > 1) html += '<span class="v2-queue-page-ellipsis">…</span>';
-      html += '<button type="button" data-queue-page="' + number + '" ' + (number === current ? 'class="active" aria-current="page"' : "") + '>' + number + '</button>';
-      prev = number;
-    }
-    html += '<button type="button" data-queue-page="' + (current + 1) + '" ' + (current === pages ? "disabled" : "") + ' aria-label="Следующая страница">›</button>';
-    root.innerHTML = html;
   };
 
   const renderQueue = () => {
@@ -89,41 +66,27 @@
     }).join("");
 
     const jobs = Array.isArray(W.snapshot.jobs) ? W.snapshot.jobs : [];
-    const total = Number(W.snapshot.jobs_pagination?.total) || 0;
+    const total = jobs.length;
     const empty = qs("#v2-queue-empty");
     const count = qs("#v2-queue-count");
     if (empty) empty.hidden = total > 0;
     if (count) count.textContent = total + " задач";
     jobsRoot.innerHTML = jobs.map(renderJob).join("");
-    renderPages(W.snapshot.jobs_pagination);
   };
 
   qs("#v2-queue-refresh")?.addEventListener("click", () => W.refreshState());
-  qs("#v2-queue-pages")?.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-queue-page]");
-    if (!button || button.disabled) return;
-    const nextPage = Number(button.dataset.queuePage) || 1;
-    if (W.refreshing) await W.refreshing;
-    W.queuePage = nextPage;
-    await W.refreshState({ silent: true, includeMedia: false });
-    qs("#v2-job-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-
   qs("#v2-job-list")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-job-action]");
     if (!button) return;
     const id = button.closest("[data-job-id]")?.dataset.jobId;
     const action = button.dataset.jobAction;
     if (!id) return;
-    if (action === "delete" && !confirm("Удалить задачу из очереди?")) return;
     button.disabled = true;
     try {
       if (action === "cancel") {
         await fetchJson("/api/jobs/" + encodeURIComponent(id) + "/cancel", { method: "POST" });
       } else if (action === "retry") {
         await fetchJson("/api/jobs/" + encodeURIComponent(id) + "/retry", { method: "POST" });
-      } else if (action === "delete") {
-        await fetchJson("/api/jobs/" + encodeURIComponent(id), { method: "DELETE" });
       } else if (action === "open") {
         const job = (W.snapshot?.jobs || []).find((item) => String(item.id) === id);
         const item = W.mediaById(job?.result_media_id);
