@@ -45,8 +45,7 @@ http://IP_ВМ:8000/v2
 
 V2 уже содержит отдельные рабочие пространства:
 
-- **Видео** — 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 сек, 8/12/16 steps, seed, sound, first/last frames, Characters и magic wand;
-- **Видео по аудио** — Digital Human с driving audio и Character/visual reference;
+- **Видео** — единый генератор: 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 сек, 8/12/16 steps, seed, first/last frames, Characters/Locations/«Прочее», magic wand и опциональная аудиодорожка. При включённом master track используется Digital Human; First/Last остаются exact native Timeline Guides;
 - **Библиотека** — просмотр результатов, скачивание и извлечение стартового/финального PNG-кадра для продолжения через First Frame;
 - **Очередь** — rolling log последних 20 задач без пагинации и ручного удаления строк, плюс занятость обеих GPU;
 - **Монтаж** — последовательный Video 1 timeline, reorder, zoom/snap/timecode, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
