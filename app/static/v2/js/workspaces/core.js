@@ -75,35 +75,6 @@
   W.mediaById = (id) =>
     W.allMedia.find((item) => String(item.id) === String(id)) || null;
 
-  W.selectedCharacterIds = () =>
-    Array.from(api.state.selectedCharacterIds || []).map(String);
-
-  W.selectedLocationIds = () =>
-    Array.from(api.state.selectedLocationIds || []).map(String);
-
-  W.selectedMiscIds = () =>
-    Array.from(api.state.selectedMiscIds || []).map(String);
-
-  W.mutedCharacterIds = () =>
-    (api.mutedCharacterIds?.() || []).map(String);
-
-  W.settingValue = (name, fallback = "") => {
-    const group = qs('[data-v2-setting="' + name + '"]');
-    return qs("button.active", group)?.dataset.value || fallback;
-  };
-
-  W.populateSelect = (select, placeholder) => {
-    if (!select) return;
-    const current = select.value;
-    select.innerHTML =
-      '<option value="">' + escapeHtml(placeholder) + "</option>" +
-      W.allMedia.map((item) =>
-        '<option value="' + escapeHtml(item.id) + '">' +
-        escapeHtml(item.title || item.filename || item.id) + "</option>"
-      ).join("");
-    if (W.allMedia.some((item) => String(item.id) === current)) select.value = current;
-  };
-
   W.populateTrackSelect = (select, placeholder) => {
     if (!select) return;
     const current = select.value;
