@@ -131,11 +131,16 @@ Visible output не должен содержать reasoning:
 - \`reasoning_content\` игнорируется;
 - \`<think>...</think>\` фильтруется.
 
-## Разговор
+## Чат с ИИ
 
 Streaming local chat.
 
-При H3-запросах модель получает полный H3 guide и текущую форму.
+- «Промт пользователя» хранится в per-user localStorage и применяется к текущему user-запросу как дополнительная user-level инструкция и в чате, и в Magic Wand.
+- Copy-ready H3 prompts, code, JSON, shell commands, configs и templates модель обязана возвращать в fenced Markdown blocks; V2 UI отображает каждый такой блок отдельной карточкой с кнопкой копирования.
+- Правый Presets rail является visibility gate: backend загружает в LLM context только отмеченные Character/Location/Misc. Неотмеченные пресеты не сериализуются вообще.
+- Для отмеченных presets передаются подробные текстовые metadata: description/prompt/category, voice metadata, image_count и muted state.
+
+При H3-запросах модель получает preload H3 knowledge и текущую форму.
 
 Жёсткое правило:
 
