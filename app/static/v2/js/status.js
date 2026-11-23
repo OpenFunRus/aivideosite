@@ -39,7 +39,7 @@
 
   const refreshSystem = async () => {
     try {
-      const data = await fetchJson("/api/state?media_page=1&jobs_page=1");
+      const data = await fetchJson("/api/v2/status");
       const gpus = Array.isArray(data?.system?.gpus) ? data.system.gpus : [];
       renderGpu(qs("#v2-gpu-0"), gpus.find((item) => Number(item.index) === 0), "GPU 0 · нет данных");
       renderGpu(qs("#v2-gpu-1"), gpus.find((item) => Number(item.index) === 1), "GPU 1 · нет данных");
