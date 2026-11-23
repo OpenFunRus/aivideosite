@@ -19,16 +19,11 @@ MAX_HISTORY_CHARS = 500000
 CONTEXT_TOKENS = 131072
 CONTEXT_SAFETY_TOKENS = 1200
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
-ASSISTANT_CONTEXT_DIR = STATIC_DIR / "assistant_context"
-H3_IMAGE_GUIDE_PATH = STATIC_DIR / "h3-image-prompting-guide-ai.txt"
-VIDEO_ASSISTANT_CONTEXT_FILES = (
+ASSISTANT_CONTEXT_DIR = Path(__file__).resolve().parent / "static" / "assistant_context"
+ASSISTANT_CONTEXT_FILES = (
     ("MINIMAX_H3_MASTER_GUIDE", ASSISTANT_CONTEXT_DIR / "01_minimax_h3_master_guide_en.txt"),
     ("MINIMAX_H3_PRACTICAL_PLAYBOOK", ASSISTANT_CONTEXT_DIR / "02_minimax_h3_practical_playbook_en.txt"),
     ("AI_VIDEO_SITE_V2_OPERATOR_MAP", ASSISTANT_CONTEXT_DIR / "03_aivideosite_v2_operator_map_en.txt"),
-)
-ASSISTANT_CONTEXT_FILES = VIDEO_ASSISTANT_CONTEXT_FILES + (
-    ("MINIMAX_H3_IMAGE_GUIDE", H3_IMAGE_GUIDE_PATH),
 )
 ASSISTANT_CONTEXT_FILE_MAX_CHARS = 100000
 
@@ -43,30 +38,26 @@ def _load_assistant_context_file(label: str, path: Path) -> str:
     return f"===== {label} =====\n{content[:ASSISTANT_CONTEXT_FILE_MAX_CHARS]}"
 
 
-def _load_assistant_knowledge_pack(files: tuple[tuple[str, Path], ...] = ASSISTANT_CONTEXT_FILES) -> str:
+def _load_assistant_knowledge_pack() -> str:
     return "\n\n".join(
         _load_assistant_context_file(label, path)
-        for label, path in files
+        for label, path in ASSISTANT_CONTEXT_FILES
     )
 
 
-VIDEO_ASSISTANT_KNOWLEDGE_PACK = _load_assistant_knowledge_pack(VIDEO_ASSISTANT_CONTEXT_FILES)
 ASSISTANT_KNOWLEDGE_PACK = _load_assistant_knowledge_pack()
-H3_IMAGE_GUIDE = _load_assistant_context_file("MINIMAX_H3_IMAGE_GUIDE", H3_IMAGE_GUIDE_PATH)
-
 
 H3_AGENT_RULES = r"""
 ROLE
 You are the local senior MiniMax H3 director, prompt engineer and operator inside AI Video Studio.
 You speak Russian and English naturally. Match the user's language for discussion.
-Your job is to turn intent into technically correct, production-ready MiniMax H3 Video or MiniMax H3 Image
-prompts and settings for THIS exact local site, not generic advice for some other workflow.
+Your job is to turn intent into technically correct, production-ready MiniMax H3 Video prompts and settings
+for THIS exact local site, not generic advice for some other workflow.
 
 OPERATING PRINCIPLES
 - Be direct, useful and concrete.
 - Treat CURRENT_SITE_STATE, AVAILABLE_CHARACTERS, AVAILABLE_LOCATIONS and AVAILABLE_MISC as ground truth.
 - The physical context files are authoritative background knowledge and are loaded into every effective assistant request because the llama.cpp chat-completions endpoint is stateless.
-- Distinguish H3 Video from H3 Image. Video uses the canonical video field/shot rules. Image uses one still-image prompt/instruction with no Shot timeline and no audio fields.
 - Never invent uploaded images, videos, audio, Characters, Locations, Misc presets, voices, guide frames or ControlNet inputs.
 - When the user asks which presets are selected, use CURRENT_SITE_STATE.selected_characters, CURRENT_SITE_STATE.selected_locations and CURRENT_SITE_STATE.selected_misc as the human-readable source of truth.
 - Never show internal Character/Location/Misc IDs to the user unless the user explicitly asks for IDs. Use preset names instead.
@@ -84,9 +75,7 @@ OPERATING PRINCIPLES
 - Do not expose hidden chain-of-thought, scratch work or internal reasoning.
 
 H3 DECISION PROCEDURE
-For every H3 task, first determine whether the user is asking about H3 VIDEO or H3 IMAGE.
-For H3 Image, follow the dedicated image guide and do not force video modes/fields.
-For H3 Video, silently determine:
+For every H3 task, silently determine:
 1. user intent and desired final visible result;
 2. invariants: identity, outfit, body, props, handedness, environment, lighting, screen direction;
 3. correct base mode: FRAMES/FL2VA, REFERENCES/Ref2VA, MULTIFRAME/Timeline, or DIGITAL HUMAN;
@@ -103,12 +92,12 @@ PROMPT WRITING — HARD LANGUAGE AND FORMAT RULES
 - EVERY production-ready MiniMax H3 prompt MUST be written in ENGLISH, regardless of the user's language.
 - The ONLY exception is literal content: exact dialogue, exact lyrics and exact visible on-screen text.
 - Exact dialogue uses a stable speaker ID and language tag: (S1) ... <d>[Russian] точная реплика</d>.
-- For normal V2 VIDEO prompt fields and VIDEO Magic Wand output, use the canonical THREE fields in this exact order:
+- For normal V2 prompt fields and Magic Wand output, use the canonical THREE fields in this exact order:
   integrated_multimodal_description:
   overall_soundscape:
   non_diegetic_music:
   Leave a blank line between fields.
-- In H3 VIDEO Ref2VA/Characters/Audio workspaces, DO NOT invent subject_definitions, Picture/Video/Audio ordinals,
+- In Ref2VA/Characters/Audio workspaces, DO NOT invent subject_definitions, Picture/Video/Audio ordinals,
   summary or retention_analysis. The server owns real attached-reference mapping and promotes the three-field
   prompt into the six-field Ref2VA schema safely.
 - Only write an explicit six-field Ref2VA prompt when the user explicitly asks for the full low-level prompt
@@ -145,14 +134,10 @@ Prefer:
 More FPS/steps are not automatically better.
 
 NORMAL CHAT OUTPUT
-For H3 VIDEO prompt requests:
-1. finished copy-ready H3 Video prompt first;
+For H3 prompt requests:
+1. finished copy-ready H3 prompt first;
 2. one compact recommendation line: Mode / Duration / FPS / Steps / H3 Audio;
 3. one short asset warning only if a required input is missing.
-For H3 IMAGE prompt requests:
-1. finished copy-ready still-image prompt/edit instruction first;
-2. optionally one compact quality/format recommendation if useful;
-3. no Shot timeline or audio fields.
 For ordinary non-H3 conversation, answer normally.
 
 CONTROL MODE
@@ -163,15 +148,15 @@ Never fabricate reference media or Character IDs.
 
 H3_EXPERT_GUIDE = (
     H3_AGENT_RULES
-    + "\n\n================ FULL LOCAL H3 VIDEO WORKFLOW GUIDE ================\n\n"
-    + VIDEO_ASSISTANT_KNOWLEDGE_PACK
+    + "\n\n================ FULL LOCAL H3 WORKFLOW GUIDE ================\n\n"
+    + ASSISTANT_KNOWLEDGE_PACK
 )
 
 CHAT_SYSTEM = (
     "You are the conversational assistant inside AI Video Studio V2. "
     "This endpoint is CHAT, not form control and not Magic Wand. "
     "Talk naturally in the user's language, answer questions, brainstorm, explain choices, troubleshoot, "
-    "and give practical advice about the site, video/image ideas, MiniMax H3 Video and MiniMax H3 Image. "
+    "and give practical advice about the site, video ideas and MiniMax H3. "
     "Do NOT behave like an autonomous operator: do not claim you changed a form, selected files, characters, "
     "settings or started a job. Do not return control JSON. "
     "Do not force every answer into H3 prompt fields. Only produce a copy-ready production prompt when the user "
@@ -439,8 +424,6 @@ def _settings_context(settings: Any) -> str:
             "source_workspace",
             "master_track_title",
             "has_visual_reference",
-            "image_mode",
-            "source_image_selected",
         )
         if key in settings
     }
@@ -452,7 +435,7 @@ def _settings_context(settings: Any) -> str:
         safe["source_title"] = str(settings.get("source_title") or "")[:300]
     if "master_track_title" in settings:
         safe["master_track_title"] = str(settings.get("master_track_title") or "")[:300]
-    for state_key in ("create_state", "audio_state", "image_state"):
+    for state_key in ("create_state", "audio_state"):
         block = settings.get(state_key)
         if not isinstance(block, dict):
             continue
@@ -481,8 +464,6 @@ def _settings_context(settings: Any) -> str:
                 "track_title",
                 "has_visual_reference",
                 "visual_reference_name",
-                "image_mode",
-                "source_image_selected",
             )
             if key in block
         }
@@ -885,27 +866,9 @@ def _extract_h3_prompt_text(content: str) -> str:
     return prompt[:16000]
 
 
-_V2_WAND_WORKSPACES = {"create", "audio", "images"}
+_V2_WAND_WORKSPACES = {"create", "audio"}
 
-def _v2_wand_system(settings_payload: dict[str, Any]) -> str:
-    workspace = str(settings_payload.get("workspace") or "").strip().lower()
-    if workspace == "images":
-        return (
-            "You are the dedicated MiniMax H3 Image Magic Wand for AI Video Site V2. "
-            "Return ONLY one final still-image prompt/instruction. No JSON, no Markdown fences, no explanation. "
-            "DO NOT use integrated_multimodal_description, overall_soundscape, non_diegetic_music, Shot blocks, "
-            "timestamps, dialogue tags for video, or camera-motion instructions. This is a still image. "
-            "Write production instructions in English; exact visible text may remain in the requested language. "
-            "Preserve every concrete user fact exactly and do not invent extra people, props, clothing, weather, text, "
-            "events, injuries, logos or scene changes. Selected Characters, Locations and Misc are real image references, "
-            "but the backend owns Picture numbering: never invent <Picture N> labels. "
-            "If CURRENT_SITE_STATE.source_image_selected is true, this is redraw/edit mode: preserve identity, outfit, "
-            "environment, lighting, camera/framing and composition unless the user explicitly asks to change them; "
-            "state only the requested edit clearly and minimally. Do not change quality, format or seed. "
-            "Follow the dedicated H3 Image guide below.\n\n"
-            + H3_IMAGE_GUIDE
-        )
-
+def _v2_wand_system() -> str:
     return (
         "You are the dedicated MiniMax H3 Video Magic Wand for AI Video Site V2. "
         "Return ONLY the final H3 prompt text. No JSON, no Markdown fences, no explanation. "
@@ -924,7 +887,6 @@ def _v2_wand_system(settings_payload: dict[str, Any]) -> str:
         + H3_EXPERT_GUIDE
     )
 
-
 def _generate_v2_wand_prompt(
     messages: Any,
     *,
@@ -934,7 +896,7 @@ def _generate_v2_wand_prompt(
     payload = _chat_payload(
         messages,
         settings=settings_payload,
-        system_prompt=_v2_wand_system(settings_payload),
+        system_prompt=_v2_wand_system(),
         stream=False,
         max_tokens=2800 if thinking else 1800,
         temperature=1.0,
