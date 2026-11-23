@@ -159,6 +159,7 @@
               "Это режим Digital Human с driving audio внутри единой страницы «Видео»: visual reference берётся из выбранных Characters/Locations/Misc либо из First/Last кадра. " +
               "Если semantic preset не выбран, backend повторно использует первый доступный endpoint-кадр как visual anchor и отдельно закрепляет First/Last точными Timeline Guides. " +
               "Master track передаётся модели как управляющее аудио: синхронизируй видимую артикуляцию, пение, жесты и body motion с ним, но не проси H3 сочинять или повторять этот трек. " +
+              "Если исходный запрос — Song/Sing/песня/поёт/петь, это явное требование: видимый субъект должен петь с lip-sync под driving vocals, а не просто стоять или идти. " +
               "non_diegetic_music: N/A. Если generate_scene_audio выключен — overall_soundscape: N/A; если включен — только физические/фоновые звуки сцены. " +
               "First/Last при наличии backend закрепляет отдельно как exact native MiniMaxH3AddGuide anchors, поэтому не придумывай для них Picture labels и не добавляй FL2VA alignment line. "
             )
@@ -183,7 +184,7 @@
             content:
               "Перепиши только этот запрос для поля prompt раздела «Видео». " +
               modeInstruction +
-              "Верни changes.prompt в каноническом формате MiniMax H3 из трёх полей: " +
+              "Верни только финальный H3 prompt в каноническом формате из трёх полей: " +
               "integrated_multimodal_description, overall_soundscape, non_diegetic_music. " +
               "Соблюдай выбранную длительность: [Shot 1] без времени, каждый следующий cut с точным временем. " +
               "Один основной camera move на shot. Точные реплики оформляй как (S1) и <d>[Language] ...</d> без перевода. " +
@@ -195,7 +196,7 @@
               "Точную реплику пиши один раз: только как (S1) <d>[Russian] ...</d>, не дублируй её обычными кавычками перед тегом. " +
               "Не придумывай гром, шаги, ветер, транспорт, новые действия или другие детали, которых нет в запросе. " +
               "Не меняй настройки формы и не добавляй события, которых пользователь не просил. " +
-              "Верни только changes.prompt; message сделай очень коротким.\n\n" +
+              "Не пиши JSON, changes.prompt, message, Mode/Duration/FPS/Steps или другие служебные строки. Верни только три поля H3.\n\n" +
               source,
           }],
           settings: {
