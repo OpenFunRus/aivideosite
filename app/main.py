@@ -2123,6 +2123,12 @@ async def api_v2_audio(
     if not math.isfinite(audio_start) or audio_start < 0 or audio_start > 86400:
         raise HTTPException(400, "Начало аудиофрагмента должно быть неотрицательным.")
 
+    compact_prompt = " ".join(prompt.split()) if "\n" not in prompt else prompt.strip()
+    if not compact_prompt:
+        raise HTTPException(400, "Введите prompt.")
+    if len(compact_prompt) > 16000:
+        raise HTTPException(400, "Prompt слишком длинный.")
+
     width, height = _v2_resolution(quality, ratio)
     selected = _v2_character_ids(character_ids)
     selected_locations = _v2_location_ids(location_ids)
@@ -2144,11 +2150,14 @@ async def api_v2_audio(
         )
         items.extend(_v2_location_references(selected_locations, user_id))
         items.extend(_v2_misc_references(selected_misc, user_id))
+        has_semantic_visual = any(
+            item.get("type") in {"image", "video"} for item in items
+        )
 
         has_first = first_frame is not None and bool(first_frame.filename)
         has_last = last_frame is not None and bool(last_frame.filename)
+        frame_paths: list[str] = []
         guides: list[dict] = []
-        frame_reference_candidates: list[dict] = []
 
         for upload, time_seconds, frame_idx, label in (
             (first_frame, 0.0, 0, "Начальный кадр"),
@@ -2163,6 +2172,7 @@ async def api_v2_audio(
             )
             temporary_paths.append(frame_path)
             source_name = Path(upload.filename).name
+            frame_paths.append(str(frame_path))
             guides.append(
                 {
                     "path": str(frame_path),
@@ -2170,37 +2180,9 @@ async def api_v2_audio(
                     "source_name": source_name,
                     "time_seconds": time_seconds,
                     "frame_idx": frame_idx,
-                    "note": f"Exact {label.lower()} for audio-driven generation.",
+                    "note": f"Exact {label.lower()} for audio-enabled generation.",
                 }
             )
-            frame_reference_candidates.append(
-                {
-                    "type": "image",
-                    "path": str(frame_path),
-                    "temporary": True,
-                    "source_name": source_name,
-                    "role": "composition",
-                    "retention": "partially_preserved",
-                    "note": (
-                        f"{label} is also the visual basis for Digital Human when no "
-                        "Character/Location/Misc visual reference is selected. Exact endpoint "
-                        "anchoring is applied separately through MiniMaxH3AddGuide."
-                    ),
-                }
-            )
-
-        if not any(item.get("type") in {"image", "video"} for item in items):
-            if frame_reference_candidates:
-                # Digital Human requires at least one semantic visual reference.
-                # Reuse the opening frame when possible (otherwise the closing frame)
-                # while the same file is also attached as an exact native timeline guide.
-                items.append(frame_reference_candidates[0])
-            else:
-                raise HTTPException(
-                    400,
-                    "Для аудиодорожки выберите персонажа, локацию, «Прочее» "
-                    "или добавьте начальный/конечный кадр.",
-                )
 
         if has_upload:
             assert audio is not None
@@ -2231,22 +2213,27 @@ async def api_v2_audio(
         )
         temporary_paths.append(segment)
 
-        items.append(
-            {
-                "type": "audio",
-                "path": str(segment),
-                "temporary": True,
-                "source_name": (
-                    f"{track['title']} [{audio_start:g}-{segment_end:g}s]"
-                ),
-                "role": "audio",
-                "retention": "reference",
-                "note": (
-                    "Driving performance audio. Synchronize mouth/body motion and rhythm "
-                    "to this clip. The original track is muxed separately when requested."
-                ),
-            }
-        )
+        audio_item = {
+            "type": "audio",
+            "path": str(segment),
+            "temporary": True,
+            "source_name": (
+                f"{track['title']} [{audio_start:g}-{segment_end:g}s]"
+            ),
+            "role": "audio",
+            "retention": "reference",
+            "note": (
+                "Driving performance audio. Synchronize mouth/body motion and rhythm "
+                "to this clip. The original track is muxed separately when requested."
+            ),
+        }
+
+        # The master track only becomes H3 driving audio when a real semantic visual
+        # reference exists. Without one, keep ordinary FL2VA/text-to-video behavior:
+        # prompt-only, First, Last, or First -> Last, then mux the chosen track.
+        use_driving_audio = has_semantic_visual
+        if use_driving_audio:
+            items.append(audio_item)
 
         # The extra second is only a technical source-audio reserve for H3/mux.
         # It must NOT advance the logical music-video timeline, otherwise the next
@@ -2255,49 +2242,88 @@ async def api_v2_audio(
         if track_duration is not None:
             timeline_audio_end = min(float(track_duration), timeline_audio_end)
 
-        h3_prompt = prompt
+        h3_prompt = compact_prompt
         if generate_scene_audio and embed_track:
             h3_prompt = (
                 "Audio constraint: generate only diegetic environmental and foley sounds "
-                "for the visible scene. Do not reproduce, sing, hum, or recreate the driving "
-                "music/vocals; the original track will be mixed separately.\n\n"
-                + prompt.lstrip()
+                "for the visible scene. Do not reproduce, sing, hum, or recreate the selected "
+                "master track; the original track will be mixed separately.\n\n"
+                + compact_prompt.lstrip()
             )
 
-        job_id = _v2_enqueue_reference_job(
-            user_id=user_id,
-            prompt=h3_prompt,
-            width=width,
-            height=height,
-            seconds=seconds,
-            steps=steps,
-            seed=_v2_seed(seed),
-            generate_audio=generate_scene_audio,
-            generation_mode="digital_human",
-            reference_task="audio_reference",
-            items=items,
-            guides=guides,
-            v2_context={
-                "workspace": "create",
-                "audio_mode": True,
-                "track_id": track["id"],
-                "audio_start": float(audio_start),
-                "audio_end": float(timeline_audio_end),
-                "audio_source_end": float(segment_end),
-                "audio_reserve": audio_reserve,
-                "embed_track": bool(embed_track),
-                "generate_scene_audio": bool(generate_scene_audio),
-                "has_first_frame": bool(has_first),
-                "has_last_frame": bool(has_last),
-            },
-            final_audio={
-                "path": str(segment),
-                "embed_track": bool(embed_track),
-                "mix_scene_audio": bool(generate_scene_audio),
-                "track_volume": 1.0,
-                "scene_volume": 0.45,
-            },
-        )
+        generation_mode = "digital_human" if use_driving_audio else "frames"
+        v2_context = {
+            "workspace": "create",
+            "audio_mode": True,
+            "has_driving_audio": bool(use_driving_audio),
+            "track_id": track["id"],
+            "audio_start": float(audio_start),
+            "audio_end": float(timeline_audio_end),
+            "audio_source_end": float(segment_end),
+            "audio_reserve": audio_reserve,
+            "embed_track": bool(embed_track),
+            "generate_scene_audio": bool(generate_scene_audio),
+            "has_first_frame": bool(has_first),
+            "has_last_frame": bool(has_last),
+            "generation_mode": generation_mode,
+        }
+        final_audio = {
+            "path": str(segment),
+            "temporary": True,
+            "embed_track": bool(embed_track),
+            "mix_scene_audio": bool(generate_scene_audio),
+            "track_volume": 1.0,
+            "scene_volume": 0.45,
+        }
+
+        if use_driving_audio:
+            job_id = _v2_enqueue_reference_job(
+                user_id=user_id,
+                prompt=h3_prompt,
+                width=width,
+                height=height,
+                seconds=seconds,
+                steps=steps,
+                seed=_v2_seed(seed),
+                generate_audio=generate_scene_audio,
+                generation_mode="digital_human",
+                reference_task="audio_reference",
+                items=items,
+                guides=guides,
+                v2_context=v2_context,
+                final_audio=final_audio,
+            )
+        else:
+            keyframe_role = "last" if has_last and not has_first else "first"
+            job_id = uuid.uuid4().hex
+            db.enqueue_job(
+                job_id,
+                "generate",
+                {
+                    "prompt": h3_prompt,
+                    "user_prompt": compact_prompt,
+                    "width": int(width),
+                    "height": int(height),
+                    "seconds": float(seconds),
+                    "fps": 24,
+                    "steps": int(steps),
+                    "seed": int(_v2_seed(seed)),
+                    "generate_audio": bool(generate_scene_audio),
+                    "generation_mode": "frames",
+                    "keyframe_role": keyframe_role,
+                    "reference_task": "reference_generation",
+                    "ref_image_size": "match",
+                    "images": frame_paths,
+                    "references": [],
+                    "reference_map": [],
+                    "guides": [],
+                    "control": {"mode": "none"},
+                    "v2_context": v2_context,
+                    "final_audio": final_audio,
+                },
+                owner_id=user_id,
+            )
+
         return {
             "ok": True,
             "job_id": job_id,
@@ -2310,9 +2336,11 @@ async def api_v2_audio(
             "audio_reserve": audio_reserve,
             "embed_track": bool(embed_track),
             "generate_scene_audio": bool(generate_scene_audio),
+            "generation_mode": generation_mode,
+            "has_driving_audio": bool(use_driving_audio),
             "has_first_frame": bool(has_first),
             "has_last_frame": bool(has_last),
-            "uses_timeline_guides": bool(guides),
+            "uses_timeline_guides": bool(use_driving_audio and guides),
         }
     except Exception:
         for path in temporary_paths:
