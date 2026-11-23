@@ -6,7 +6,7 @@
 >
 > Основная ветка: `main`
 >
-> Handoff обновлён 2026-11-20 после добавления локального Qwen3-ассистента, dynamic GPU/CPU failover, 32k context, Thinking toggle и последних UI-фиксов.
+> Handoff обновлён после перехода на локальную Gemma4 26B A4B Heretic, dynamic GPU/CPU failover, 128k context, Thinking toggle и последних UI-фиксов. Старый Qwen3-8B assistant больше не используется.
 >
 > После чтения этого файла новый исполнитель ОБЯЗАН сначала перечитать актуальный `main` на GitHub: SHA намеренно не фиксируется внутри handoff, чтобы не создавать самоссылочный устаревающий checkpoint.
 
@@ -33,8 +33,8 @@
 - **Библиотека**: видео, metadata/prompt/settings, download/delete, Continue, next clip, отправка в Editor. Первые 40 preview, затем «Показать ещё».
 - **Очередь**: личные jobs, progress/stage/timers, Cancel/Retry/Delete/Result; отдельно показана общая занятость RTX3090/RTX2080 и пользователь текущей H3-задачи.
 - **Монтаж**: persistent per-user browser project, Library → последовательный Video 1 timeline, drag reorder, zoom, Snap 0.5s, monitor timecode, trim, split, clip volume, video/audio fade in/out, отдельный Music track с offset/trim/length/volume, Space/Delete keyboard basics и background FFmpeg export в Library.
-- **Чат**: отдельный streaming Qwen3-8B chat, Thinking, per-user browser history, 32k context meter; backend резервирует output и удаляет из model request самые старые полные user+assistant turns. Для token count используется llama.cpp `/tokenize`, при недоступности — conservative fallback.
-- **Система**: GPU/VRAM/load/temp, active user/job, Qwen target/state, оба ComfyUI, RAM, CPU load, disk.
+- **Чат**: отдельный streaming Gemma4 26B A4B Heretic chat, Thinking, per-user browser history, 128k context meter; backend резервирует output и удаляет из model request самые старые полные user+assistant turns. Для token count используется llama.cpp `/tokenize`, при недоступности — conservative fallback.
+- **Система**: GPU/VRAM/load/temp, active user/job, Gemma target/state, оба ComfyUI, RAM, CPU load, disk.
 - **Инструкция**: обучение по V2/H3 и copy-paste контекст для ChatGPT. Кнопка объединяет `v2-chatgpt-site-guide.txt` с актуальным `h3-prompting-guide-ai.txt`.
 
 ### Важные технические решения V2
@@ -1468,7 +1468,7 @@ COMFYUI_INPUT_DIR/aivideosite/<job_id>/
 Используется:
 
 \`\`\`text
-w3joe/Qwen3-8B-abliterated
+llmfan46/gemma-4-26B-A4B-it-uncensored-heretic-GGUF
 Q4_K_M GGUF
 \`\`\`
 
