@@ -1070,6 +1070,7 @@ def _repair_control_prompt(
         "No JSON, no Markdown, no explanation. The prompt MUST contain exactly three fields in order: "
         "integrated_multimodal_description, overall_soundscape, non_diegetic_music. "
         "Preserve every concrete SOURCE fact exactly and remove every unsupported detail. "
+        "Every explicit spoken line or lyric must use a stable (Sx) speaker/singer ID and exactly one <d>[Language] exact words</d> block; quotation marks alone are invalid dialogue formatting. "
         "Never invent thunder, footsteps, traffic, wind, extra actions, people, objects, music, emotions, "
         "or a specific source for an unspecified noise. Keep exact dialogue/lyrics/visible text unchanged. "
         "[Shot 1] has no timestamp; every later cut/switch uses a new timed [Shot N] inside the selected duration. "
@@ -1124,6 +1125,7 @@ def _clean_v2_wand_prompt(
         "Return ONLY the cleaned H3 prompt text. No JSON, no Markdown, no explanation. "
         "Keep exactly three fields in this order: integrated_multimodal_description, overall_soundscape, non_diegetic_music. "
         "Preserve all concrete SOURCE facts exactly: numeric age/count, direction, handedness, props, weather, actions, camera request, dialogue, lyrics and visible text. "
+        "Every explicit spoken line or lyric must be tied to a stable (Sx) speaker/singer ID and written exactly once as <d>[Language] exact words</d>; never leave dialogue only in quotation marks. "
         "REMOVE every detail not explicitly supported by SOURCE. Do not enrich the scene from common sense. "
         "Do not add thunder, footsteps, traffic, wind, branch snaps, extra people, extra actions, extra objects, emotions, or a named source for an unspecified noise unless SOURCE says so. "
         "overall_soundscape may contain ONLY sounds explicitly supported by SOURCE; if SOURCE provides no sound at all, use N/A. "
@@ -1175,6 +1177,33 @@ def _source_literal_validation_issues(
     for literal in quoted:
         if literal not in prompt:
             issues.append("missing exact quoted source text: " + literal[:120])
+
+    # When a quoted literal is explicitly introduced as speech/singing, preserving the
+    # words is not enough: MiniMax H3 expects a stable speaker ID plus a <d>[Language]
+    # ...</d> block. Visible signs/titles are intentionally excluded from this check.
+    speech_patterns = (
+        r"(?:говорит|говорит\s+ему|говорит\s+ей|сказал|сказала|отвечает|ответил|ответила|"
+        r"произносит|шепчет|кричит|по[её]т|спел|спела)\s*[:,-]?\s*[«“\"]([^»”\"]{1,500})[»”\"]",
+        r"(?:says|said|replies|replied|whispers|whispered|shouts|shouted|sings|sang)\s*[:,-]?\s*[“\"]([^”\"]{1,500})[”\"]",
+    )
+    spoken_literals: list[str] = []
+    for pattern in speech_patterns:
+        spoken_literals.extend(
+            match.group(1).strip()
+            for match in re.finditer(pattern, source, flags=re.IGNORECASE)
+            if match.group(1).strip()
+        )
+    dialogue_blocks = re.findall(
+        r"\(S\d+(?:,S\d+)*\).*?<d>\[[^\]]+\]\s*(.*?)</d>",
+        prompt,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    for literal in spoken_literals:
+        if not any(literal in block for block in dialogue_blocks):
+            issues.append(
+                "explicit spoken/sung source text must use stable (Sx) + <d>[Language] ...</d>: "
+                + literal[:120]
+            )
 
     source_lower = source.lower()
     no_music = any(
