@@ -769,7 +769,7 @@
       state.selectedLocationIds?.size ||
       state.selectedMiscIds?.size
     );
-    const audioDrivesH3 = audioMode && hasPresets;
+    const audioDrivesH3 = audioMode && (hasPresets || hasFrames);
 
     return {
       ...audioContext,
