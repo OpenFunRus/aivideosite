@@ -7,11 +7,13 @@
 
   const currentAudioAssistantSettings = () => ({
     workspace: "audio",
+    prompt: String(qs("#v2-audio-prompt")?.value || ""),
     generation_mode: "digital_human",
     reference_task: "audio_reference",
     quality: W.settingValue("audio-quality", "720"),
     resolution_shape: W.settingValue("audio-ratio", "16:9"),
     seconds: Number(W.settingValue("audio-seconds", "10")),
+    fps: 24,
     steps: Number(W.settingValue("audio-steps", "12")),
     seed: Number(qs("#v2-audio-seed")?.value || -1),
     embed_track: Boolean(qs("#v2-audio-embed-track")?.checked),
@@ -20,8 +22,12 @@
     selected_character_ids: W.selectedCharacterIds(),
     selected_location_ids: W.selectedLocationIds(),
     muted_character_ids: W.mutedCharacterIds(),
+    track_id: String(qs("#v2-audio-track")?.value || ""),
+    visual_reference_name: String(qs("#v2-audio-visual")?.files?.[0]?.name || ""),
     ...(W.audioAssistantContext?.() || {}),
   });
+
+  api.currentAudioAssistantSettings = currentAudioAssistantSettings;
 
   const improveAudioPrompt = async () => {
     const target = qs("#v2-audio-prompt");

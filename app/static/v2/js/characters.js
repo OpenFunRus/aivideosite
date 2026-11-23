@@ -744,23 +744,22 @@
   };
 
   const currentCreateAssistantSettings = () => ({
-    prompt: state.draft.prompt,
-    resolution_shape: state.draft.ratio,
-    seconds: Number(state.draft.seconds),
+    workspace: "create",
+    prompt: String(qs("#v2-prompt")?.value ?? state.draft.prompt ?? ""),
+    quality: String(qs('[data-setting="quality"] button.active')?.dataset.value || state.draft.quality || "720"),
+    resolution_shape: String(qs('[data-setting="ratio"] button.active')?.dataset.value || state.draft.ratio || "16:9"),
+    seconds: Number(qs('[data-setting="seconds"] button.active')?.dataset.value || state.draft.seconds || 10),
     fps: 24,
-    steps: Number(state.draft.steps),
-    seed: state.draft.seed.trim() ? Number(state.draft.seed) : -1,
-    generate_audio: Boolean(state.draft.audio),
-    selected_character_ids: Array.from(state.selectedCharacterIds),
-    selected_location_ids: Array.from(state.selectedLocationIds || []),
-    muted_character_ids: mutedCharacterIds(),
-    available_characters: state.characters.map((item) => ({
-      id: item.id,
-      name: item.name,
-      description: item.description || "",
-      voice: Boolean(item.voice),
-      image_count: Number(item.image_count || 0),
-    })),
+    steps: Number(qs('[data-setting="steps"] button.active')?.dataset.value || state.draft.steps || 12),
+    seed: String(qs("#v2-seed")?.value || "").trim()
+      ? Number(qs("#v2-seed")?.value)
+      : -1,
+    generate_audio: Boolean(qs("#v2-audio")?.checked),
+    has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
+    has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
+    selected_character_ids: Array.from(state.selectedCharacterIds).map(String),
+    selected_location_ids: Array.from(state.selectedLocationIds || []).map(String),
+    muted_character_ids: mutedCharacterIds().map(String),
   });
 
   characterSearch?.addEventListener("input", renderCharacterGrid);

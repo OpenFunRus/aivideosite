@@ -115,6 +115,26 @@
     root.scrollTop = root.scrollHeight;
   };
 
+
+  const currentSiteSettings = () => {
+    const createState = { ...(api.currentCreateAssistantSettings?.() || {}) };
+    const audioState = { ...(api.currentAudioAssistantSettings?.() || {}) };
+    delete createState.available_characters;
+    delete createState.available_locations;
+    delete audioState.available_characters;
+    delete audioState.available_locations;
+
+    return {
+      workspace: "chat",
+      active_view: String(api.state?.view || "chat"),
+      selected_character_ids: Array.from(api.state?.selectedCharacterIds || []).map(String),
+      selected_location_ids: Array.from(api.state?.selectedLocationIds || []).map(String),
+      muted_character_ids: (api.mutedCharacterIds?.() || []).map(String),
+      create_state: createState,
+      audio_state: audioState,
+    };
+  };
+
   const updateContext = async () => {
     const label = qs("#v2-chat-context-label");
     const fill = qs("#v2-chat-context-fill");
@@ -127,6 +147,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: modelMessages(),
+          settings: currentSiteSettings(),
           thinking: Boolean(qs("#v2-chat-thinking")?.checked),
         }),
       });
@@ -174,6 +195,7 @@
         },
         body: JSON.stringify({
           messages: modelMessages(),
+          settings: currentSiteSettings(),
           thinking: Boolean(qs("#v2-chat-thinking")?.checked),
         }),
       });
