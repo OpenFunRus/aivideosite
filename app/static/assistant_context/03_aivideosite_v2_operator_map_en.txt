@@ -220,7 +220,7 @@ Female-oriented names:
 - Alisa
 
 The runtime Character context must provide, when available:
-- id
+- id (internal control/validation only)
 - name
 - full saved description
 - image_count
@@ -228,8 +228,19 @@ The runtime Character context must provide, when available:
 - voice source type: preset/custom/none
 - voice_preset_id
 - voice_preset_name
+- voice_label
 - selected true/false
 - voice_muted true/false for the current generation
+
+CURRENT_SITE_STATE also contains a dedicated selected_characters array with human-readable
+selected preset metadata. When answering the user about current selections:
+- use Character names, never internal IDs unless IDs were explicitly requested;
+- include the saved description when useful;
+- report the number of reference images;
+- report the configured voice as "Preset: <name>", "Custom voice", or "No voice";
+- a built-in preset is a configured audio/voice reference even though it was not uploaded
+  by the user as a custom audio file;
+- mention voice_muted separately if the selected Character's voice is disabled for this scene.
 
 Never send image bytes to the LLM context. Send only counts and metadata.
 
@@ -261,11 +272,15 @@ Location prompt should describe stable environment facts:
 - continuity rules.
 
 The runtime Location context must provide:
-- id
+- id (internal control/validation only)
 - name
 - full saved prompt
 - image_count
 - selected true/false
+
+CURRENT_SITE_STATE also contains selected_locations with only human-readable selected
+Location metadata. When describing selections to the user, use the Location name,
+saved prompt, and image_count; do not expose its internal ID unless explicitly asked.
 
 Never send location image bytes to the LLM context.
 

@@ -60,6 +60,10 @@ OPERATING PRINCIPLES
 - Treat CURRENT_SITE_STATE, AVAILABLE_CHARACTERS and AVAILABLE_LOCATIONS as ground truth.
 - The three physical context files are authoritative background knowledge and are loaded into every effective assistant request because the llama.cpp chat-completions endpoint is stateless.
 - Never invent uploaded images, videos, audio, Characters, Locations, voices, guide frames or ControlNet inputs.
+- When the user asks which Characters or Locations are selected, use CURRENT_SITE_STATE.selected_characters and CURRENT_SITE_STATE.selected_locations as the human-readable source of truth.
+- Never show internal Character/Location IDs to the user unless the user explicitly asks for IDs. Use preset names instead.
+- For each selected Character, report its name, saved description when relevant, image_count, and voice_label/voice_preset_name. A built-in voice preset is a real saved voice reference even though the user did not upload a custom audio file.
+- Do not say a Character has no voice merely because no custom audio file was uploaded. Check voice_source, voice_preset_name, voice_label, and voice_muted first.
 - Never claim the UI can do something that is not present in the supplied state/guide.
 - Preserve exact requested dialogue, lyrics, names and on-screen text.
 - Never silently add extra people, dialogue, props, music, cuts, camera moves or story beats.
@@ -156,6 +160,8 @@ CHAT_SYSTEM = (
     "Do not force every answer into H3 prompt fields. Only produce a copy-ready production prompt when the user "
     "explicitly asks for a prompt or asks you to rewrite one; otherwise discuss the idea normally first. "
     "When a production H3 prompt is explicitly requested, follow the reference guide below accurately. "
+    "When reporting current selections, always use human-readable Character/Location names and metadata, never internal IDs unless the user explicitly asks for IDs. "
+    "A built-in Character voice preset counts as a configured voice; do not describe it as missing just because no custom audio file was uploaded. "
     "Keep answers conversational and useful; avoid repetitive boilerplate. Never reveal hidden reasoning.\n\n"
     "================ THREE-FILE BOOTSTRAP KNOWLEDGE ================\n\n"
     + ASSISTANT_KNOWLEDGE_PACK
@@ -396,6 +402,7 @@ def _settings_context(settings: Any) -> str:
             "control_canny_high",
             "selected_character_ids",
             "selected_location_ids",
+            "muted_character_ids",
             "workspace",
             "active_view",
             "has_first_frame",
@@ -458,6 +465,37 @@ def _settings_context(settings: Any) -> str:
         if "prompt" in allowed:
             allowed["prompt"] = str(allowed.get("prompt") or "")[:16000]
         safe[state_key] = allowed
+
+
+    selected_characters = settings.get("selected_characters")
+    if isinstance(selected_characters, list):
+        safe["selected_characters"] = [
+            {
+                "name": str(item.get("name") or ""),
+                "description": str(item.get("description") or "")[:2000],
+                "image_count": int(item.get("image_count") or 0),
+                "voice": bool(item.get("voice")),
+                "voice_source": str(item.get("voice_source") or "none"),
+                "voice_preset_id": str(item.get("voice_preset_id") or ""),
+                "voice_preset_name": str(item.get("voice_preset_name") or ""),
+                "voice_muted": bool(item.get("voice_muted")),
+                "voice_label": str(item.get("voice_label") or ""),
+            }
+            for item in selected_characters[:100]
+            if isinstance(item, dict) and item.get("name")
+        ]
+
+    selected_locations = settings.get("selected_locations")
+    if isinstance(selected_locations, list):
+        safe["selected_locations"] = [
+            {
+                "name": str(item.get("name") or ""),
+                "prompt": str(item.get("prompt") or "")[:4000],
+                "image_count": int(item.get("image_count") or 0),
+            }
+            for item in selected_locations[:100]
+            if isinstance(item, dict) and item.get("name")
+        ]
 
     available = settings.get("available_characters")
     if isinstance(available, list):

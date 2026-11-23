@@ -2679,8 +2679,46 @@ def _assistant_runtime_context(
             }
         )
 
+    selected_characters = [
+        {
+            "name": item["name"],
+            "description": item["description"],
+            "image_count": item["image_count"],
+            "voice": item["voice"],
+            "voice_source": item["voice_source"],
+            "voice_preset_id": item["voice_preset_id"],
+            "voice_preset_name": item["voice_preset_name"],
+            "voice_muted": item["voice_muted"],
+            "voice_label": (
+                f"Preset: {item['voice_preset_name']}"
+                if item["voice_source"] == "preset" and item["voice_preset_name"]
+                else (
+                    "Custom voice"
+                    if item["voice_source"] == "custom"
+                    else "No voice"
+                )
+            ),
+        }
+        for item in characters
+        if item["selected"]
+    ]
+    selected_locations = [
+        {
+            "name": item["name"],
+            "prompt": item["prompt"],
+            "image_count": item["image_count"],
+        }
+        for item in locations
+        if item["selected"]
+    ]
+
     context["available_characters"] = characters
     context["available_locations"] = locations
+    context["selected_characters"] = selected_characters
+    context["selected_locations"] = selected_locations
+
+    # Internal IDs remain available for backend control/validation, but the assistant
+    # should normally describe selected presets by human-readable metadata above.
     context["selected_character_ids"] = sorted(selected_character_ids)
     context["selected_location_ids"] = sorted(selected_location_ids)
     context["muted_character_ids"] = sorted(muted_character_ids)
