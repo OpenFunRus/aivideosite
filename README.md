@@ -49,7 +49,7 @@ V2 уже содержит отдельные рабочие пространс�
 - **Библиотека** — просмотр результатов, скачивание и извлечение стартового/финального PNG-кадра для продолжения через First Frame;
 - **Очередь** — rolling log последних 20 задач без пагинации и ручного удаления строк, плюс занятость обеих GPU;
 - **Монтаж** — последовательный Video 1 timeline, reorder, zoom/snap/timecode, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
-- **Чат** — streaming Gemma4 26B A4B Heretic с Thinking и управлением реальным 128k context budget;
+- **Чат с ИИ** — streaming Gemma с Thinking и 128k context meter; общий «Промт пользователя» для чата и Magic Wand; copy-ready fenced-блоки с кнопкой копирования; LLM видит подробные metadata только отмеченных справа Character/Location/Misc, неотмеченные пресеты полностью исключаются из контекста;
 - **Система** — GPU/VRAM/load/temp, Gemma, ComfyUI, RAM/CPU/disk;
 - **Инструкция** — обучение по сайту/H3 и полный copy-paste context для ChatGPT.
 
