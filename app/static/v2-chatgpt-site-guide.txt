@@ -136,12 +136,16 @@ EDITOR
 ------
 Sequential video editor with one optional music track and FFmpeg export.
 
-CHAT
-----
+CHAT WITH AI
+------------
 Local Gemma4 26B A4B Heretic assistant:
 - 128k context;
 - Thinking toggle;
+- "Промт пользователя" is a persistent per-user instruction shared by Chat and Magic Wand;
+- copy-ready prompts/code/commands are returned in fenced blocks so the UI can show a separate Copy card;
 - sees one unified create_state;
+- sees deep Character/Location/Misc metadata ONLY for presets currently checked in the right rail;
+- unchecked presets are completely absent from assistant context;
 - create_state contains audio_mode/master-track metadata when enabled;
 - does not mutate UI controls.
 
