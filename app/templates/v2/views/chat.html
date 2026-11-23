@@ -3,6 +3,9 @@
     <div class="v2-workspace-toolbar">
       <p>Живой локальный чат для идей, вопросов и советов. Он ничего не меняет в формах сам — для переписывания prompt используйте волшебную палочку в нужном генераторе.</p>
       <div class="v2-head-actions v2-chat-toolbar-actions">
+        <button class="v2-secondary-button v2-user-prompt-button" id="v2-user-prompt-open" type="button" title="Дополнительные постоянные инструкции для ИИ">
+          Промт пользователя
+        </button>
         <label class="v2-thinking-toggle">
           <input id="v2-chat-thinking" type="checkbox">
           <span class="v2-thinking-switch" aria-hidden="true"><span></span></span>
@@ -31,3 +34,32 @@
     </form>
   </div>
 </section>
+
+
+<dialog class="v2-user-prompt-dialog" id="v2-user-prompt-dialog">
+  <form class="v2-user-prompt-form" id="v2-user-prompt-form">
+    <div class="v2-user-prompt-head">
+      <div>
+        <span class="v2-kicker">AI PERSONAL INSTRUCTION</span>
+        <h2>Промт пользователя</h2>
+        <p>Дополнительные постоянные правила для локального ИИ. Они применяются и в «Чате с ИИ», и в волшебной палочке генератора.</p>
+      </div>
+      <button class="v2-user-prompt-close" type="button" data-user-prompt-close aria-label="Закрыть">
+        <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+      </button>
+    </div>
+    <div class="v2-user-prompt-body">
+      <textarea id="v2-user-prompt-text" maxlength="12000" rows="12" placeholder="Например: отвечай кратко; не меняй мои реплики; при написании H3 prompt сохраняй порядок действий буквально; не добавляй детали без запроса."></textarea>
+      <div class="v2-user-prompt-meta">
+        <span>Хранится локально отдельно для текущего пользователя.</span>
+        <strong id="v2-user-prompt-count">0 / 12 000</strong>
+      </div>
+    </div>
+    <div class="v2-user-prompt-actions">
+      <button class="v2-user-prompt-clear" id="v2-user-prompt-clear" type="button">Очистить</button>
+      <span></span>
+      <button class="v2-secondary-button" type="button" data-user-prompt-close>Отмена</button>
+      <button class="v2-primary-button" type="submit">Сохранить</button>
+    </div>
+  </form>
+</dialog>
