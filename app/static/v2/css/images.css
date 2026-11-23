@@ -20,14 +20,10 @@
 .v2-image-result-action.frame{font-size:13px;font-weight:900;color:#c7baff}
 .v2-image-result-action.danger:hover{border-color:#d65f73;color:#ff9cab}
 .v2-image-result-action .icon{width:17px;height:17px}
-.v2-image-settings{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(150px,.65fr) minmax(0,1fr);gap:18px;align-items:end}
-.v2-image-setting{min-width:0;display:flex;flex-direction:column;gap:8px}
-.v2-image-select,.v2-image-seed input,.v2-image-fixed-value{width:100%;height:44px;border:1px solid #303649;border-radius:10px;background:#121620;color:#e8ebf5;padding:0 13px;font:inherit}
-.v2-image-select{cursor:pointer}
-.v2-image-seed input:focus,.v2-image-select:focus{outline:none;border-color:#7459df;box-shadow:0 0 0 2px rgba(116,89,223,.12)}
-.v2-image-fixed-value{display:flex;align-items:center;gap:8px;color:#fff;font-weight:750;background:linear-gradient(90deg,rgba(100,74,220,.72),rgba(74,55,158,.4))}
-.v2-image-fixed-value small{color:#c6baff;font-size:10px;font-weight:600}
+.v2-image-settings.v2-settings-card{grid-template-columns:repeat(2,minmax(0,1fr))}
+.v2-image-settings .v2-setting-group:last-of-type{border-right:0;padding-right:0}
+.v2-image-settings .v2-settings-bottom{grid-column:1/-1}
 .v2-image-result.is-portrait .v2-image-result-preview{aspect-ratio:9/16}
 .v2-image-result.is-square .v2-image-result-preview{aspect-ratio:1/1}
-@media(max-width:1180px){.v2-image-results-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v2-image-settings{grid-template-columns:1fr 1fr}.v2-image-seed{grid-column:1/-1}}
-@media(max-width:700px){.v2-image-results-head{align-items:flex-start;flex-direction:column}.v2-image-results-status{text-align:left}.v2-image-results-grid{grid-template-columns:1fr}.v2-image-settings{grid-template-columns:1fr}.v2-image-seed{grid-column:auto}.v2-image-result-preview{aspect-ratio:16/10}}
+@media(max-width:1180px){.v2-image-results-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.v2-image-results-head{align-items:flex-start;flex-direction:column}.v2-image-results-status{text-align:left}.v2-image-results-grid{grid-template-columns:1fr}.v2-image-settings.v2-settings-card{grid-template-columns:1fr}.v2-image-settings .v2-setting-group{padding:0 0 14px;border-right:0;border-bottom:1px solid #2b3042}.v2-image-settings .v2-setting-group:last-of-type{padding-bottom:0;border-bottom:0}.v2-image-result-preview{aspect-ratio:16/10}}
