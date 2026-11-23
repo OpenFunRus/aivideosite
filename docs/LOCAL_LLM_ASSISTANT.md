@@ -1,42 +1,141 @@
-# Локальный ИИ-помощник для AI Video Site
+# Локальный ИИ-помощник AI Video Site
 
-Актуальное состояние после перехода на Gemma4 26B A4B Heretic.
+Актуальная модель:
 
-Модель:
-
-\`\`\`text
+```text
 llmfan46/gemma-4-26B-A4B-it-uncensored-heretic-GGUF
-Q4_K_M GGUF
-\`\`\`
+Q4_K_M
+context: 131072 tokens
+```
 
-Gemma уже встроена в сайт и является единственной текущей chat/control моделью.
+Gemma — единственная текущая chat / Magic Wand модель сайта.
 
 ## Архитектура
 
-Компоненты:
+Основные файлы:
 
-\`\`\`text
+```text
 app/assistant.py
 app/llm_assistant_manager.py
-app/static/assistant.js
-app/static/h3-prompting-guide-ai.txt
+
+app/static/assistant_context/
+  01_minimax_h3_master_guide_en.txt
+  02_minimax_h3_practical_playbook_en.txt
+  03_aivideosite_v2_operator_map_en.txt
+
+app/static/v2/js/workspaces/chat.js
+app/static/v2/js/create.js
 systemd/llm-assistant.service
-\`\`\`
+```
 
-Порты:
+`app/static/h3-prompting-guide-ai.txt` остаётся публичным machine-readable guide для внешнего копирования/ChatGPT, но НЕ является единственным preload локальной Gemma.
 
-- \`127.0.0.1:8090\` — llama.cpp OpenAI-compatible API;
-- \`127.0.0.1:8091\` — local GPU/CPU manager control API.
+Browser не обращается к llama.cpp напрямую.
 
 Site API:
 
-\`\`\`text
+```text
 GET  /api/assistant/status
 POST /api/assistant/chat
 POST /api/assistant/control
-\`\`\`
+POST /api/assistant/context
+```
 
-Browser не обращается к 8090 напрямую.
+Runtime:
+- llama.cpp OpenAI-compatible API: `127.0.0.1:8090`;
+- LLM placement manager: `127.0.0.1:8091`.
+
+## Preload / context
+
+Каждый эффективный LLM request получает:
+
+1. system/operator rules из `app/assistant.py`;
+2. три preload-файла `assistant_context/01..03`;
+3. sanitized `CURRENT_SITE_STATE`;
+4. conversation history;
+5. persistent user prompt, если он задан.
+
+Preset visibility — жёсткий backend gate:
+- в LLM context попадают только отмеченные справа Character/Location/Misc;
+- неотмеченные presets вообще не сериализуются;
+- для отмеченных передаются name + deep text metadata, voice state и image count;
+- сами reference pixels Gemma не видит: их получает MiniMax H3 при generation.
+
+## Промт пользователя
+
+Кнопка **«Промт пользователя»** хранит до 12 000 символов в per-user localStorage.
+
+Инструкция применяется на user priority:
+- к обычному Чату с ИИ;
+- к Magic Wand.
+
+Она не может переопределить higher-priority system rules.
+
+## Чат с ИИ
+
+Чат:
+- streaming;
+- говорит на языке пользователя;
+- не меняет формы и не утверждает, что запустил генерацию;
+- хранит историю per-user в browser localStorage;
+- показывает 128k context meter.
+
+Copy-ready output contract:
+- H3 prompt -> fenced ```text block;
+- code -> соответствующий language fence;
+- JSON / shell / config / template -> отдельный fenced block;
+- UI рендерит fence как отдельную карточку с кнопкой Copy.
+
+Обычный разговорный текст не нужно заворачивать в code fence.
+
+## Magic Wand
+
+Magic Wand возвращает prompt для текущего поля Video.
+
+Canonical H3 fields:
+
+```text
+integrated_multimodal_description:
+...
+
+overall_soundscape:
+...
+
+non_diegetic_music:
+...
+```
+
+Жёсткие правила:
+- production instructions — English;
+- exact dialogue / lyrics / on-screen text сохраняются на исходном языке;
+- явная речь/пение: stable `(Sx)` + `<d>[Language] ...</d>`;
+- никакого `changes.prompt:`, `message:`, `Mode:` footer;
+- runtime `generation_mode` / `has_driving_audio` важнее статических предположений;
+- master track с visual input = authoritative driving audio;
+- master track без visual input = mux-only, не H3 conditioning.
+
+Pipeline:
+1. Gemma draft;
+2. cleanup;
+3. deterministic validation;
+4. один repair-pass при необходимости;
+5. single-dialogue normalizer для типичного случая обычных кавычек.
+
+Validator — страховка, а не точка отказа.
+
+## Thinking
+
+Thinking управляется через llama.cpp chat template:
+
+```python
+chat_template_kwargs = {"enable_thinking": bool(thinking)}
+```
+
+Сайт НЕ добавляет вручную `/think` или `/no_think`.
+
+Visible response:
+- `reasoning_content` не форвардится;
+- inline `<think>...</think>` фильтруется.
 
 ## Dynamic GPU / CPU placement
 
@@ -46,22 +145,23 @@ Browser не обращается к 8090 напрямую.
 2. RTX3090;
 3. CPU, если обе GPU заняты H3.
 
-\`app/worker.py\` резервирует GPU перед H3 generation и освобождает после success/error/cancel.
+H3 worker резервирует GPU. Manager при необходимости переносит llama-server на другую свободную GPU или CPU, а после освобождения снова возвращает модель на GPU.
 
-Если текущая GPU LLM нужна H3, manager:
+Manager также учитывает очереди двух ComfyUI backend.
 
-1. останавливает текущий llama-server;
-2. выбирает вторую свободную GPU;
-3. если обе заняты — запускает CPU-only;
-4. после освобождения GPU возвращает LLM на GPU.
+## Model file
 
-Менеджер также смотрит \`/queue\` обоих ComfyUI backend.
+```text
+/opt/ai/models/llm/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf
+```
 
-## llama.cpp / CUDA build
+Установка/обновление модели автоматизируется `scripts/setup_gemma_assistant.sh`.
 
-Нужна CUDA-сборка:
+## llama.cpp CUDA build
 
-\`\`\`bash
+Пример:
+
+```bash
 cd /opt/ai/llama.cpp
 
 cmake -B build \
@@ -72,247 +172,45 @@ cmake -B build \
   -DCMAKE_CUDA_ARCHITECTURES="75;86"
 
 cmake --build build --config Release -j 18 -t llama-server
-\`\`\`
+```
 
 Проверка:
 
-\`\`\`bash
+```bash
 ./build/bin/llama-server --list-devices
-\`\`\`
+```
 
-## Model file
+## systemd
 
-\`\`\`text
-/opt/ai/models/llm/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf
-\`\`\`
-
-Если модель нужно скачать заново:
-
-\`\`\`bash
-sudo install -d -o openfun -g openfun /opt/ai/models/llm
-
-sudo -u openfun curl -L --fail --retry 5 \
-  'https://huggingface.co/llmfan46/gemma-4-26B-A4B-it-uncensored-heretic-GGUF/resolve/main/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf?download=true' \
-  -o /opt/ai/models/llm/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf
-\`\`\`
-
-## Context
-
-Service запускает модель с:
-
-\`\`\`text
-LLM_CTX_SIZE=131072
-\`\`\`
-
-То есть context = 128k tokens.
-
-System prompt состоит из:
-
-- H3 operator layer в \`app/assistant.py\`;
-- полного \`app/static/h3-prompting-guide-ai.txt\`;
-- текущего generator state;
-- conversation history.
-
-Текущий full H3 guide — около 20k chars. Цель — держать system prompt компактным, чтобы в 128k context оставался запас под историю, generator state и output.
-
-## Thinking
-
-По умолчанию OFF.
-
-Кнопка-мозг в assistant UI:
-
-- OFF -> \`/no_think\`;
-- ON -> \`/think\`.
-
-Thinking действует и в \`Разговор\`, и в \`Управление\`.
-
-Visible output не должен содержать reasoning:
-
-- \`reasoning_content\` игнорируется;
-- \`<think>...</think>\` фильтруется.
-
-## Чат с ИИ
-
-Streaming local chat.
-
-- «Промт пользователя» хранится в per-user localStorage и применяется к текущему user-запросу как дополнительная user-level инструкция и в чате, и в Magic Wand.
-- Copy-ready H3 prompts, code, JSON, shell commands, configs и templates модель обязана возвращать в fenced Markdown blocks; V2 UI отображает каждый такой блок отдельной карточкой с кнопкой копирования.
-- Правый Presets rail является visibility gate: backend загружает в LLM context только отмеченные Character/Location/Misc. Неотмеченные пресеты не сериализуются вообще.
-- Для отмеченных presets передаются подробные текстовые metadata: description/prompt/category, voice metadata, image_count и muted state.
-
-При H3-запросах модель получает preload H3 knowledge и текущую форму.
-
-Жёсткое правило:
-
-- объяснение может быть по-русски;
-- production-ready H3 instructions всегда English;
-- exact dialogue / lyrics / exact on-screen text сохраняются на исходном языке;
-- обычный V2 prompt и Magic Wand используют три поля: `integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`;
-- в Ref2VA-workspace backend сам добавляет `subject_definitions / summary / retention_analysis` и реальные reference labels, поэтому LLM не должна выдумывать `<Picture N>/<Video N>/<Audio N>`.
-
-## Разделение Chat и Magic Wand
-
-- `POST /api/assistant/chat` — **обычный разговорный помощник**: идеи, вопросы, разбор результатов, советы, troubleshooting. Он не управляет формой и не обязан превращать любой ответ в H3 prompt.
-- `POST /api/assistant/control` — **Magic Wand / control agent**. Только он возвращает JSON `changes.prompt` для формы.
-- Каждая палочка получает собственный workspace context:
-  - Create — duration/ratio/steps/sound + first/last flags + Characters;
-  - Continue — source video context + свои settings;
-  - Audio — выбранный master-track диапазон + embed/scene-sound + visual/Characters;
-  - Clip — previous video + следующий master-track диапазон + свои settings.
-- Состояние Create нельзя spread/переиспользовать для Continue/Audio/Clip.
-
-## Управление
-
-Модель возвращает JSON, backend валидирует и разрешает менять только allowlisted fields:
-
-- prompt;
-- generation_mode;
-- seconds;
-- fps;
-- steps;
-- seed;
-- generate_audio;
-- resolution_shape/resolution;
-- reference_task;
-- ref_image_size;
-- ControlNet settings;
-- selected Character IDs.
-
-Она не имеет shell-доступа и не должна выдумывать отсутствующие assets.
-
-## H3 knowledge
-
-Главный machine guide:
-
-\`\`\`text
-app/static/h3-prompting-guide-ai.txt
-\`\`\`
-
-В нём описаны:
-
-- FL2VA;
-- Ref2VA;
-- Characters;
-- exact Timeline Guides;
-- Digital Human;
-- H3 Audio;
-- reference roles/retention;
-- video edit/continuation;
-- H3 Fun ControlNet Union;
-- Inpaint;
-- action/camera/dialogue/sound grammar;
-- continuity checklist;
-- templates;
-- canonical three-field V2 prompt contract;
-- automatic three-field → six-field Ref2VA promotion in `app/h3_references.py`.
-
-## UI
-
-Плавающая кнопка справа снизу -> assistant panel.
-
-Режимы:
-
-- Разговор;
-- Управление.
-
-Дополнительно:
-
-- Thinking brain-toggle;
-- status target GPU/CPU;
-- per-user localStorage history;
-- streaming;
-- copy response;
-- clear history.
-
-## Clipboard
-
-Копирование не должно зависеть только от Clipboard API.
-
-Общий порядок:
-
-1. \`navigator.clipboard.writeText()\`;
-2. если unavailable/rejected -> hidden textarea;
-3. \`document.execCommand("copy")\`.
-
-Используется для assistant и guide copy buttons.
-
-## UTF-8
-
-SSE от llama.cpp читается как raw bytes и явно декодируется \`utf-8\`.
-
-Это исправляет mojibake вида \`Ð...\`.
-
-Saved assistant history также пытается восстановить типичный UTF-8/Latin-1 mojibake при загрузке.
-
-## systemd install/update
-
-\`\`\`bash
+```bash
 cd /opt/ai/aivideosite
 git pull origin main
 
 sudo cp systemd/llm-assistant.service /etc/systemd/system/llm-assistant.service
 sudo cp systemd/aivideosite.service /etc/systemd/system/aivideosite.service
-
 sudo systemctl daemon-reload
-sudo systemctl enable llm-assistant.service
-sudo systemctl enable aivideosite.service
 
 sudo systemctl restart llm-assistant.service
 sudo systemctl restart aivideosite.service
-\`\`\`
+```
 
-\`llm-assistant.service\` очищает старый ручной \`llama-server --port 8090\` через \`ExecStartPre\`, чтобы избежать bind conflict.
+Диагностика:
 
-## Проверка
-
-\`\`\`bash
+```bash
 systemctl --no-pager --full status llm-assistant.service
 journalctl -u llm-assistant.service -n 150 --no-pager
-
 curl -sS http://127.0.0.1:8091/status
 echo
 curl -sS http://127.0.0.1:8090/health
+```
 
-watch -n 0.5 nvidia-smi
-\`\`\`
+## Что проверяет пользователь вручную
 
-Ожидаемо при свободной RTX2080:
-
-\`\`\`json
-{"ok":true,"target":"RTX2080","reserved_gpus":[],"llama_alive":true,"llama_port":8090}
-\`\`\`
-
-## Runtime checks, которые делает пользователь
-
-1. Brain OFF/ON.
-2. H3 prompt на английском при русском запросе.
-3. Copy в assistant и guide.
-4. Dynamic move RTX2080 -> RTX3090 -> CPU при H3 load.
-5. Возврат LLM на GPU после завершения H3.
-6. Реальный 128k context после установки systemd service.
-7. Desktop/mobile UI.
-
-
-## Поведение Magic Wand
-
-- Для текущего unified `Видео` локальная LLM получает workspace-specific runtime state и возвращает plain-text H3 prompt.
-- Первый ответ Gemma проходит cleanup по исходному запросу, затем deterministic validation.
-- При нарушении формата backend автоматически делает repair-pass.
-- Проверяются обязательные три поля, Shot numbering/timing, запрет служебных footer-строк, сохранение конкретных чисел/quoted literals, а для явной речи/пения — обязательные stable `(Sx)` + `<d>[Language] ...</d>`.
-- Для одной явной реплики backend дополнительно нормализует типичный ответ с обычными кавычками в stable `(S1)` + `<d>[Language] ...</d>`, не меняя сам текст реплики.
-- После одного repair-pass внутренние diagnostics валидатора не показываются пользователю: непустой канонический prompt возвращается в форму, а validator остаётся страховкой, а не точкой отказа.
-- FORMAT LOCK / few-shot примеры в preload должны быть первым способом направлять Gemma; validator остаётся страховкой.
-
-
-## Gemma4 inference compatibility
-
-For Gemma4 the assistant follows the model-card sampling defaults:
-- temperature=1.0;
-- top_p=0.95;
-- top_k=64.
-
-Thinking is controlled through llama.cpp chat-template kwargs (enable_thinking), not by manually appending Qwen-style /think tokens.
-
-The manager starts llama-server with reasoning-format=deepseek so reasoning is returned separately from final content.
-
-Control mode deliberately does not use OpenAI response_format/json_object. Current llama.cpp Gemma4 structured-output handling can consume the full generation in the thought channel and return empty content; the site instead asks for plain JSON text and validates it server-side.
+1. Chat streaming.
+2. Thinking OFF / ON.
+3. «Промт пользователя» после reload.
+4. Copy-ready fenced blocks.
+5. Magic Wand canonical fields/dialogue format.
+6. Selected-only Presets visibility.
+7. Dynamic RTX2080 -> RTX3090 -> CPU placement under H3 load.
+8. Возврат Gemma на GPU после завершения H3.
