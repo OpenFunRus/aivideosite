@@ -5,11 +5,11 @@
 Модель:
 
 \`\`\`text
-w3joe/Qwen3-8B-abliterated
+llmfan46/gemma-4-26B-A4B-it-uncensored-heretic-GGUF
 Q4_K_M GGUF
 \`\`\`
 
-Модель уже встроена в сайт. Это НЕ только отдельный тестовый API.
+Gemma уже встроена в сайт. Старый Qwen3-8B assistant больше не используется и должен быть удалён с диска.
 
 ## Архитектура
 
