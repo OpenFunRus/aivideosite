@@ -21,7 +21,7 @@
 - шаги регулируются ползунком 6–24 с шагом 2. Для новых FL2VA-задач ровно 8 шагов используют установленную FL Turbo LoRA; остальные значения идут через Base. Ref2VA/Timeline/Digital Human в новом диапазоне 6–24 работают через Base, потому что установленная Ref Turbo LoRA рассчитана на 4 шага;
 - native Timeline Guides и ControlNet переключают sampler на `res_multistep`, как в официальных ComfyUI H3 workflows; обычный Easy path остаётся на `euler`;
 - полноэкранный гайд по MiniMax H3 прямо в интерфейсе: FL2VA/Ref2VA/Timeline/Digital Human, Characters, roles/retention, ControlNet, video editing/continuation, shots/timing, camera, dialogue/audio, ограничения и примеры;
-- отдельные machine-readable guides: `/static/h3-prompting-guide-ai.txt` для H3 Video и `/static/h3-image-prompting-guide-ai.txt` для H3 Image; copy-paste контекст для ChatGPT объединяет структуру V2 и оба гайда;
+- отдельный machine-readable H3 Video guide: `/static/h3-prompting-guide-ai.txt`; copy-paste контекст для ChatGPT объединяет структуру V2 и этот актуальный guide;
 - опциональное нативное аудио MiniMax H3 через Audio VAE, выключено по умолчанию;
 - prompt и все параметры генерации автоматически сохраняются в localStorage и восстанавливаются после перезагрузки;
 - очередь GPU-задач с хранением состояния в SQLite;
@@ -47,7 +47,6 @@ V2 уже содержит отдельные рабочие пространс�
 
 - **Видео** — 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 сек, 8/12/16 steps, seed, sound, first/last frames, Characters и magic wand;
 - **Видео по аудио** — Digital Human с driving audio и Character/visual reference;
-- **Изображения** — MiniMax H3 Image на RTX2080: генерация и redraw/edit, Characters/Locations/Misc как reference images, до 8 последних результатов и кнопки отправки результата в первый/последний кадр Video;
 - **Библиотека** — просмотр результатов, скачивание и извлечение стартового/финального PNG-кадра для продолжения через First Frame;
 - **Очередь** — rolling log последних 20 задач без пагинации и ручного удаления строк, плюс занятость обеих GPU;
 - **Монтаж** — последовательный Video 1 timeline, reorder, zoom/snap/timecode, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
@@ -219,8 +218,6 @@ H3_AUDIO_VAE=minimax_h3_audio_vae_fp32.safetensors
 H3_TURBO_LORA=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
 H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors
 H3_CONTROLNET_MODEL_PATCH=minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors
-H3_IMAGE_MODEL=MiniMax-H3-Image-AD-Q4_K.gguf
-H3_IMAGE_VAE=minimax_h3_image_vae_fp16.safetensors
 ```
 
 Если файл модели называется иначе, достаточно изменить `.env`, код трогать не нужно. FL2VA и Ref2VA передаются в EasyLoader раздельно, поэтому отсутствие нового Ref2VA checkpoint не ломает старые FL2VA-задачи; Ref2VA начнёт работать после установки указанного checkpoint. Для 4-step Ref Turbo отдельно нужен Ref2V Turbo LoRA. ControlNet требует отдельный model patch в ComfyUI `models/model_patches`. Модели приложение само не скачивает.
@@ -258,7 +255,6 @@ UI позволяет выбрать все aspect ratio, которые под�
 
 ```text
 /static/h3-prompting-guide-ai.txt
-/static/h3-image-prompting-guide-ai.txt
 ```
 
 В модалке есть кнопка `Ссылка для нейронки`, копирование абсолютного URL и отдельный copy-paste блок для ChatGPT. Machine guide теперь описывает все реально подключённые режимы: FL2VA, Ref2VA, exact Timeline Guides, Characters, video/audio references, Digital Human и ControlNet Union.
