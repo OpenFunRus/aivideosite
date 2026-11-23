@@ -32,7 +32,6 @@
   .v2-chatgpt-actions{min-width:0}
 }
 @media (max-width:520px){
-  .v2-topbar-status .v2-draft-state{display:none}
   .v2-gpu-pill{font-size:10px}
   .v2-prompt-field textarea{font-size:15px;min-height:170px}
   .v2-character-dialog{inset:8px;width:calc(100vw - 16px)}
@@ -212,10 +211,6 @@ html {
 .v2-gpu-load b {
   color: #e7eaf4;
 }
-.v2-draft-state {
-  display: none !important;
-}
-
 .v2-prompt-card {
   padding: 16px 18px 12px;
 }
@@ -546,11 +541,6 @@ html {
     font-size: 13px;
     letter-spacing: -.02em;
   }
-  .v2-mobile-brand em {
-    color: #a776ff;
-    font-style: normal;
-  }
-
   .v2-mobile-backdrop {
     position: fixed;
     inset: 62px 0 0;
