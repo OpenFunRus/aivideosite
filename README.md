@@ -21,7 +21,8 @@
 - шаги регулируются ползунком 6–24 с шагом 2. Для новых FL2VA-задач ровно 8 шагов используют установленную FL Turbo LoRA; остальные значения идут через Base. Ref2VA/Timeline/Digital Human в новом диапазоне 6–24 работают через Base, потому что установленная Ref Turbo LoRA рассчитана на 4 шага;
 - native Timeline Guides и ControlNet переключают sampler на `res_multistep`, как в официальных ComfyUI H3 workflows; обычный Easy path остаётся на `euler`;
 - полноэкранный гайд по MiniMax H3 прямо в интерфейсе: FL2VA/Ref2VA/Timeline/Digital Human, Characters, roles/retention, ControlNet, video editing/continuation, shots/timing, camera, dialogue/audio, ограничения и примеры;
-- отдельный machine-readable guide: `/static/h3-prompting-guide-ai.txt`, плюс готовый copy-paste для ChatGPT;
+- отдельные machine-readable guides: `/static/h3-prompting-guide-ai.txt
+/static/h3-image-prompting-guide-ai.txt` для H3 Video и `/static/h3-image-prompting-guide-ai.txt` для H3 Image; copy-paste контекст для ChatGPT объединяет структуру V2 и оба гайда;
 - опциональное нативное аудио MiniMax H3 через Audio VAE, выключено по умолчанию;
 - prompt и все параметры генерации автоматически сохраняются в localStorage и восстанавливаются после перезагрузки;
 - очередь GPU-задач с хранением состояния в SQLite;
