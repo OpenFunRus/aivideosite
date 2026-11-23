@@ -183,7 +183,7 @@
     if (total) total.textContent = state.misc.length + " пресетов";
     if (empty) empty.hidden = list.length > 0;
     const addCard = '<button class="v2-character-add-card v2-misc-add-card" type="button" data-misc-add-card>' +
-      '<span class="v2-character-add-card-icon"><svg class="icon"><use href="/static/icons.svg#icon-plus"></use></svg></span><strong>Добавить пресет</strong></button>';
+      '<span class="v2-character-add-card-icon"><svg class="icon"><use href="/static/icons.svg#icon-plus"></use></svg></span><strong><span>Добавить</span><span>пресет</span></strong></button>';
     const cards = list.map((preset) => {
       const id=String(preset.id), selected=state.selectedMiscIds.has(id);
       const image=preset.preview_url ? '<img src="'+escapeHtml(preset.preview_url)+'" alt="">' :
