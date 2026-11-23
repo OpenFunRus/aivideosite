@@ -19,16 +19,33 @@ MAX_HISTORY_CHARS = 500000
 CONTEXT_TOKENS = 131072
 CONTEXT_SAFETY_TOKENS = 1200
 
-H3_GUIDE_PATH = Path(__file__).resolve().parent / "static" / "h3-prompting-guide-ai.txt"
-H3_GUIDE_MAX_CHARS = 60000
+ASSISTANT_CONTEXT_DIR = Path(__file__).resolve().parent / "static" / "assistant_context"
+ASSISTANT_CONTEXT_FILES = (
+    ("MINIMAX_H3_MASTER_GUIDE", ASSISTANT_CONTEXT_DIR / "01_minimax_h3_master_guide_en.txt"),
+    ("MINIMAX_H3_PRACTICAL_PLAYBOOK", ASSISTANT_CONTEXT_DIR / "02_minimax_h3_practical_playbook_en.txt"),
+    ("AI_VIDEO_SITE_V2_OPERATOR_MAP", ASSISTANT_CONTEXT_DIR / "03_aivideosite_v2_operator_map_en.txt"),
+)
+ASSISTANT_CONTEXT_FILE_MAX_CHARS = 100000
 
 
-def _load_h3_guide() -> str:
+def _load_assistant_context_file(label: str, path: Path) -> str:
     try:
-        content = H3_GUIDE_PATH.read_text(encoding="utf-8").strip()
+        content = path.read_text(encoding="utf-8").strip()
     except OSError:
         content = ""
-    return content[:H3_GUIDE_MAX_CHARS]
+    if not content:
+        return f"===== {label} =====\n[Context file unavailable: {path.name}]"
+    return f"===== {label} =====\n{content[:ASSISTANT_CONTEXT_FILE_MAX_CHARS]}"
+
+
+def _load_assistant_knowledge_pack() -> str:
+    return "\n\n".join(
+        _load_assistant_context_file(label, path)
+        for label, path in ASSISTANT_CONTEXT_FILES
+    )
+
+
+ASSISTANT_KNOWLEDGE_PACK = _load_assistant_knowledge_pack()
 
 
 H3_AGENT_RULES = r"""
@@ -40,7 +57,8 @@ for THIS exact local site, not generic advice for some other H3 workflow.
 
 OPERATING PRINCIPLES
 - Be direct, useful and concrete.
-- Treat CURRENT_GENERATOR_STATE, AVAILABLE_CHARACTERS and AVAILABLE_LOCATIONS as ground truth.
+- Treat CURRENT_SITE_STATE, AVAILABLE_CHARACTERS and AVAILABLE_LOCATIONS as ground truth.
+- The three physical context files are authoritative background knowledge and are loaded into every effective assistant request because the llama.cpp chat-completions endpoint is stateless.
 - Never invent uploaded images, videos, audio, Characters, Locations, voices, guide frames or ControlNet inputs.
 - Never claim the UI can do something that is not present in the supplied state/guide.
 - Preserve exact requested dialogue, lyrics, names and on-screen text.
@@ -125,7 +143,7 @@ Never fabricate reference media or Character IDs.
 H3_EXPERT_GUIDE = (
     H3_AGENT_RULES
     + "\n\n================ FULL LOCAL H3 WORKFLOW GUIDE ================\n\n"
-    + _load_h3_guide()
+    + ASSISTANT_KNOWLEDGE_PACK
 )
 
 CHAT_SYSTEM = (
@@ -139,8 +157,8 @@ CHAT_SYSTEM = (
     "explicitly asks for a prompt or asks you to rewrite one; otherwise discuss the idea normally first. "
     "When a production H3 prompt is explicitly requested, follow the reference guide below accurately. "
     "Keep answers conversational and useful; avoid repetitive boilerplate. Never reveal hidden reasoning.\n\n"
-    "================ H3 REFERENCE KNOWLEDGE (use when relevant) ================\n\n"
-    + _load_h3_guide()
+    "================ THREE-FILE BOOTSTRAP KNOWLEDGE ================\n\n"
+    + ASSISTANT_KNOWLEDGE_PACK
 )
 
 CONTROL_SYSTEM = (
@@ -379,6 +397,7 @@ def _settings_context(settings: Any) -> str:
             "selected_character_ids",
             "selected_location_ids",
             "workspace",
+            "active_view",
             "has_first_frame",
             "has_last_frame",
             "embed_track",
@@ -404,17 +423,57 @@ def _settings_context(settings: Any) -> str:
         safe["source_title"] = str(settings.get("source_title") or "")[:300]
     if "master_track_title" in settings:
         safe["master_track_title"] = str(settings.get("master_track_title") or "")[:300]
+    for state_key in ("create_state", "audio_state"):
+        block = settings.get(state_key)
+        if not isinstance(block, dict):
+            continue
+        allowed = {
+            key: block.get(key)
+            for key in (
+                "workspace",
+                "prompt",
+                "quality",
+                "resolution",
+                "resolution_shape",
+                "seconds",
+                "fps",
+                "steps",
+                "seed",
+                "generate_audio",
+                "has_first_frame",
+                "has_last_frame",
+                "embed_track",
+                "generate_scene_audio",
+                "audio_start",
+                "audio_end",
+                "master_track_title",
+                "track_id",
+                "track_title",
+                "has_visual_reference",
+                "visual_reference_name",
+            )
+            if key in block
+        }
+        if "prompt" in allowed:
+            allowed["prompt"] = str(allowed.get("prompt") or "")[:16000]
+        safe[state_key] = allowed
+
     available = settings.get("available_characters")
     if isinstance(available, list):
         safe["available_characters"] = [
             {
                 "id": str(item.get("id") or ""),
                 "name": str(item.get("name") or ""),
-                "description": str(item.get("description") or "")[:240],
-                "voice": bool(item.get("voice")),
+                "description": str(item.get("description") or "")[:2000],
                 "image_count": int(item.get("image_count") or 0),
+                "voice": bool(item.get("voice")),
+                "voice_source": str(item.get("voice_source") or "none"),
+                "voice_preset_id": str(item.get("voice_preset_id") or ""),
+                "voice_preset_name": str(item.get("voice_preset_name") or ""),
+                "selected": bool(item.get("selected")),
+                "voice_muted": bool(item.get("voice_muted")),
             }
-            for item in available[:20]
+            for item in available[:100]
             if isinstance(item, dict) and item.get("id")
         ]
     available_locations = settings.get("available_locations")
@@ -423,10 +482,11 @@ def _settings_context(settings: Any) -> str:
             {
                 "id": str(item.get("id") or ""),
                 "name": str(item.get("name") or ""),
-                "prompt": str(item.get("prompt") or "")[:800],
+                "prompt": str(item.get("prompt") or "")[:4000],
                 "image_count": int(item.get("image_count") or 0),
+                "selected": bool(item.get("selected")),
             }
-            for item in available_locations[:30]
+            for item in available_locations[:100]
             if isinstance(item, dict) and item.get("id")
         ]
     return json.dumps(safe, ensure_ascii=False, separators=(",", ":"))
@@ -454,7 +514,7 @@ def _chat_payload(
         prepared.append(
             {
                 "role": "system",
-                "content": "CURRENT_GENERATOR_STATE JSON:\n" + settings_json,
+                "content": "CURRENT_SITE_STATE JSON:\n" + settings_json,
             }
         )
     prepared.append(
@@ -503,7 +563,7 @@ def context_usage(
         system_messages.append(
             {
                 "role": "system",
-                "content": "CURRENT_GENERATOR_STATE JSON:\n" + settings_json,
+                "content": "CURRENT_SITE_STATE JSON:\n" + settings_json,
             }
         )
     system_messages.append(
