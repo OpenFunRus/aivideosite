@@ -121,13 +121,17 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_media_owner_created "
             "ON media(owner_id, created_at DESC)"
         )
-        # H3 Image generator was retired. Remove its job history and legacy table.
+        # The standalone still-image generator was retired. Purge its old jobs and
+        # legacy table once. Character/Location/Misc reference images live elsewhere.
+        legacy_image_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='image_results'"
+        ).fetchone()
         conn.execute("DELETE FROM jobs WHERE kind='image_generate'")
-        conn.execute("DROP TABLE IF EXISTS image_results")
+        if legacy_image_table is not None:
+            conn.execute("DROP TABLE image_results")
 
-    # Generated stills lived only in this dedicated folder; Character/Location/Misc
-    # reference images are stored elsewhere and are intentionally preserved.
-    shutil.rmtree(settings.data_dir / "images", ignore_errors=True)
+    if legacy_image_table is not None:
+        shutil.rmtree(settings.data_dir / "images", ignore_errors=True)
 
 
 def _ensure_jobs_columns(conn: sqlite3.Connection) -> None:
