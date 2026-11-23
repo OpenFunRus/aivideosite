@@ -261,8 +261,7 @@ The llama.cpp endpoint is stateless, so the assistant context files are included
 effective system context on each request. Older conversation turns may be trimmed to
 preserve output budget.
 
-The active local assistant is Gemma4. The retired Qwen3-8B assistant is not part of the
-current architecture.
+Gemma4 26B A4B Heretic is the only local chat assistant in the current architecture.
 
 ===============================================================================
 11. SYSTEM
