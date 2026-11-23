@@ -210,6 +210,8 @@
       renderMiscGrid();
       api.renderCharacterGrid?.();
       api.renderLocationGrid?.();
+      api.updateCreateCompatibility?.();
+      saveDraft();
     } catch (error) {
       showToast("Не удалось загрузить «Прочее»: " + error.message, "error");
     }
