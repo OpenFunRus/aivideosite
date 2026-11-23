@@ -45,8 +45,9 @@ http://IP_ВМ:8000/v2
 
 V2 уже содержит отдельные рабочие пространства:
 
-- **Создать** — 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 сек, 8/12/16 steps, seed, sound, first/last frames, Characters и magic wand;
-- **По аудио** — Digital Human с driving audio и Character/visual reference;
+- **Видео** — 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 сек, 8/12/16 steps, seed, sound, first/last frames, Characters и magic wand;
+- **Видео по аудио** — Digital Human с driving audio и Character/visual reference;
+- **Изображения** — MiniMax H3 Image на RTX2080: генерация и redraw/edit, Characters/Locations/Misc как reference images, до 8 последних результатов и кнопки отправки результата в первый/последний кадр Video;
 - **Библиотека** — просмотр результатов, скачивание и извлечение стартового/финального PNG-кадра для продолжения через First Frame;
 - **Очередь** — rolling log последних 20 задач без пагинации и ручного удаления строк, плюс занятость обеих GPU;
 - **Монтаж** — последовательный Video 1 timeline, reorder, zoom/snap/timecode, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
@@ -218,6 +219,8 @@ H3_AUDIO_VAE=minimax_h3_audio_vae_fp32.safetensors
 H3_TURBO_LORA=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
 H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors
 H3_CONTROLNET_MODEL_PATCH=minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors
+H3_IMAGE_MODEL=MiniMax-H3-Image-AD-Q4_K.gguf
+H3_IMAGE_VAE=minimax_h3_image_vae_fp16.safetensors
 ```
 
 Если файл модели называется иначе, достаточно изменить `.env`, код трогать не нужно. FL2VA и Ref2VA передаются в EasyLoader раздельно, поэтому отсутствие нового Ref2VA checkpoint не ломает старые FL2VA-задачи; Ref2VA начнёт работать после установки указанного checkpoint. Для 4-step Ref Turbo отдельно нужен Ref2V Turbo LoRA. ControlNet требует отдельный model patch в ComfyUI `models/model_patches`. Модели приложение само не скачивает.
