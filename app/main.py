@@ -2261,12 +2261,22 @@ async def api_v2_audio(
             timeline_audio_end = min(float(track_duration), timeline_audio_end)
 
         h3_prompt = compact_prompt
+        if use_driving_audio:
+            h3_prompt = (
+                "Driving-audio performance constraint: the supplied audio is the authoritative "
+                "performance track. Synchronize visible mouth/lip articulation, facial performance, "
+                "gestures and body motion to it. If the supplied audio contains singing, the visible "
+                "subject must visibly sing in sync with the vocals; if it contains speech, the visible "
+                "subject must visibly speak in sync. Do not invent, rewrite or replace lyrics or spoken "
+                "words.\n\n"
+                + h3_prompt.lstrip()
+            )
         if generate_scene_audio and embed_track:
             h3_prompt = (
                 "Audio constraint: generate only diegetic environmental and foley sounds "
                 "for the visible scene. Do not reproduce, sing, hum, or recreate the selected "
                 "master track; the original track will be mixed separately.\n\n"
-                + compact_prompt.lstrip()
+                + h3_prompt.lstrip()
             )
 
         generation_mode = "digital_human" if use_driving_audio else "frames"
