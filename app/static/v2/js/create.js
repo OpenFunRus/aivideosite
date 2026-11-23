@@ -132,7 +132,9 @@
           "First/Last при наличии backend закрепляет отдельно как exact native MiniMaxH3AddGuide anchors, поэтому не придумывай для них Picture labels и не добавляй FL2VA alignment line. "
         )
         : (
-          "Это обычный режим Video без driving master track. "
+          "Это обычный режим Video без driving master track. " +
+          "Если First/Last используются без Characters/Locations/Misc — добавь правильную FL2VA alignment line из H3 guide. " +
+          "Если First/Last используются вместе с Characters/Locations/Misc — НЕ добавляй Picture alignment line: backend применит кадры отдельно как exact Timeline Guides. "
         );
       const result = await fetchJson("/api/assistant/control", {
         method: "POST",
@@ -149,8 +151,6 @@
               "Один основной camera move на shot. Точные реплики оформляй как (S1) и <d>[Language] ...</d> без перевода. " +
               "Если generate_audio выключен — overall_soundscape: N/A и non_diegetic_music: N/A. " +
               "Если звук включён, но музыки не просили — non_diegetic_music: N/A. " +
-              "Если first/last frame используются БЕЗ Characters, добавь перед тремя полями правильную FL2VA alignment line из H3 guide. " +
-              "Если Characters, Locations или Misc и first/last frame выбраны одновременно, НЕ добавляй Picture alignment line: backend применит кадры отдельно как exact Timeline Guides. " +
               "Если выбраны Characters, Locations или Misc, не придумывай Picture/Subject ordinals и не пиши шесть Ref2VA-полей: backend добавит реальные semantic references сам. " +
               "Selected Misc presets — реальные H3 semantic references предметов, одежды, оружия, транспорта, существ, особенностей, поз/действий, стилей и прочего; обязательно учитывай их name/category/description в сцене, не выдумывая новые свойства. " +
               "Сохрани все конкретные факты буквально: если написано 35 лет — в результате тоже должно быть 35, а не диапазон возраста. " +
