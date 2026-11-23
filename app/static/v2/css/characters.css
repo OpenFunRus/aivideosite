@@ -312,34 +312,55 @@
 }
 .v2-character-rail .v2-character-edit-button .icon{width:14px;height:14px}
 .v2-character-rail .v2-character-add-card{
+  --v2-add-border:#7657c8;
+  --v2-add-hover-border:#9a7cff;
+  --v2-add-bg:linear-gradient(145deg,#171a29,#121521);
+  --v2-add-hover-bg:linear-gradient(145deg,#1d1932,#151724);
+  --v2-add-text:#c8b9ff;
+  --v2-add-hover-text:#fff;
+  --v2-add-icon-border:#7657e8;
+  --v2-add-icon-bg:#251d48;
+  --v2-add-icon-color:#b9a4ff;
+  --v2-add-glow:rgba(118,87,255,.12);
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
   gap:10px;
-  border:1px dashed #7657c8;
-  background:linear-gradient(145deg,#171a29,#121521);
-  color:#c8b9ff;
+  border:1px dashed var(--v2-add-border);
+  background:var(--v2-add-bg);
+  color:var(--v2-add-text);
   cursor:pointer;
 }
 .v2-character-rail .v2-character-add-card:hover{
-  border-color:#9a7cff;
-  background:linear-gradient(145deg,#1d1932,#151724);
-  color:#fff;
+  border-color:var(--v2-add-hover-border);
+  background:var(--v2-add-hover-bg);
+  color:var(--v2-add-hover-text);
 }
 .v2-character-add-card-icon{
   width:44px;
   height:44px;
   display:grid;
   place-items:center;
-  border:1px solid #7657e8;
+  border:1px solid var(--v2-add-icon-border);
   border-radius:12px;
-  background:#251d48;
-  color:#b9a4ff;
-  box-shadow:0 0 20px rgba(118,87,255,.12);
+  background:var(--v2-add-icon-bg);
+  color:var(--v2-add-icon-color);
+  box-shadow:0 0 20px var(--v2-add-glow);
 }
 .v2-character-add-card-icon .icon{width:22px;height:22px}
-.v2-character-add-card strong{font-size:11px;font-weight:750;text-align:center}
+.v2-character-add-card strong{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:1px;
+  font-size:11px;
+  font-weight:750;
+  line-height:1.15;
+  text-align:center;
+}
+.v2-character-add-card strong>span{display:block}
 
 
 /* Reusable presets: Characters + Locations */
@@ -358,13 +379,33 @@
 .v2-character-card.v2-location-card.selected{border-color:#d85b68;box-shadow:0 0 0 1px rgba(229,84,98,.35),0 10px 30px rgba(0,0,0,.18)}
 .v2-location-card.selected .v2-character-selectmark{background:#e55462;border-color:#ff7d87}
 .v2-location-card .v2-user-avatar .icon{width:25px;height:25px}
-.v2-location-add-card .v2-character-add-card-icon{color:#f06b77}
+.v2-character-rail .v2-location-add-card{
+  --v2-add-border:#a93c4a;
+  --v2-add-hover-border:#e55462;
+  --v2-add-bg:linear-gradient(145deg,#29161d,#17131a);
+  --v2-add-hover-bg:linear-gradient(145deg,#351922,#1e1419);
+  --v2-add-text:#f06b77;
+  --v2-add-hover-text:#ffadb5;
+  --v2-add-icon-border:#c94d5a;
+  --v2-add-icon-bg:#321820;
+  --v2-add-icon-color:#ff7d87;
+  --v2-add-glow:rgba(229,84,98,.16);
+}
 .v2-location-create-dialog .v2-kicker{color:#f06b77}
 .v2-character-card.v2-misc-card.selected{border-color:#d5a928;box-shadow:0 0 0 1px rgba(213,169,40,.38),0 10px 30px rgba(0,0,0,.18)}
 .v2-misc-card.selected .v2-character-selectmark{background:#d5a928;border-color:#ffe17c;color:#181202}
-.v2-misc-add-card .v2-character-add-card-icon{border-color:#a77b18;background:#30260f;color:#f4c84d}
-.v2-misc-add-card{border-color:#8f6c1b!important;color:#e9c85c!important}
-.v2-misc-add-card:hover{border-color:#d5a928!important;background:linear-gradient(145deg,#29230f,#18170f)!important;color:#fff1ad!important}
+.v2-character-rail .v2-misc-add-card{
+  --v2-add-border:#8f6c1b;
+  --v2-add-hover-border:#d5a928;
+  --v2-add-bg:linear-gradient(145deg,#231e0f,#15150f);
+  --v2-add-hover-bg:linear-gradient(145deg,#29230f,#18170f);
+  --v2-add-text:#e9c85c;
+  --v2-add-hover-text:#fff1ad;
+  --v2-add-icon-border:#a77b18;
+  --v2-add-icon-bg:#30260f;
+  --v2-add-icon-color:#f4c84d;
+  --v2-add-glow:rgba(213,169,40,.15);
+}
 .v2-misc-create-dialog .v2-kicker{color:#e6bd4c}
 .v2-misc-category-chip{position:absolute;z-index:4;left:8px;right:38px;top:40px;display:block;width:max-content;max-width:calc(100% - 52px);padding:4px 6px;border:1px solid rgba(213,169,40,.5);border-radius:6px;background:rgba(34,27,8,.84);color:#f3ce65;font-size:8px;font-weight:800;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;backdrop-filter:blur(4px)}
 
