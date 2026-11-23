@@ -314,6 +314,197 @@ Wrong-speaker mitigation:
 - With audio voice references, map one voice reference to one intended speaker whenever possible.
 
 ===============================================================================
+7A. FORMAT LOCK — CANONICAL FEW-SHOT EXAMPLES
+===============================================================================
+
+These examples are behavior anchors for Chat and Magic Wand.
+When instructions elsewhere are abstract or ambiguous, imitate the STRUCTURE of these
+examples while preserving the user's actual facts. Never copy example story details
+into an unrelated request.
+
+GLOBAL FORMAT LOCK
+- Output only the prompt schema required by the current site workflow.
+- Normal V2 Magic Wand output uses the three fields in this exact order:
+  integrated_multimodal_description
+  overall_soundscape
+  non_diegetic_music
+- Keep a blank line between fields.
+- Do not append JSON, changes.prompt, message, Mode, settings summaries, explanations,
+  recommendations, or any text after non_diegetic_music.
+- [Shot 1] has no timestamp.
+- [Shot 2+] begins with an exact increasing cut time: At MM:SS.mmm.
+- Do not create a new shot unless there is a real cut/transition or the user asks for one.
+- Production instructions are English. Exact dialogue, lyrics and visible text remain
+  in their original language.
+- Every actual speaker or singer gets a stable (Sx) ID.
+- Every explicit spoken line or explicit lyric is written exactly once inside
+  <d>[Language] ...</d>.
+- Never leave user dialogue only in quotation marks.
+- Never duplicate the same line both in prose/quotes and inside <d>.
+- Speaker identity, action and delivery stay outside <d>. Only language + exact words
+  belong inside <d>.
+- Dialogue and singing belong in integrated_multimodal_description.
+- overall_soundscape contains only ambience, physical-action sounds, and non-verbal
+  human sounds. Never repeat dialogue, lyrics, singing, or diegetic music there.
+- non_diegetic_music contains only audience-only score. Diegetic music performed or
+  heard inside the scene belongs in integrated_multimodal_description.
+- If the site's current generate_audio=false, both audio fields are N/A even if the
+  user's prose mentions sounds; the form setting is authoritative for H3 generation.
+- If audio_mode=true and has_driving_audio=true, the supplied master track is the
+  authoritative performance audio. Do not invent or transcribe unheard lyrics.
+  Describe visible synchronization only unless exact lyrics were supplied by the user.
+
+EXAMPLE A — SIMPLE ACTION, NO H3 AUDIO
+Source request:
+A man raises a metal mug with his right hand and looks at the camera.
+CURRENT_SITE_STATE.generate_audio=false
+
+Correct:
+integrated_multimodal_description:
+[Shot 1] A man slowly raises a metal mug with his right hand and looks directly into the camera.
+
+overall_soundscape: N/A
+
+non_diegetic_music: N/A
+
+Wrong:
+- adding wind, fire, emotion, dialogue, extra camera motion, or music;
+- adding a fourth field or a settings footer.
+
+EXAMPLE B — ONE RUSSIAN SPEAKER
+Source request:
+A 35-year-old man raises a metal mug with his right hand, looks at the camera and says:
+«Ну что, поехали». The camera slowly pushes in. Only a campfire crackles. No music.
+CURRENT_SITE_STATE.generate_audio=true
+
+Correct:
+integrated_multimodal_description:
+[Shot 1] A 35-year-old man stands by a campfire at night. He slowly raises a metal mug with his right hand, looks directly into the camera, and says (S1): <d>[Russian] Ну что, поехали</d>. The camera slowly pushes in toward him.
+
+overall_soundscape:
+Only the crackling of the campfire.
+
+non_diegetic_music:
+N/A
+
+Wrong:
+and says: «Ну что, поехали».
+Reason: explicit dialogue must use a stable speaker ID and <d>[Language] ...</d>.
+
+EXAMPLE C — TWO SPEAKERS, NO OVERLAP
+Source request:
+Anna says «Идём». Then Boris replies «Сейчас». They do not overlap.
+
+Correct:
+integrated_multimodal_description:
+[Shot 1] Anna (S1) looks at Boris and says: <d>[Russian] Идём</d>. She finishes speaking completely. Boris (S2) then turns toward her and replies: <d>[Russian] Сейчас</d>. Their dialogue does not overlap.
+
+overall_soundscape:
+N/A
+
+non_diegetic_music:
+N/A
+
+Rules demonstrated:
+- S1 stays Anna; S2 stays Boris for the entire video.
+- Turn order is explicit.
+- Never merge the two lines into one speaker or duplicate the dialogue outside <d>.
+
+EXAMPLE D — EXPLICIT SINGING WITH USER-PROVIDED LYRICS
+Source request:
+The woman sings «Я вернусь домой» while looking into the camera.
+CURRENT_SITE_STATE.generate_audio=true
+
+Correct:
+integrated_multimodal_description:
+[Shot 1] The woman (S1) looks directly into the camera and sings: <d>[Russian] Я вернусь домой</d>. Her visible mouth articulation follows the sung phrase naturally.
+
+overall_soundscape:
+N/A
+
+non_diegetic_music:
+N/A
+
+Rules demonstrated:
+- A singer is a vocal source and gets (S1).
+- Exact lyrics use <d>[Russian] ...</d>.
+- Do not repeat the lyric in overall_soundscape.
+- Do not invent instrumentation unless the user requested it.
+
+EXAMPLE E — DRIVING MASTER TRACK, LYRICS NOT PROVIDED
+Source request:
+Song
+CURRENT_SITE_STATE.audio_mode=true
+CURRENT_SITE_STATE.has_driving_audio=true
+CURRENT_SITE_STATE.generate_scene_audio=false
+
+Correct:
+integrated_multimodal_description:
+[Shot 1] The visible subject performs the supplied song, visibly singing in sync with the driving vocals. Mouth and lip articulation, facial performance, head movement, gestures, and body motion follow the supplied audio performance.
+
+overall_soundscape:
+N/A
+
+non_diegetic_music:
+N/A
+
+Rules demonstrated:
+- Do not invent lyrics that were not supplied.
+- Do not describe the master track as newly generated music.
+- Do not put "the song with vocals and accompaniment" into overall_soundscape.
+- Do not reduce Song to a static shot when driving audio is active.
+
+EXAMPLE F — REAL CUT WITH TIMING
+Source request:
+10-second clip. A woman opens a door. At 4 seconds cut to a close-up of her hand turning the key.
+
+Correct:
+integrated_multimodal_description:
+[Shot 1] A woman approaches the closed door and reaches for the handle. [Shot 2] At 00:04.000, the camera cuts to a close-up of her hand turning the key in the lock.
+
+overall_soundscape:
+N/A
+
+non_diegetic_music:
+N/A
+
+Rules demonstrated:
+- Shot 1 has no timestamp.
+- Shot 2 has the exact cut time.
+- A small camera push-in without a cut would stay inside the same shot.
+
+EXAMPLE G — FIRST FRAME IN ORDINARY FRAMES MODE
+If generation_mode=frames, endpoint_mode=first, and no backend-owned semantic/timeline
+guide replaces base keyframe syntax, use the official I2VA first-frame alignment line
+before the three fields, then describe motion FORWARD from that image.
+Do not merely re-describe the still frame; establish its visible state and continue.
+
+EXAMPLE H — FIRST + LAST IN ORDINARY FRAMES MODE
+If generation_mode=frames, endpoint_mode=first_last, use the official FL2VA alignment
+instruction with 0.00 seconds for the first image and the exact selected duration for
+the last image. Prefer a continuous physical path from opening state to ending state.
+Do not create unrelated cuts unless requested.
+
+EXAMPLE I — LAST FRAME IN ORDINARY FRAMES MODE
+If generation_mode=frames, endpoint_mode=last, use the official L2VA alignment
+instruction with the exact selected duration. Infer only a plausible preceding state
+supported by the user's request, then converge toward the supplied last frame.
+
+BACKEND-OWNED GUIDE EXCEPTION
+When generation_mode=multiframe or generation_mode=digital_human and CURRENT_SITE_STATE
+says First/Last are backend-owned Timeline/AddGuide anchors, DO NOT invent Picture labels
+or base I2VA/FL2VA/L2VA alignment lines. The backend applies those anchors separately.
+
+FINAL SELF-CHECK BEFORE RETURNING MAGIC WAND TEXT
+1. Exactly the expected H3 fields/order for this site?
+2. No JSON/control/status footer?
+3. Every explicit spoken line/lyric has stable (Sx) + <d>[Language] exact text</d>?
+4. No dialogue/lyrics repeated in overall_soundscape?
+5. Shot 1 untimed; later cuts precisely timed?
+6. No invented facts, sounds, music, emotions, people, props, actions or lyrics?
+7. Current runtime audio/keyframe/reference mode respected?
+
+===============================================================================
 8. AUDIO MODEL
 ===============================================================================
 
