@@ -46,6 +46,15 @@
   let audioStart = 0;
   let dragging = false;
   let dragOffsetPx = 0;
+  let restoringSavedTrack = false;
+
+  const saveAudioDraft = () => {
+    state.draft.embedTrack = Boolean(embedTrack?.checked);
+    state.draft.sceneSound = Boolean(sceneSound?.checked);
+    state.draft.trackId = selectedTrack?.id ? String(selectedTrack.id) : "";
+    state.draft.audioStart = Number(audioStart.toFixed(3));
+    saveDraft();
+  };
 
   const formatAudioTime = (value) => {
     const seconds = Math.max(0, Number(value) || 0);
@@ -219,9 +228,9 @@
     }
   };
 
-  const renderTrack = async (track, source) => {
+  const renderTrack = async (track, source, startAt = 0) => {
     selectedTrack = { ...track };
-    audioStart = 0;
+    audioStart = Math.max(0, Number(startAt) || 0);
     const meta = metadataForTrack(selectedTrack);
     if (meta.duration > 0) selectedTrack.duration = meta.duration;
 
@@ -257,15 +266,22 @@
     updateRange();
   };
 
-  const selectSavedTrack = async (trackId) => {
+  const selectSavedTrack = async (trackId, { restoreStart = false, silent = false } = {}) => {
     const track = (W.snapshot?.tracks || []).find((item) => String(item.id) === String(trackId));
     if (!track) {
-      showToast("Сохранённый трек не найден.", "error");
-      return;
+      if (!silent) showToast("Сохранённый трек не найден.", "error");
+      return false;
     }
     if (audioInput) audioInput.value = "";
+    if (trackSelect) trackSelect.value = String(track.id);
     setSourceMode("library");
-    await renderTrack(track, "/api/v2/tracks/" + encodeURIComponent(track.id) + "/audio");
+    await renderTrack(
+      track,
+      "/api/v2/tracks/" + encodeURIComponent(track.id) + "/audio",
+      restoreStart ? state.draft.audioStart : 0
+    );
+    saveAudioDraft();
+    return true;
   };
 
   const selectUploadedTrack = async (file) => {
@@ -273,12 +289,15 @@
     if (trackSelect) trackSelect.value = "";
     setSourceMode("upload");
     const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "audio";
+    state.draft.trackId = "";
+    state.draft.audioStart = 0;
     await renderTrack({
       title: file.name,
       file,
       size_bytes: file.size,
       extension,
     }, file);
+    saveAudioDraft();
   };
 
   const clearTrack = () => {
@@ -294,11 +313,14 @@
     if (selectedRoot) selectedRoot.hidden = true;
     if (sourcePicker) sourcePicker.hidden = false;
     setSourceMode("library");
+    state.draft.trackId = "";
+    state.draft.audioStart = 0;
     drawWaveform();
     updateRange();
+    saveDraft();
   };
 
-  const setStartFromPointer = (event, offsetPx = 0) => {
+  const setStartFromPointer = (event, offsetPx = 0, persist = false) => {
     if (!waveStage || !trackDuration()) return;
     const rect = waveStage.getBoundingClientRect();
     if (rect.width <= 0) return;
@@ -306,12 +328,16 @@
     const x = event.clientX - rect.left - offsetPx;
     audioStart = clampStart((x / rect.width) * duration);
     updateRange();
+    if (persist) saveAudioDraft();
   };
 
   W.updateAudioRange = updateRange;
   W.audioModeEnabled = () => Boolean(useTrack.checked);
   W.restoreAudioMode = () => {
     useTrack.checked = Boolean(state.draft.useTrack);
+    if (embedTrack) embedTrack.checked = state.draft.embedTrack !== false;
+    if (sceneSound) sceneSound.checked = Boolean(state.draft.sceneSound);
+    audioStart = Math.max(0, Number(state.draft.audioStart) || 0);
     renderMode();
   };
   W.audioAssistantContext = () => ({
@@ -319,6 +345,8 @@
     audio_start: Number(audioStart.toFixed(3)),
     audio_end: Number((audioStart + selectedSeconds()).toFixed(3)),
     master_track_title: String(selectedTrack?.title || selectedTrack?.file?.name || ""),
+    track_id: String(selectedTrack?.id || ""),
+    track_title: String(selectedTrack?.title || selectedTrack?.file?.name || ""),
     source_kind: selectedTrack?.id ? "library_track" : (selectedTrack ? "uploaded_track" : "none"),
     has_master_track: Boolean(selectedTrack),
     has_driving_audio: false,
@@ -336,8 +364,8 @@
   });
 
   useTrack.addEventListener("change", renderMode);
-  embedTrack?.addEventListener("change", saveDraft);
-  sceneSound?.addEventListener("change", saveDraft);
+  embedTrack?.addEventListener("change", saveAudioDraft);
+  sceneSound?.addEventListener("change", saveAudioDraft);
 
   libraryTab?.addEventListener("click", () => {
     if (selectedTrack?.id) {
@@ -376,6 +404,7 @@
     if (!dragging) return;
     dragging = false;
     rangeWindow?.releasePointerCapture?.(event.pointerId);
+    saveAudioDraft();
   };
   rangeWindow?.addEventListener("pointerup", endDrag);
   rangeWindow?.addEventListener("pointercancel", endDrag);
@@ -383,7 +412,7 @@
   waveStage?.addEventListener("pointerdown", (event) => {
     if (event.target === rangeWindow || rangeWindow?.contains(event.target)) return;
     const rect = rangeWindow?.getBoundingClientRect();
-    setStartFromPointer(event, (rect?.width || 0) / 2);
+    setStartFromPointer(event, (rect?.width || 0) / 2, true);
   });
 
   playButton?.addEventListener("click", async () => {
@@ -414,7 +443,22 @@
   previewAudio.addEventListener("ended", stopPreview);
 
   window.addEventListener("v2:datarefresh", () => {
-    if (!selectedTrack?.id) return;
+    if (!selectedTrack?.id) {
+      const savedTrackId = String(state.draft.trackId || "");
+      if (savedTrackId && !restoringSavedTrack) {
+        const exists = (W.snapshot?.tracks || []).some((item) => String(item.id) === savedTrackId);
+        if (!exists) {
+          state.draft.trackId = "";
+          state.draft.audioStart = 0;
+          saveDraft();
+          return;
+        }
+        restoringSavedTrack = true;
+        selectSavedTrack(savedTrackId, { restoreStart: true, silent: true })
+          .finally(() => { restoringSavedTrack = false; });
+      }
+      return;
+    }
     const updated = (W.snapshot?.tracks || []).find((item) => String(item.id) === String(selectedTrack.id));
     if (!updated) return;
     selectedTrack = { ...selectedTrack, ...updated };
