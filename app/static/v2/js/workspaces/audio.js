@@ -320,7 +320,8 @@
     audio_end: Number((audioStart + selectedSeconds()).toFixed(3)),
     master_track_title: String(selectedTrack?.title || selectedTrack?.file?.name || ""),
     source_kind: selectedTrack?.id ? "library_track" : (selectedTrack ? "uploaded_track" : "none"),
-    has_driving_audio: Boolean(selectedTrack),
+    has_master_track: Boolean(selectedTrack),
+    has_driving_audio: false,
     embed_track: Boolean(embedTrack?.checked),
     generate_scene_audio: Boolean(sceneSound?.checked),
   });
