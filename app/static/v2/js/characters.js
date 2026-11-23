@@ -519,7 +519,7 @@
       (acc, character) => {
         const id = String(character.id);
         if (!characterSet.has(id)) return acc;
-        const voiceActive = state.view !== "images" && Boolean(character.voice) && !muted.has(id);
+        const voiceActive = Boolean(character.voice) && !muted.has(id);
         acc.images += Number(character.image_count || 0);
         acc.audios += voiceActive ? 1 : 0;
         acc.total += Number(character.image_count || 0) + (voiceActive ? 1 : 0);
@@ -543,14 +543,10 @@
   };
 
   const referenceBudgetExceeded = (budget) =>
-    state.view === "images"
-      ? budget.images > 16
-      : (budget.images > 9 || budget.audios > 3 || budget.total > 15);
+    budget.images > 9 || budget.audios > 3 || budget.total > 15;
 
   const referenceBudgetMessage = () =>
-    state.view === "images"
-      ? "Лимит H3 Image — до 16 reference images."
-      : "Лимит одной H3-задачи: до 9 изображений, 3 аудио и 15 reference media.";
+    "Лимит одной H3-задачи: до 9 изображений, 3 аудио и 15 reference media.";
 
   const characterBudget = (ids, mutedIds = state.mutedCharacterIds) =>
     referenceBudget(ids, state.selectedLocationIds, mutedIds);
@@ -568,9 +564,7 @@
       const budget = characterBudget(state.selectedCharacterIds, candidateMuted);
       if (referenceBudgetExceeded(budget)) {
         showToast(
-          state.view === "images"
-            ? "Голос не используется H3 Image; выбранные изображения уже достигли лимита 16 references."
-            : "Нельзя включить голос: лимит H3 — до 3 audio refs и 15 reference media.",
+          "Нельзя включить голос: лимит H3 — до 3 audio refs и 15 reference media.",
           "error"
         );
         return;
