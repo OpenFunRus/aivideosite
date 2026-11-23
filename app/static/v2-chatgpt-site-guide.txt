@@ -41,34 +41,39 @@ With "Использовать аудиодорожку" OFF:
 - presets + First/Last -> semantic refs + exact native Timeline Guides;
 - normal "Генерировать звук" controls H3-generated audio.
 
-DRIVING-AUDIO MODE INSIDE VIDEO
--------------------------------
-Enable "Использовать аудиодорожку".
+MASTER-TRACK MODE INSIDE VIDEO
+------------------------------
+Enable "Использовать аудиодорожку" and select a saved master track or upload one.
+The waveform selects the start of the 5/10/15-second fragment.
 
-Then:
-- select a saved master track OR upload one;
-- move the waveform window to choose the fragment start;
-- the 5/10/15-second fragment becomes the single Digital Human driving audio;
-- there is NO separate arbitrary visual-reference upload;
-- Characters/Locations/Misc remain semantic visual references;
-- if no preset visual is selected, First Frame is reused as the required semantic visual;
-  if First is absent, Last Frame is reused instead;
-- First Frame is also an exact native MiniMaxH3AddGuide anchor at 0 seconds;
-- Last Frame is also an exact native MiniMaxH3AddGuide anchor at the selected duration;
-- endpoint images are backend-owned guides, not Picture labels for the prompt;
-- "Вклеить трек в видео" controls final mux of the original fragment;
-- "Фоновые звуки H3" controls optional extra diegetic/foley sound;
-- the normal "Генерировать звук" option is hidden.
+The runtime generation mode depends on visual inputs.
 
-Prompt rules in driving-audio mode:
-- master track is already supplied as driving audio;
-- non_diegetic_music: N/A;
+WITHOUT Characters/Locations/Misc:
+- the master track is NOT sent to H3 as Digital Human driving audio;
+- prompt only -> ordinary base FL2VA/text-to-video path;
+- First only, Last only, or First+Last -> ordinary FL2VA exact endpoint conditioning;
+- no visual reference is required;
+- "Вклеить трек в видео" muxes the selected original fragment into the final MP4;
+- "Фоновые звуки H3" optionally generates scene audio before the final mux.
+
+WITH Characters/Locations/Misc:
+- the selected fragment becomes the single Digital Human driving audio;
+- the selected presets provide the required semantic visual references;
+- First Frame is an exact native MiniMaxH3AddGuide anchor at 0 seconds;
+- Last Frame is an exact native MiniMaxH3AddGuide anchor at the selected duration;
+- endpoint images are backend-owned guides, not Picture labels for the prompt.
+
+Prompt rules:
+- runtime generation_mode and has_driving_audio are authoritative;
+- when has_driving_audio=true, synchronize visible mouth/body performance to the supplied audio;
+- when has_driving_audio=false, do NOT claim the master track is driving H3 and do NOT require a visual reference;
+- with audio_mode=true, non_diegetic_music: N/A;
 - overall_soundscape: N/A when H3 scene sound is OFF;
 - when ON, request only physical/diegetic scene sound;
-- never invent lyrics;
-- synchronize visible mouth/body performance to the supplied audio;
-- do not use FL2VA alignment for First/Last in this mode.
+- never invent lyrics.
 
+MAGIC WAND
+----------
 MAGIC WAND
 ----------
 There is one Magic Wand in Video.
