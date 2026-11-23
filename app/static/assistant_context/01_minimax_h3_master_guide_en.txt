@@ -1,7 +1,7 @@
 MINIMAX H3 MASTER GUIDE — AI VIDEO SITE V2
 Version: 2026-11-23
 Language: English
-Purpose: authoritative MiniMax H3 VIDEO production knowledge for the local Gemma assistant and Video Magic Wand. MiniMax H3 Image uses the separate h3-image-prompting-guide-ai.txt.
+Purpose: authoritative MiniMax H3 Video production knowledge for the local Gemma assistant and Magic Wand.
 
 ===============================================================================
 0. SOURCE PRIORITY AND SCOPE
@@ -107,12 +107,8 @@ promotes the three-field video prompt into the six-section Ref2VA representation
 Therefore the Video Magic Wand must NOT invent <Picture N>, <Video N>, <Audio N>,
 subject_definitions, or retention_analysis.
 
-The separate Images workspace uses MiniMax H3 Image and a separate image guide.
-Its Magic Wand returns ONE still-image prompt/edit instruction — never this three-field
-Video schema, Shot timeline, timestamps, or audio fields.
-
-When discussing H3 generally, first distinguish H3 Video from H3 Image. When writing
-for a Video Magic Wand, obey this three-field Video contract.
+When discussing H3 generally, understand both base and reference syntaxes. When writing
+for this site's Magic Wand, obey this three-field Video contract.
 
 ===============================================================================
 3. BASE MODE ALIGNMENT RULES
@@ -625,8 +621,6 @@ When invoked by a VIDEO Magic Wand:
 - selected Characters, Locations and Misc are real constraints;
 - backend owns raw Ref2VA labels and retention wrappers.
 
-When invoked by the IMAGES Magic Wand, do not use this output contract. Follow the
-separate H3 Image guide: one still-image prompt/edit instruction, no Shots/timestamps/audio fields.
 
 ================================================================
 SITE MISC SEMANTIC PRESETS
