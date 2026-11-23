@@ -102,3 +102,44 @@
   .v2-audio-settings-secondary{grid-template-columns:1fr}
   .v2-audio-submit{grid-column:auto;min-width:0}
 }
+
+
+/* Integrated driving-audio block inside the single Video workspace */
+.v2-create-audio-card{padding:14px 16px}
+.v2-create-audio-heading{
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  margin-bottom:0;
+}
+.v2-create-audio-toggle{
+  min-height:38px;
+  margin:0;
+  padding:0 2px 0 10px;
+  white-space:nowrap;
+}
+.v2-create-audio-body{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin-top:13px;
+  padding-top:13px;
+  border-top:1px solid #2d3347;
+}
+.v2-create-audio-body[hidden]{display:none!important}
+.v2-create-audio-options{
+  display:flex;
+  align-items:center;
+  gap:22px;
+  min-height:40px;
+  padding:2px 4px 0;
+}
+.v2-create-audio-options .v2-audio-output-option{height:38px}
+#v2-generate-sound-option[hidden]{display:none!important}
+
+@media(max-width:900px){
+  .v2-create-audio-heading{grid-template-columns:42px minmax(0,1fr)}
+  .v2-create-audio-toggle{grid-column:1/-1;padding:4px 0 0}
+  .v2-create-audio-options{align-items:flex-start;flex-direction:column;gap:8px}
+}
