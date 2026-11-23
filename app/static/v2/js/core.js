@@ -33,6 +33,7 @@
       steps: "12",
       seed: "",
       audio: true,
+      useTrack: false,
     },
   };
 
@@ -147,6 +148,7 @@
         if (saved[key] !== undefined && saved[key] !== null) state.draft[key] = String(saved[key]);
       });
       if (typeof saved.audio === "boolean") state.draft.audio = saved.audio;
+      if (typeof saved.useTrack === "boolean") state.draft.useTrack = saved.useTrack;
       if (Array.isArray(saved.selectedCharacterIds)) {
         state.selectedCharacterIds = new Set(saved.selectedCharacterIds.map(String));
       }
