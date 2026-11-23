@@ -777,6 +777,7 @@
       prompt: String(qs("#v2-prompt")?.value ?? state.draft.prompt ?? ""),
       quality: String(qs('[data-setting="quality"] button.active')?.dataset.value || state.draft.quality || "720"),
       resolution_shape: String(qs('[data-setting="ratio"] button.active')?.dataset.value || state.draft.ratio || "16:9"),
+      resolution: String(api.resolvedVideoSize?.() || ""),
       seconds: Number(qs('[data-setting="seconds"] button.active')?.dataset.value || state.draft.seconds || 10),
       fps: 24,
       steps: Number(qs('[data-setting="steps"] button.active')?.dataset.value || state.draft.steps || 12),
