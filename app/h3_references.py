@@ -355,7 +355,7 @@ def build_reference_prompt(
         "video_editing": "The target video is an edited version of the supplied reference video.",
         "video_continuation": "The target video continues naturally from the supplied reference video.",
         "audio_reuse": "The target video reuses the supplied audio according to its retention rule.",
-        "audio_reference": "The target video uses the supplied audio as a voice, timbre or rhythm reference.",
+        "audio_reference": "The supplied audio is the authoritative driving performance track; synchronize visible mouth articulation, singing or speech, facial performance, gestures and body motion to it.",
         "keyframe_completion": "The supplied pictures are storyboard/keyframe references, not exact latent anchors.",
         "timeline_guides": "Exact native timeline guides are applied separately at their configured frame indices; semantic references here define identity, style, motion, and continuity around those anchors.",
     }.get(task, "The target video is generated from the supplied multimodal references.")
