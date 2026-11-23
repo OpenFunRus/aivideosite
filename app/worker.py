@@ -434,6 +434,9 @@ class JobWorker(threading.Thread):
                 for key in ("control_video_path", "source_video_path", "mask_video_path")
                 if control.get(key)
             )
+            final_audio_path = str(final_audio.get("path") or "")
+            if final_audio.get("temporary") and final_audio_path and final_audio_path not in cleanup_paths:
+                cleanup_paths.append(final_audio_path)
             _remove_uploads(cleanup_paths)
             return media_id
         except (JobCancelled, ComfyUICancelled):
