@@ -118,11 +118,8 @@
 
   const currentSiteSettings = () => {
     const createState = { ...(api.currentCreateAssistantSettings?.() || {}) };
-    const audioState = { ...(api.currentAudioAssistantSettings?.() || {}) };
     delete createState.available_characters;
     delete createState.available_locations;
-    delete audioState.available_characters;
-    delete audioState.available_locations;
 
     return {
       workspace: "chat",
@@ -132,7 +129,6 @@
       selected_misc_ids: Array.from(api.state?.selectedMiscIds || []).map(String),
       muted_character_ids: (api.mutedCharacterIds?.() || []).map(String),
       create_state: createState,
-      audio_state: audioState,
     };
   };
 
