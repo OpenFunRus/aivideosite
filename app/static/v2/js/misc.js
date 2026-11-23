@@ -123,6 +123,15 @@
     return { images, audios: 0, total: images };
   };
 
+  const budgetExceeded = (budget) =>
+    api.referenceBudgetExceeded
+      ? api.referenceBudgetExceeded(budget)
+      : (budget.images > 9 || budget.audios > 3 || budget.total > 15);
+  const budgetMessage = () =>
+    api.referenceBudgetMessage
+      ? api.referenceBudgetMessage()
+      : "Лимит H3: до 9 изображений, 3 аудио и 15 reference media на одну генерацию.";
+
   const renderSelectedMisc = () => {
     const countValue = selectedMisc().length;
     ["#v2-misc-count", "#v2-mobile-misc-count"].forEach((selector) => {
@@ -155,8 +164,8 @@
       const candidate = new Set(state.selectedMiscIds);
       candidate.add(id);
       const budget = budgetWithMisc(candidate);
-      if (budget.images > 9 || budget.audios > 3 || budget.total > 15) {
-        showToast("Лимит H3: до 9 изображений, 3 аудио и 15 reference media на одну генерацию.", "error");
+      if (budgetExceeded(budget)) {
+        showToast(budgetMessage(), "error");
         return;
       }
       state.selectedMiscIds.add(id);
@@ -260,7 +269,7 @@
       dialog?.close(); await refreshMisc();
       if(editedId){
         const budget=budgetWithMisc(state.selectedMiscIds);
-        if(state.selectedMiscIds.has(editedId)&&(budget.images>9||budget.audios>3||budget.total>15)){
+        if(state.selectedMiscIds.has(editedId)&&budgetExceeded(budget)){
           state.selectedMiscIds.delete(editedId); renderSelectedMisc(); renderMiscGrid();
           showToast("Из-за новых референсов пресет снят с выбора: превышен лимит H3.","error");
         } else showToast("Пресет обновлён.");
@@ -270,7 +279,7 @@
         if(id){
           const candidate=new Set(state.selectedMiscIds); candidate.add(id);
           const budget=budgetWithMisc(candidate);
-          if(budget.images<=9&&budget.audios<=3&&budget.total<=15){
+          if(!budgetExceeded(budget)){
             state.selectedMiscIds.add(id); renderSelectedMisc(); renderMiscGrid();
           }
         }
