@@ -1859,7 +1859,8 @@ async def api_v2_delete_image(
 @app.post("/api/v2/images/generate")
 async def api_v2_generate_image(
     prompt: Annotated[str, Form()],
-    size: Annotated[str, Form()] = "2688x1536",
+    quality: Annotated[str, Form()] = "720",
+    ratio: Annotated[str, Form()] = "16:9",
     seed: Annotated[str, Form()] = "",
     source_image_id: Annotated[str, Form()] = "",
     character_ids: Annotated[str, Form()] = "[]",
@@ -1879,14 +1880,9 @@ async def api_v2_generate_image(
             "У вас уже есть активная генерация изображения. Дождитесь её завершения.",
         )
 
-    allowed_sizes = {
-        "2688x1536": (2688, 1536),
-        "2048x2048": (2048, 2048),
-        "1536x2688": (1536, 2688),
-    }
-    if size not in allowed_sizes:
-        raise HTTPException(400, "Неподдерживаемое разрешение H3 Image.")
-    width, height = allowed_sizes[size]
+    # Image uses exactly the same user-facing quality/format mapping as Video,
+    # including the same 32px grid alignment (480 / 736 / 1088 short side).
+    width, height = _v2_resolution(quality, ratio)
     seed_value = _v2_seed(seed)
 
     selected_characters = _v2_character_ids(character_ids)
@@ -2036,6 +2032,8 @@ async def api_v2_generate_image(
         "ok": True,
         "job_id": job_id,
         "mode": mode,
+        "quality": str(quality),
+        "ratio": str(ratio),
         "width": width,
         "height": height,
         "reference_count": len(reference_paths),
