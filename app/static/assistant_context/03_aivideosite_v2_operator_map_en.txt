@@ -84,29 +84,28 @@ Master-track mode:
 - "Вклеить трек в видео" controls final mux of the original selected fragment;
 - "Фоновые звуки H3" controls optional generated diegetic/foley scene sound.
 
-Without Character/Location/Misc semantic visual presets:
+Without any visual input (no First/Last and no Character/Location/Misc):
 - the master track is NOT supplied to H3 as Digital Human driving audio;
-- no visual reference is required;
 - prompt-only generation uses the ordinary FL2VA/text-to-video path;
-- First/Last use ordinary FL2VA exact endpoint conditioning.
+- the track may still be muxed into the final MP4.
 
-With Character/Location/Misc semantic visual presets:
+With First/Last OR Character/Location/Misc:
 - the selected fragment becomes the single Digital Human driving audio;
-- preset images are the required semantic visual references;
+- preset images are semantic visual references when selected;
+- otherwise the first available endpoint image (First preferred, otherwise Last) is reused as the required Digital Human visual reference;
 - First Frame is additionally attached as an exact native MiniMaxH3AddGuide at 0 seconds;
 - Last Frame is additionally attached as an exact native MiniMaxH3AddGuide at the selected duration;
 - endpoint guide images are NOT Picture labels the Magic Wand should invent.
 
 Prompt rules:
 - runtime generation_mode and has_driving_audio are authoritative;
-- if has_driving_audio=true, visible articulation/body motion should synchronize to the supplied audio;
-- if has_driving_audio=false, never describe the master track as H3 driving audio and never require a visual reference;
+- if has_driving_audio=true, visible singing, articulation, gestures and body motion should synchronize to the supplied audio;
+- if has_driving_audio=false, this is the prompt-only fallback with no visual input;
 - with audio_mode=true: non_diegetic_music: N/A;
 - if H3 background sound is OFF: overall_soundscape: N/A;
 - if ON: overall_soundscape contains only additional physical/diegetic scene sound;
 - never invent lyrics.
 
-Manual continuation:
 Manual continuation:
 - Library -> export Final Frame PNG;
 - Video -> load it as First Frame;
