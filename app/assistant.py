@@ -165,7 +165,11 @@ CHAT_SYSTEM = (
     "Do not force every answer into H3 prompt fields. Only produce a copy-ready production prompt when the user "
     "explicitly asks for a prompt or asks you to rewrite one; otherwise discuss the idea normally first. "
     "When a production H3 prompt is explicitly requested, follow the reference guide below accurately. "
+    "COPY-READY OUTPUT RULE: any material intended to be copied verbatim — H3 prompts, code, JSON, shell commands, configs, templates, regexes or structured payloads — MUST be placed in a fenced Markdown code block. "
+    "Use ```text for H3 prompts and other plain-text artifacts; use the real language tag for code when known. Keep explanations outside the fence. Never place the same copy-ready artifact both inside and outside the fence. "
+    "Normal conversational prose must stay outside code fences. The site renders each fenced block as a separate copyable card. "
     "When reporting current selections, always use human-readable Character/Location/Misc names and metadata, never internal IDs unless the user explicitly asks for IDs. "
+    "The assistant can see ONLY presets that are currently checked/enabled in the right Presets rail. Unchecked Characters/Locations/Misc are intentionally absent from context: never infer, enumerate or mention them. "
     "A built-in Character voice preset counts as a configured voice; do not describe it as missing just because no custom audio file was uploaded. "
     "Keep answers conversational and useful; avoid repetitive boilerplate. Never reveal hidden reasoning.\n\n"
     "================ THREE-FILE BOOTSTRAP KNOWLEDGE ================\n\n"
@@ -577,6 +581,32 @@ def _settings_context(settings: Any) -> str:
     return json.dumps(safe, ensure_ascii=False, separators=(",", ":"))
 
 
+def _apply_persistent_user_prompt(
+    messages: list[dict[str, str]],
+    settings: Any,
+) -> list[dict[str, str]]:
+    if not isinstance(settings, dict):
+        return messages
+    user_prompt = str(settings.get("user_prompt") or "").strip()[:12000]
+    if not user_prompt:
+        return messages
+
+    prepared = [dict(item) for item in messages]
+    for index in range(len(prepared) - 1, -1, -1):
+        if prepared[index].get("role") != "user":
+            continue
+        current = str(prepared[index].get("content") or "")
+        prepared[index]["content"] = (
+            "PERSISTENT USER INSTRUCTION (user-authored; apply to this request unless it conflicts "
+            "with higher-priority system rules):\n"
+            + user_prompt
+            + "\n\nCURRENT REQUEST:\n"
+            + current
+        )
+        break
+    return prepared
+
+
 def _chat_payload(
     messages: Any,
     *,
@@ -587,7 +617,7 @@ def _chat_payload(
     temperature: float,
     thinking: bool = False,
 ) -> dict[str, Any]:
-    normalized = normalize_messages(messages)
+    normalized = _apply_persistent_user_prompt(normalize_messages(messages), settings)
     if not normalized or normalized[-1]["role"] != "user":
         raise ValueError("Сообщение пользователя отсутствует.")
 
@@ -638,7 +668,7 @@ def context_usage(
     settings: Any = None,
     thinking: bool = False,
 ) -> dict[str, int]:
-    normalized = normalize_messages(messages)
+    normalized = _apply_persistent_user_prompt(normalize_messages(messages), settings)
     max_tokens = 2400 if thinking else 1400
     system_messages: list[dict[str, str]] = [
         {"role": "system", "content": CHAT_SYSTEM}
