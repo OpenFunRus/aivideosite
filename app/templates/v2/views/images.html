@@ -1,0 +1,62 @@
+<section class="v2-view" data-v2-view="images">
+  <form class="v2-create v2-generator-form v2-image-generator" id="v2-image-form">
+    <div class="v2-workspace-intro">
+      <p>Создавай кадры, персонажей, локации и предметы через MiniMax H3 Image. Выбранные справа пресеты автоматически идут в референсы.</p>
+    </div>
+
+    <section class="v2-tool-card v2-prompt-panel">
+      <div class="v2-prompt-panel-head">
+        <label class="v2-card-title" for="v2-image-prompt">
+          <span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg></span>
+          <strong id="v2-image-prompt-title">Что должно быть на изображении?</strong>
+        </label>
+        <span class="v2-prompt-counter" id="v2-image-prompt-count">0 / 16 000</span>
+      </div>
+      <div class="v2-tool-textarea v2-prompt-panel-box">
+        <textarea id="v2-image-prompt" name="prompt" maxlength="16000" placeholder="Опишите обычным языком: кто в кадре, где находится, поза, одежда, предметы, свет, камера и атмосфера."></textarea>
+      </div>
+      <p class="v2-help" id="v2-image-prompt-help">Выбранные справа персонажи, локации и прочее используются как референсы H3 Image.</p>
+    </section>
+
+    <section class="v2-tool-card v2-image-results-card">
+      <div class="v2-image-results-head">
+        <div class="v2-card-title">
+          <span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg></span>
+          <strong>Результаты</strong>
+        </div>
+        <span class="v2-image-results-status" id="v2-image-results-status">До 8 изображений · новые появляются первыми</span>
+      </div>
+      <div class="v2-image-results-grid" id="v2-image-results-grid">
+        <div class="v2-image-results-empty">Здесь появятся сгенерированные изображения.</div>
+      </div>
+    </section>
+
+    <section class="v2-settings-card v2-image-settings">
+      <div class="v2-image-setting">
+        <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Разрешение</span>
+        <select id="v2-image-size" class="v2-image-select">
+          <option value="2688x1536">2688 × 1536 (16:9)</option>
+          <option value="2048x2048">2048 × 2048 (1:1)</option>
+          <option value="1536x2688">1536 × 2688 (9:16)</option>
+        </select>
+      </div>
+      <div class="v2-image-setting">
+        <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>Шаги</span>
+        <div class="v2-image-fixed-value">6 <small>H3 Image</small></div>
+      </div>
+      <label class="v2-image-setting v2-image-seed">
+        <span class="v2-setting-label"># Seed</span>
+        <input id="v2-image-seed" type="number" inputmode="numeric" placeholder="Авто (-1)">
+      </label>
+    </section>
+
+    <div class="v2-create-warning" id="v2-image-warning" hidden></div>
+
+    <div class="v2-generate-row">
+      <button class="v2-primary-button" id="v2-image-generate" type="submit">
+        <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+        <span id="v2-image-generate-label">Сгенерировать изображение</span>
+      </button>
+    </div>
+  </form>
+</section>
