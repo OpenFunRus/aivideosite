@@ -4,7 +4,6 @@
 .v2-brand-mark{display:grid;place-items:center;width:50px;height:50px;border-radius:17px;background:linear-gradient(145deg,#30207c,#16172c);color:#9d7cff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
 .v2-brand-mark .icon{width:27px;height:27px;stroke-width:2.3}
 .v2-brand strong{font-size:18px;letter-spacing:-.02em;white-space:nowrap}
-.v2-brand em{color:#a776ff;font-style:normal}
 .v2-brand small{display:block;margin-top:4px;color:var(--muted);font-size:12px}
 .v2-nav{display:flex;flex-direction:column;gap:5px;overflow-y:auto;padding-right:2px}
 .v2-nav-item{height:48px;border:0;border-radius:12px;background:transparent;color:#d5d8e4;display:flex;align-items:center;gap:13px;padding:0 14px;cursor:pointer;text-align:left;transition:.16s ease}
@@ -25,7 +24,6 @@
 .v2-gpu-pill{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:1px solid #303649;border-radius:11px;background:#161925;color:#c9cedd;font-size:12px}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#71778a;box-shadow:0 0 0 3px rgba(113,119,138,.12)}
 .v2-gpu-pill.online .status-dot{background:var(--green);box-shadow:0 0 0 3px rgba(95,224,148,.12)}
-.v2-draft-state{padding-left:8px;color:#8b91a5;font-size:12px}
 .v2-view{display:none}
 .v2-view.active{display:block}
 .v2-toast{position:fixed;right:24px;bottom:24px;z-index:100;max-width:420px;padding:13px 16px;border:1px solid #414861;border-radius:12px;background:#1a1e2a;box-shadow:var(--shadow);opacity:0;transform:translateY(12px);pointer-events:none;transition:.18s ease;font-size:12px}
