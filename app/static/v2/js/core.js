@@ -17,6 +17,7 @@
     view: "create",
     characters: [],
     selectedCharacterIds: new Set(),
+    mutedCharacterIds: new Set(),
     recentCharacterIds: [],
     characterTab: "all",
     locations: [],
@@ -133,6 +134,7 @@
         JSON.stringify({
           ...state.draft,
           selectedCharacterIds: Array.from(state.selectedCharacterIds),
+          mutedCharacterIds: Array.from(state.mutedCharacterIds || []),
           selectedLocationIds: Array.from(state.selectedLocationIds),
           selectedMiscIds: Array.from(state.selectedMiscIds),
           presetTab: state.presetTab,
@@ -160,6 +162,9 @@
       if (["characters", "locations", "misc"].includes(saved.presetTab)) state.presetTab = saved.presetTab;
       if (Array.isArray(saved.selectedCharacterIds)) {
         state.selectedCharacterIds = new Set(saved.selectedCharacterIds.map(String));
+      }
+      if (Array.isArray(saved.mutedCharacterIds)) {
+        state.mutedCharacterIds = new Set(saved.mutedCharacterIds.map(String));
       }
       if (Array.isArray(saved.selectedLocationIds)) {
         state.selectedLocationIds = new Set(saved.selectedLocationIds.map(String));
