@@ -2,11 +2,17 @@
   "use strict";
   const api = window.AIVideoV2;
   if (!api) return;
-  const { qs, fetchJson, showToast } = api;
+  const { qs, fetchJson, showToast, copyText } = api;
 
   const CHAT_KEY = "aivideosite-" + api.userId + "-v2-chat";
   let messages = api.readStoredJson(CHAT_KEY, []);
   let busy = false;
+
+  const userPromptDialog = qs("#v2-user-prompt-dialog");
+  const userPromptForm = qs("#v2-user-prompt-form");
+  const userPromptText = qs("#v2-user-prompt-text");
+  const userPromptCount = qs("#v2-user-prompt-count");
+  const userPromptOpen = qs("#v2-user-prompt-open");
 
   if (!Array.isArray(messages)) messages = [];
   messages = messages
@@ -73,6 +79,67 @@
     return avatar;
   };
 
+  const appendPlainText = (container, value) => {
+    if (!value) return;
+    const node = document.createElement("div");
+    node.className = "v2-chat-text-fragment";
+    node.textContent = value;
+    container.appendChild(node);
+  };
+
+  const renderMessageContent = (container, value, role = "assistant") => {
+    const text = String(value || "");
+    container.innerHTML = "";
+    if (role !== "assistant" || !text.includes("```")) {
+      appendPlainText(container, text || "…");
+      return;
+    }
+
+    const fence = /```([^\n`]*)\n([\s\S]*?)```/g;
+    let cursor = 0;
+    let match = null;
+    while ((match = fence.exec(text))) {
+      appendPlainText(container, text.slice(cursor, match.index));
+      const language = String(match[1] || "").trim();
+      const code = String(match[2] || "").replace(/\n$/, "");
+
+      const block = document.createElement("div");
+      block.className = "v2-chat-code-block";
+
+      const head = document.createElement("div");
+      head.className = "v2-chat-code-head";
+      const label = document.createElement("span");
+      label.textContent = language ? language.toUpperCase() : "ТЕКСТ";
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.className = "v2-chat-code-copy";
+      copy.appendChild(makeIcon("icon-copy"));
+      copy.appendChild(document.createTextNode("Копировать"));
+      copy.addEventListener("click", async () => {
+        try {
+          await copyText(code);
+          copy.lastChild.textContent = "Скопировано";
+          setTimeout(() => {
+            if (copy.lastChild) copy.lastChild.textContent = "Копировать";
+          }, 1400);
+        } catch {
+          showToast("Не удалось скопировать блок.", "error");
+        }
+      });
+      head.append(label, copy);
+
+      const pre = document.createElement("pre");
+      const codeNode = document.createElement("code");
+      codeNode.textContent = code;
+      pre.appendChild(codeNode);
+      block.append(head, pre);
+      container.appendChild(block);
+      cursor = fence.lastIndex;
+    }
+    appendPlainText(container, text.slice(cursor));
+    if (!container.childNodes.length) appendPlainText(container, text || "…");
+  };
+
   const makeMessageRow = (message, options = {}) => {
     const row = document.createElement("div");
     row.className = "v2-chat-row " + message.role + (options.pending ? " pending" : "");
@@ -82,7 +149,11 @@
 
     const content = document.createElement("div");
     content.className = "v2-chat-content";
-    content.textContent = message.content || (options.pending ? "…" : "");
+    renderMessageContent(
+      content,
+      message.content || (options.pending ? "…" : ""),
+      message.role
+    );
     bubble.appendChild(content);
 
     const timeText = formatTime(message.created_at);
@@ -128,6 +199,7 @@
       selected_location_ids: Array.from(api.state?.selectedLocationIds || []).map(String),
       selected_misc_ids: Array.from(api.state?.selectedMiscIds || []).map(String),
       muted_character_ids: (api.mutedCharacterIds?.() || []).map(String),
+      user_prompt: String(api.getAssistantUserPrompt?.() || ""),
       create_state: createState,
     };
   };
@@ -221,6 +293,7 @@
       }
       answer += decoder.decode();
       answer = answer.trim();
+      if (answer) renderMessageContent(pending.content, answer, "assistant");
 
       if (answer) {
         messages.push({ role: "assistant", content: answer, created_at: Date.now() });
@@ -239,6 +312,58 @@
       await updateContext();
     }
   };
+
+  const updateUserPromptUi = () => {
+    const text = String(api.getAssistantUserPrompt?.() || "");
+    userPromptOpen?.classList.toggle("configured", Boolean(text.trim()));
+    userPromptOpen?.setAttribute(
+      "title",
+      text.trim()
+        ? "Дополнительный промт пользователя включён"
+        : "Дополнительные постоянные инструкции для ИИ"
+    );
+    if (userPromptCount && userPromptText) {
+      userPromptCount.textContent = userPromptText.value.length.toLocaleString("ru-RU") + " / 12 000";
+    }
+  };
+
+  const openUserPromptDialog = () => {
+    if (!userPromptDialog || !userPromptText) return;
+    userPromptText.value = String(api.getAssistantUserPrompt?.() || "");
+    updateUserPromptUi();
+    userPromptDialog.showModal();
+    requestAnimationFrame(() => userPromptText.focus());
+  };
+
+  const closeUserPromptDialog = () => {
+    if (userPromptDialog?.open) userPromptDialog.close();
+  };
+
+  userPromptOpen?.addEventListener("click", openUserPromptDialog);
+  userPromptText?.addEventListener("input", updateUserPromptUi);
+  userPromptForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const saved = api.setAssistantUserPrompt?.(userPromptText?.value || "") || "";
+    if (userPromptText) userPromptText.value = saved;
+    updateUserPromptUi();
+    closeUserPromptDialog();
+    showToast(saved.trim() ? "Промт пользователя сохранён." : "Промт пользователя очищен.");
+    updateContext();
+  });
+  qs("#v2-user-prompt-clear")?.addEventListener("click", () => {
+    if (userPromptText) userPromptText.value = "";
+    api.setAssistantUserPrompt?.("");
+    updateUserPromptUi();
+    showToast("Промт пользователя очищен.");
+    updateContext();
+  });
+  userPromptDialog?.querySelectorAll("[data-user-prompt-close]").forEach((button) => {
+    button.addEventListener("click", closeUserPromptDialog);
+  });
+  userPromptDialog?.addEventListener("click", (event) => {
+    if (event.target === userPromptDialog) closeUserPromptDialog();
+  });
+  window.addEventListener("v2:assistant-user-prompt-change", updateUserPromptUi);
 
   qs("#v2-chat-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -268,5 +393,6 @@
     }
   });
 
+  updateUserPromptUi();
   render();
 })();
