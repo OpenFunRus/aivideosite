@@ -137,6 +137,16 @@
     return { images, audios: 0, total: images };
   };
 
+  const budgetExceeded = (budget) =>
+    api.referenceBudgetExceeded
+      ? api.referenceBudgetExceeded(budget)
+      : (budget.images > 9 || budget.audios > 3 || budget.total > 15);
+
+  const budgetMessage = () =>
+    api.referenceBudgetMessage
+      ? api.referenceBudgetMessage()
+      : "Лимит H3: до 9 изображений, 3 аудио и 15 reference media на одну генерацию.";
+
   const renderSelectedLocations = () => {
     const countValue = selectedLocations().length;
     for (const selector of ["#v2-location-count", "#v2-mobile-location-count"]) {
@@ -183,9 +193,9 @@
       const candidate = new Set(state.selectedLocationIds);
       candidate.add(id);
       const budget = budgetWithLocations(candidate);
-      if (budget.images > 9 || budget.audios > 3 || budget.total > 15) {
+      if (budgetExceeded(budget)) {
         showToast(
-          "Лимит H3: до 9 изображений, 3 аудио и 15 reference media на одну генерацию.",
+          budgetMessage(),
           "error"
         );
         return;
@@ -383,7 +393,7 @@
         const budget = budgetWithLocations(state.selectedLocationIds);
         if (
           state.selectedLocationIds.has(editedId) &&
-          (budget.images > 9 || budget.audios > 3 || budget.total > 15)
+          budgetExceeded(budget)
         ) {
           state.selectedLocationIds.delete(editedId);
           renderSelectedLocations();
@@ -402,7 +412,7 @@
           const candidate = new Set(state.selectedLocationIds);
           candidate.add(id);
           const budget = budgetWithLocations(candidate);
-          if (budget.images <= 9 && budget.audios <= 3 && budget.total <= 15) {
+          if (!budgetExceeded(budget)) {
             state.selectedLocationIds.add(id);
             renderSelectedLocations();
             renderLocationGrid();
