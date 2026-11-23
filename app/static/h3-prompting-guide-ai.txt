@@ -420,27 +420,22 @@ Visual inputs come from the same Video controls:
 - optional First Frame;
 - optional Last Frame.
 
-MODE A — MASTER TRACK + NO SEMANTIC VISUAL PRESETS
+MODE A — MASTER TRACK + NO VISUAL INPUT
 
-If no Character/Location/Misc visual reference is selected:
+If there is no First Frame, Last Frame, Character, Location or Misc visual reference:
 - DO NOT use Digital Human;
-- DO NOT require a visual reference;
 - prompt only -> ordinary FL2VA/text-to-video generation;
-- First only -> ordinary FL2VA First endpoint;
-- Last only -> ordinary FL2VA Last endpoint;
-- First + Last -> ordinary FL2VA First -> Last endpoint conditioning;
+- has_driving_audio=false;
 - the selected master-track fragment is muxed into the final MP4 when embed_track is ON;
 - generate_scene_audio may add H3 physical/diegetic scene sound before the final mux.
+Do not invent synchronization to unheard lyrics or rhythm in this prompt-only fallback.
 
-In this mode has_driving_audio=false even though audio_mode=true.
-Never tell the prompt that the master track is driving H3.
-Do not invent synchronization to unheard lyrics or rhythm.
+MODE B — MASTER TRACK + ANY VISUAL INPUT
 
-MODE B — MASTER TRACK + SEMANTIC VISUAL PRESETS
-
-If Character/Location/Misc visual references are selected:
+If First/Last or Character/Location/Misc visual references are selected:
 - the selected master-track fragment becomes the Digital Human driving audio;
-- the selected presets provide the required semantic visual references;
+- Character/Location/Misc images provide semantic visual references when selected;
+- otherwise the first available endpoint image (First preferred, otherwise Last) is reused as the required Digital Human visual reference;
 - has_driving_audio=true;
 - First Frame is attached separately through native MiniMaxH3AddGuide at frame 0;
 - Last Frame is attached separately through native MiniMaxH3AddGuide at the final frame;
@@ -455,14 +450,14 @@ PROMPT RULES FOR BOTH AUDIO-MODE BRANCHES
 Runtime generation_mode and has_driving_audio are authoritative.
 
 When has_driving_audio=true:
-- synchronize visible articulation/body motion to the supplied driving audio;
+- synchronize visible singing, mouth articulation, gestures and body motion to the supplied driving audio;
+- if the requested action is singing, make the character visibly perform the song rather than merely moving through the scene;
 - do not invent or recreate the master song;
 - do not add FL2VA Picture alignment for endpoint guides.
 
 When has_driving_audio=false:
 - use normal FL2VA prompt rules;
-- First/Last are normal endpoint conditioning;
-- no visual reference is required.
+- this is only the prompt-only fallback with no visual input.
 
 With audio_mode=true:
 non_diegetic_music: N/A
