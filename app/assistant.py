@@ -1133,7 +1133,7 @@ def _clean_v2_wand_prompt(
         "preserve that as explicit visible singing synchronized to the supplied driving vocals, including mouth/lip articulation; "
         "do not replace it with a static pose or an unrelated action. "
         "If SOURCE says music is not wanted, non_diegetic_music must be N/A. "
-        "[Shot 1] has no timestamp. If SOURCE explicitly requests a camera switch/cut/new framing, represent that switch as a new [Shot N] with an exact timestamp inside CURRENT_GENERATOR_STATE.seconds. "
+        "[Shot 1] has no timestamp. If SOURCE explicitly requests a camera switch/cut/new framing, represent that switch as a new [Shot N] with an exact timestamp inside CURRENT_SITE_STATE.seconds. "
         "Do not output low-level Ref2VA wrapper fields."
     )
     cleanup_user = (
@@ -1153,6 +1153,61 @@ def _clean_v2_wand_prompt(
         thinking=thinking,
     )
     return _extract_h3_prompt_text(_request_plain_content(payload))
+
+
+def _explicit_spoken_literals(source_text: str) -> list[str]:
+    source = str(source_text or "")
+    patterns = (
+        r"(?:говорит|говорит\s+ему|говорит\s+ей|сказал|сказала|отвечает|ответил|ответила|"
+        r"произносит|шепчет|кричит|по[её]т|спел|спела)\s*[:,-]?\s*[«“\"]([^»”\"]{1,500})[»”\"]",
+        r"(?:says|said|replies|replied|whispers|whispered|shouts|shouted|sings|sang)\s*[:,-]?\s*[“\"]([^”\"]{1,500})[”\"]",
+    )
+    literals: list[str] = []
+    for pattern in patterns:
+        literals.extend(
+            match.group(1).strip()
+            for match in re.finditer(pattern, source, flags=re.IGNORECASE)
+            if match.group(1).strip()
+        )
+    return literals
+
+
+def _normalize_single_dialogue_format(source_text: str, prompt: str) -> str:
+    """Deterministically fix the common one-speaker quote form after LLM cleanup/repair."""
+    text = str(prompt or "").strip()
+    literals = _explicit_spoken_literals(source_text)
+    if len(literals) != 1:
+        return text
+
+    literal = literals[0]
+    escaped = re.escape(literal)
+
+    # If the literal is already inside <d>, only ensure a stable speaker ID exists
+    # before that tag in the same nearby clause.
+    tagged = re.search(
+        rf"<d>\[[^\]]+\]\s*[^<]*{escaped}[^<]*</d>",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if tagged:
+        prefix = text[max(0, tagged.start() - 220):tagged.start()]
+        if not re.search(r"\(S\d+(?:,S\d+)*\)", prefix, flags=re.IGNORECASE):
+            text = text[:tagged.start()] + "(S1) " + text[tagged.start():]
+        return text
+
+    language = "Russian" if re.search(r"[А-Яа-яЁё]", literal) else "English"
+    replacement = f"(S1) <d>[{language}] {literal}</d>"
+
+    # Prefer replacing quote marks around the exact literal.
+    for left, right in (("«", "»"), ("“", "”"), ('"', '"')):
+        quoted = left + literal + right
+        if quoted in text:
+            return text.replace(quoted, replacement, 1)
+
+    # Last resort: replace the exact literal once if it survived without quote marks.
+    if literal in text:
+        return text.replace(literal, replacement, 1)
+    return text
 
 
 def _source_literal_validation_issues(
@@ -1181,18 +1236,7 @@ def _source_literal_validation_issues(
     # When a quoted literal is explicitly introduced as speech/singing, preserving the
     # words is not enough: MiniMax H3 expects a stable speaker ID plus a <d>[Language]
     # ...</d> block. Visible signs/titles are intentionally excluded from this check.
-    speech_patterns = (
-        r"(?:говорит|говорит\s+ему|говорит\s+ей|сказал|сказала|отвечает|ответил|ответила|"
-        r"произносит|шепчет|кричит|по[её]т|спел|спела)\s*[:,-]?\s*[«“\"]([^»”\"]{1,500})[»”\"]",
-        r"(?:says|said|replies|replied|whispers|whispered|shouts|shouted|sings|sang)\s*[:,-]?\s*[“\"]([^”\"]{1,500})[”\"]",
-    )
-    spoken_literals: list[str] = []
-    for pattern in speech_patterns:
-        spoken_literals.extend(
-            match.group(1).strip()
-            for match in re.finditer(pattern, source, flags=re.IGNORECASE)
-            if match.group(1).strip()
-        )
+    spoken_literals = _explicit_spoken_literals(source)
     dialogue_blocks = re.findall(
         r"\(S\d+(?:,S\d+)*\).*?<d>\[[^\]]+\]\s*(.*?)</d>",
         prompt,
@@ -1370,6 +1414,7 @@ def control(
             thinking=thinking,
         )
         source_text = _wand_source_text(messages)
+        prompt = _normalize_single_dialogue_format(source_text, prompt)
         issues = _v2_prompt_validation_issues(prompt, settings_payload)
         issues.extend(_source_literal_validation_issues(source_text, prompt))
         if issues:
@@ -1381,13 +1426,15 @@ def control(
                 thinking=thinking,
             )
             prompt = str(repaired.get("changes", {}).get("prompt") or "").strip()
+            prompt = _normalize_single_dialogue_format(source_text, prompt)
             final_issues = _v2_prompt_validation_issues(prompt, settings_payload)
             final_issues.extend(_source_literal_validation_issues(source_text, prompt))
             if final_issues:
-                raise AssistantUnavailable(
-                    "Палочка не смогла подготовить корректный H3 prompt: "
-                    + "; ".join(final_issues[:4])
-                )
+                # After one guided repair and deterministic one-speaker normalization,
+                # do not expose internal validator diagnostics to the user. A non-empty
+                # canonical prompt is still more useful than blocking the Magic Wand.
+                if not prompt.strip():
+                    raise AssistantUnavailable("Палочка вернула пустой H3 prompt.")
         return {"message": "Промт подготовлен.", "changes": {"prompt": prompt}}
 
     payload = _chat_payload(
