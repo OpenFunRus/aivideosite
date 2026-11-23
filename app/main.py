@@ -1982,6 +1982,10 @@ async def api_retry_job(
     audio_path = payload.get("audio_path")
     if audio_path and not Path(audio_path).is_file():
         missing.append(str(audio_path))
+    final_audio = payload.get("final_audio") if isinstance(payload.get("final_audio"), dict) else {}
+    final_audio_path = final_audio.get("path")
+    if final_audio_path and not Path(str(final_audio_path)).is_file():
+        missing.append(str(final_audio_path))
     for clip in payload.get("clips") or []:
         if not isinstance(clip, dict) or not clip.get("media_id"):
             continue
@@ -2394,6 +2398,9 @@ def _cleanup_job_uploads(job: dict) -> None:
             paths.append(control[key])
     if payload.get("audio_path"):
         paths.append(payload["audio_path"])
+    final_audio = payload.get("final_audio") if isinstance(payload.get("final_audio"), dict) else {}
+    if final_audio.get("temporary") and final_audio.get("path"):
+        paths.append(final_audio["path"])
 
     upload_root = settings.upload_dir.resolve()
     for value in paths:
