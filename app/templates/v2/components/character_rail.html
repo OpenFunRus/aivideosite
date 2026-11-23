@@ -1,29 +1,25 @@
-<aside class="v2-character-rail" id="v2-character-rail" aria-label="Персонажи">
+<aside class="v2-character-rail" id="v2-character-rail" aria-label="Пресеты">
   <div class="v2-character-rail-head">
-    <span class="v2-character-rail-icon" title="Персонажи">
-      <svg class="icon"><use href="/static/icons.svg#icon-users"></use></svg>
-      <span class="v2-character-count-badge" id="v2-character-count" hidden>0</span>
-    </span>
-    <span class="v2-character-rail-title">
-      <strong>Персонажи</strong>
-      <small>Выбор героев для генерации</small>
-    </span>
+    <span class="v2-character-rail-icon" title="Пресеты"><svg class="icon"><use href="/static/icons.svg#icon-stack"></use></svg></span>
+    <span class="v2-character-rail-title"><strong>Пресеты</strong><small>Персонажи и локации</small></span>
   </div>
-
   <div class="v2-character-panel">
-    <label class="v2-search">
-      <svg class="icon"><use href="/static/icons.svg#icon-search"></use></svg>
-      <input id="v2-character-search" type="search" placeholder="Поиск по имени...">
-    </label>
-
-
-    <div class="v2-character-grid" id="v2-character-grid"></div>
-    <div class="v2-character-empty" id="v2-character-empty" hidden>Персонажи не найдены.</div>
-
-    <div class="v2-character-dialog-foot">
-      <span id="v2-character-total">0 персонажей</span>
-      <span class="v2-character-hint">Нажмите карточку, чтобы выбрать</span>
+    <div class="v2-preset-tabs" role="tablist" aria-label="Тип пресета">
+      <button class="active" type="button" role="tab" aria-selected="true" data-v2-preset-tab="characters"><svg class="icon"><use href="/static/icons.svg#icon-users"></use></svg><span>Персонажи</span><b class="v2-preset-tab-count v2-preset-tab-count-character" id="v2-character-count" hidden>0</b></button>
+      <button type="button" role="tab" aria-selected="false" data-v2-preset-tab="locations"><svg class="icon"><use href="/static/icons.svg#icon-map-pin"></use></svg><span>Локации</span><b class="v2-preset-tab-count v2-preset-tab-count-location" id="v2-location-count" hidden>0</b></button>
     </div>
+    <section class="v2-preset-panel" data-v2-preset-panel="characters">
+      <label class="v2-search"><svg class="icon"><use href="/static/icons.svg#icon-search"></use></svg><input id="v2-character-search" type="search" placeholder="Поиск по имени..."></label>
+      <div class="v2-character-grid" id="v2-character-grid"></div>
+      <div class="v2-character-empty" id="v2-character-empty" hidden>Персонажи не найдены.</div>
+      <div class="v2-character-dialog-foot"><span id="v2-character-total">0 персонажей</span><span class="v2-character-hint">Нажмите карточку, чтобы выбрать</span></div>
+    </section>
+    <section class="v2-preset-panel" data-v2-preset-panel="locations" hidden>
+      <label class="v2-search"><svg class="icon"><use href="/static/icons.svg#icon-search"></use></svg><input id="v2-location-search" type="search" placeholder="Поиск по локациям..."></label>
+      <div class="v2-character-grid v2-location-grid" id="v2-location-grid"></div>
+      <div class="v2-character-empty" id="v2-location-empty" hidden>Локации не найдены.</div>
+      <div class="v2-character-dialog-foot"><span id="v2-location-total">0 локаций</span><span class="v2-character-hint">Локация задаёт окружение сцены</span></div>
+    </section>
   </div>
 </aside>
 
@@ -121,6 +117,31 @@
         <svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg>
         <span id="v2-character-submit-label">Сохранить персонажа</span>
       </button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="v2-character-create-dialog v2-location-create-dialog" id="v2-location-create-dialog">
+  <form class="v2-character-create-form" id="v2-location-create-form">
+    <div class="v2-character-create-head">
+      <div><span class="v2-kicker">LOCATION PRESET</span><h2 id="v2-location-form-title">Добавить локацию</h2><p id="v2-location-form-subtitle">Сохраните окружение один раз и используйте его как стабильный фон сцены.</p></div>
+      <button class="v2-character-create-close" type="button" data-location-create-close aria-label="Закрыть"><svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button>
+    </div>
+    <div class="v2-character-create-fields">
+      <label class="v2-character-field"><span>Название локации</span><input id="v2-location-create-name" name="name" maxlength="80" autocomplete="off" placeholder="Например: Дом OpenFun" required></label>
+      <label class="v2-character-field"><span>Промпт локации <em>необязательно</em></span><textarea id="v2-location-create-prompt" name="prompt" maxlength="4000" rows="6" placeholder="Опишите постоянное окружение: архитектуру, планировку, мебель, материалы, свет, состояние пространства и детали, которые должны сохраняться между сценами."></textarea></label>
+      <div class="v2-character-reference-block">
+        <div class="v2-character-reference-title"><div><strong>Референсы локации</strong><small>1–4 изображения · лучше разные ракурсы одного и того же пространства</small></div><span id="v2-location-reference-count">0 / 4</span></div>
+        <label class="v2-character-reference-drop" id="v2-location-reference-drop"><input id="v2-location-create-images" name="images" type="file" accept="image/png,image/jpeg,image/webp" multiple><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg><strong>Добавить изображения</strong><span>JPG, PNG или WEBP · до 4 файлов</span></label>
+        <div class="v2-character-reference-previews" id="v2-location-reference-previews"></div>
+      </div>
+    </div>
+    <div class="v2-character-create-note"><svg class="icon"><use href="/static/icons.svg#icon-info"></use></svg><span>Изображения задают внешний вид окружения, а промпт фиксирует планировку, материалы, свет и другие постоянные детали локации.</span></div>
+    <div class="v2-character-create-actions">
+      <button class="v2-character-delete-button" id="v2-location-delete" type="button" hidden><svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg>Удалить локацию</button>
+      <span class="v2-character-action-spacer"></span>
+      <button class="v2-secondary-button" type="button" data-location-create-close>Отмена</button>
+      <button class="v2-primary-button" id="v2-location-create-submit" type="submit"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg><span id="v2-location-submit-label">Сохранить локацию</span></button>
     </div>
   </form>
 </dialog>

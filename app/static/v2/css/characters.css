@@ -338,3 +338,22 @@
 }
 .v2-character-add-card-icon .icon{width:22px;height:22px}
 .v2-character-add-card strong{font-size:11px;font-weight:750;text-align:center}
+
+
+/* Reusable presets: Characters + Locations */
+.v2-preset-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:10px 0 2px;flex:0 0 auto}
+.v2-preset-tabs button{min-width:0;height:38px;display:flex;align-items:center;justify-content:center;gap:6px;padding:0 8px;border:1px solid #2d3245;border-radius:10px;background:#151823;color:#858da2;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.v2-preset-tabs button:hover{border-color:#454d68;color:#d9ddea}
+.v2-preset-tabs button.active{background:#202436;color:#f1f3fa;border-color:#555f80}
+.v2-preset-tabs .icon{width:15px;height:15px;flex:0 0 auto}
+.v2-preset-tab-count{min-width:18px;height:18px;display:inline-grid;place-items:center;padding:0 5px;border-radius:999px;color:#fff;font-size:9px;line-height:18px;font-weight:850}
+.v2-preset-tab-count[hidden]{display:none!important}
+.v2-preset-tab-count-character{background:#4b7cff}
+.v2-preset-tab-count-location{background:#e55462}
+.v2-preset-panel{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.v2-preset-panel[hidden]{display:none!important}
+.v2-character-card.v2-location-card.selected{border-color:#d85b68;box-shadow:0 0 0 1px rgba(229,84,98,.35),0 10px 30px rgba(0,0,0,.18)}
+.v2-location-card.selected .v2-character-selectmark{background:#e55462;border-color:#ff7d87}
+.v2-location-card .v2-user-avatar .icon{width:25px;height:25px}
+.v2-location-add-card .v2-character-add-card-icon{color:#f06b77}
+.v2-location-create-dialog .v2-kicker{color:#f06b77}
