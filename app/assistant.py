@@ -870,14 +870,15 @@ def _extract_h3_prompt_text(content: str) -> str:
     prompt = re.sub(r"\s*```+\s*$", "", prompt).strip()
     if prompt.endswith('\"}') or prompt.endswith("'}"):
         prompt = prompt[:-2].rstrip()
-    # Magic Wand output is the H3 prompt itself. Gemma may occasionally inherit the
-    # normal-chat recommendation footer from the shared guide; strip that UI-only line.
-    prompt = re.sub(
-        r"\n+\s*(?:Mode|Режим)\s*:\s*[^\n]*\Z",
-        "",
-        prompt,
+    # Magic Wand output is the H3 prompt itself. Gemma may occasionally inherit
+    # normal-chat or control-protocol footer lines from the shared guide. Strip all
+    # such UI-only suffixes before validation and before returning text to the form.
+    footer_pattern = re.compile(
+        r"\n+\s*(?:(?:changes\.)?prompt|message|Mode|Режим)\s*:\s*[^\n]*\Z",
         flags=re.IGNORECASE,
-    ).rstrip()
+    )
+    while footer_pattern.search(prompt):
+        prompt = footer_pattern.sub("", prompt).rstrip()
     return prompt[:16000]
 
 
@@ -899,6 +900,9 @@ def _v2_wand_system() -> str:
         "timestamp that fits CURRENT_SITE_STATE.seconds. If CURRENT_SITE_STATE.has_driving_audio is true, the selected "
         "master track is authoritative driving audio: synchronize visible performance to it and never recreate it in the prompt. "
         "If audio_mode is true but has_driving_audio is false, the track is mux-only and must not be described as H3 conditioning. "
+        "When has_driving_audio is true and SOURCE asks for Song/Sing/Singing or Russian equivalents such as песня/поёт/петь, "
+        "the visible subject MUST visibly sing with mouth/lip articulation and facial/body performance synchronized to the supplied vocals; "
+        "never reduce that request to a static shot or unrelated walking. "
         "Whenever audio_mode is true, keep non_diegetic_music: N/A and use overall_soundscape only for optional generated scene/foley sound. "
         "If music was not requested, non_diegetic_music: N/A. "
         "If CURRENT_SITE_STATE.generate_audio is false, both generated-sound fields are exactly N/A. "
@@ -1008,6 +1012,12 @@ def _v2_prompt_validation_issues(prompt: str, settings: dict[str, Any]) -> list[
     ):
         issues.append("a described camera cut/switch must start a new timed [Shot N]")
 
+    if re.search(
+        r"(?im)^\s*(?:(?:changes\.)?prompt|message|Mode|Режим)\s*:",
+        text,
+    ):
+        issues.append("prompt contains a control/chat metadata footer")
+
     forbidden_ref2va = (
         "subject_definitions:",
         "summary:",
@@ -1112,6 +1122,9 @@ def _clean_v2_wand_prompt(
         "REMOVE every detail not explicitly supported by SOURCE. Do not enrich the scene from common sense. "
         "Do not add thunder, footsteps, traffic, wind, branch snaps, extra people, extra actions, extra objects, emotions, or a named source for an unspecified noise unless SOURCE says so. "
         "overall_soundscape may contain ONLY sounds explicitly supported by SOURCE; if SOURCE provides no sound at all, use N/A. "
+        "When CURRENT_SITE_STATE.has_driving_audio is true and SOURCE asks for Song/Sing/Singing or песня/поёт/петь, "
+        "preserve that as explicit visible singing synchronized to the supplied driving vocals, including mouth/lip articulation; "
+        "do not replace it with a static pose or an unrelated action. "
         "If SOURCE says music is not wanted, non_diegetic_music must be N/A. "
         "[Shot 1] has no timestamp. If SOURCE explicitly requests a camera switch/cut/new framing, represent that switch as a new [Shot N] with an exact timestamp inside CURRENT_GENERATOR_STATE.seconds. "
         "Do not output low-level Ref2VA wrapper fields."
@@ -1174,6 +1187,17 @@ def _source_literal_validation_issues(
         )
         if not music or music.group(1).strip().upper() != "N/A":
             issues.append("source explicitly requests no music, so non_diegetic_music must be N/A")
+
+    singing_requested = bool(
+        re.search(r"\b(?:song|sing|sings|singing)\b", source_lower)
+        or re.search(r"\b(?:песня|пение|петь|по[её]т|по[её]м|по[её]шь)\b", source_lower)
+    )
+    if singing_requested and not re.search(
+        r"\b(?:sing|sings|singing|vocal|vocals|lip[- ]?sync|mouth articulation)\b|"
+        r"\b(?:по[её]т|пение|вокал|губ)\w*",
+        prompt.lower(),
+    ):
+        issues.append("source requests singing, but the prompt does not preserve visible singing/lip synchronization")
 
     return issues
 
@@ -1300,13 +1324,36 @@ def control(
 
     workspace = str(settings_payload.get("workspace") or "").strip().lower()
     if workspace in _V2_WAND_WORKSPACES:
-        # Deliberately permissive: the local model may be imperfect, but the user
-        # should still receive its useful output instead of being blocked by validators.
-        prompt = _generate_v2_wand_prompt(
+        candidate = _generate_v2_wand_prompt(
             messages,
             settings_payload=settings_payload,
             thinking=thinking,
         )
+        prompt = _clean_v2_wand_prompt(
+            messages,
+            settings_payload=settings_payload,
+            candidate_prompt=candidate,
+            thinking=thinking,
+        )
+        source_text = _wand_source_text(messages)
+        issues = _v2_prompt_validation_issues(prompt, settings_payload)
+        issues.extend(_source_literal_validation_issues(source_text, prompt))
+        if issues:
+            repaired = _repair_control_prompt(
+                messages,
+                settings_payload=settings_payload,
+                bad_prompt=prompt,
+                issues=issues,
+                thinking=thinking,
+            )
+            prompt = str(repaired.get("changes", {}).get("prompt") or "").strip()
+            final_issues = _v2_prompt_validation_issues(prompt, settings_payload)
+            final_issues.extend(_source_literal_validation_issues(source_text, prompt))
+            if final_issues:
+                raise AssistantUnavailable(
+                    "Палочка не смогла подготовить корректный H3 prompt: "
+                    + "; ".join(final_issues[:4])
+                )
         return {"message": "Промт подготовлен.", "changes": {"prompt": prompt}}
 
     payload = _chat_payload(
