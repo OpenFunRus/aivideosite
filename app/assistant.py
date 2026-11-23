@@ -423,7 +423,8 @@ def _settings_context(settings: Any) -> str:
             "source_duration",
             "source_workspace",
             "master_track_title",
-            "has_visual_reference",
+            "audio_mode",
+            "has_driving_audio",
         )
         if key in settings
     }
@@ -435,7 +436,7 @@ def _settings_context(settings: Any) -> str:
         safe["source_title"] = str(settings.get("source_title") or "")[:300]
     if "master_track_title" in settings:
         safe["master_track_title"] = str(settings.get("master_track_title") or "")[:300]
-    for state_key in ("create_state", "audio_state"):
+    for state_key in ("create_state",):
         block = settings.get(state_key)
         if not isinstance(block, dict):
             continue
@@ -462,8 +463,8 @@ def _settings_context(settings: Any) -> str:
                 "source_kind",
                 "track_id",
                 "track_title",
-                "has_visual_reference",
-                "visual_reference_name",
+                "audio_mode",
+                "has_driving_audio",
             )
             if key in block
         }
@@ -866,7 +867,7 @@ def _extract_h3_prompt_text(content: str) -> str:
     return prompt[:16000]
 
 
-_V2_WAND_WORKSPACES = {"create", "audio"}
+_V2_WAND_WORKSPACES = {"create"}
 
 def _v2_wand_system() -> str:
     return (
@@ -879,8 +880,11 @@ def _v2_wand_system() -> str:
         "handedness, props, weather, requested actions, camera request and exact dialogue. Do not invent extra "
         "sounds, actions, people, objects, weather events, emotions, music or a specific source for an unspecified noise. "
         "[Shot 1] has no timestamp. Every later camera cut/switch starts a new [Shot N] with an exact increasing "
-        "timestamp that fits CURRENT_SITE_STATE.seconds. If music was not requested, non_diegetic_music: N/A. "
-        "If CURRENT_SITE_STATE.generate_audio is false, both sound fields are exactly N/A. "
+        "timestamp that fits CURRENT_SITE_STATE.seconds. If CURRENT_SITE_STATE.audio_mode is true, the selected "
+        "master track is already the driving audio: never recreate it in the prompt, keep non_diegetic_music: N/A, "
+        "and use overall_soundscape only for optional generated scene/foley sound. "
+        "If music was not requested, non_diegetic_music: N/A. "
+        "If CURRENT_SITE_STATE.generate_audio is false, both generated-sound fields are exactly N/A. "
         "Never output subject_definitions, summary, retention_analysis or detailed_description; the backend owns Ref2VA mapping. "
         "Do not embellish sparse input; sparse but faithful output is preferred. "
         "Follow the workspace-specific user instruction and the H3 Video reference guide below.\n\n"
