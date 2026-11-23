@@ -136,8 +136,9 @@
               "Если generate_audio выключен — overall_soundscape: N/A и non_diegetic_music: N/A. " +
               "Если звук включён, но музыки не просили — non_diegetic_music: N/A. " +
               "Если first/last frame используются БЕЗ Characters, добавь перед тремя полями правильную FL2VA alignment line из H3 guide. " +
-              "Если Characters и first/last frame выбраны одновременно, НЕ добавляй Picture alignment line: backend применит кадры отдельно как exact Timeline Guides. " +
-              "Если выбраны Characters, не придумывай Picture/Subject ordinals и не пиши шесть Ref2VA-полей: backend добавит их сам. " +
+              "Если Characters, Locations или Misc и first/last frame выбраны одновременно, НЕ добавляй Picture alignment line: backend применит кадры отдельно как exact Timeline Guides. " +
+              "Если выбраны Characters, Locations или Misc, не придумывай Picture/Subject ordinals и не пиши шесть Ref2VA-полей: backend добавит реальные semantic references сам. " +
+              "Selected Misc presets — реальные H3 semantic references предметов, одежды, оружия, транспорта, существ, особенностей, поз/действий, стилей и прочего; обязательно учитывай их name/category/description в сцене, не выдумывая новые свойства. " +
               "Сохрани все конкретные факты буквально: если написано 35 лет — в результате тоже должно быть 35, а не диапазон возраста. " +
               "Точную реплику пиши один раз: только как (S1) <d>[Russian] ...</d>, не дублируй её обычными кавычками перед тегом. " +
               "Не придумывай гром, шаги, ветер, транспорт, новые действия или другие детали, которых нет в запросе. " +
@@ -150,8 +151,8 @@
             workspace: "create",
             generation_mode:
               (qs("#v2-first-frame")?.files?.[0] || qs("#v2-last-frame")?.files?.[0])
-                ? ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length) ? "multiframe" : "frames")
-                : ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length) ? "reference" : "frames"),
+                ? ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length || api.selectedMisc?.()?.length) ? "multiframe" : "frames")
+                : ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length || api.selectedMisc?.()?.length) ? "reference" : "frames"),
             has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
             has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
           },
@@ -185,12 +186,15 @@
     Boolean(firstFrameInput?.files?.length || lastFrameInput?.files?.length);
 
   const updateCreateCompatibility = () => {
-    const hasPresets = state.selectedCharacterIds.size > 0 || state.selectedLocationIds.size > 0;
+    const hasPresets =
+      state.selectedCharacterIds.size > 0 ||
+      state.selectedLocationIds.size > 0 ||
+      state.selectedMiscIds.size > 0;
     const mixed = hasPresets && createHasFrames();
     if (createWarning) {
       createWarning.hidden = !mixed;
       createWarning.textContent = mixed
-        ? "Персонажи и локации задают semantic references, а First/Last используются как точные Timeline Guides. Их можно применять вместе."
+        ? "Персонажи, локации и «Прочее» задают semantic references, а First/Last используются как точные Timeline Guides. Их можно применять вместе."
         : "";
     }
     if (generateButton && !generateButton.classList.contains("is-loading")) {
@@ -219,6 +223,7 @@
     formData.set("generate_audio", state.draft.audio ? "true" : "false");
     formData.set("character_ids", JSON.stringify(Array.from(state.selectedCharacterIds)));
     formData.set("location_ids", JSON.stringify(Array.from(state.selectedLocationIds)));
+    formData.set("misc_ids", JSON.stringify(Array.from(state.selectedMiscIds)));
     formData.set("muted_character_ids", JSON.stringify(api.mutedCharacterIds?.() || []));
     if (firstFrameInput?.files?.[0]) formData.set("first_frame", firstFrameInput.files[0]);
     if (lastFrameInput?.files?.[0]) formData.set("last_frame", lastFrameInput.files[0]);

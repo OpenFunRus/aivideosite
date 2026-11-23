@@ -508,11 +508,13 @@
   const referenceBudget = (
     characterIds = state.selectedCharacterIds,
     locationIds = state.selectedLocationIds,
-    mutedIds = state.mutedCharacterIds
+    mutedIds = state.mutedCharacterIds,
+    miscIds = state.selectedMiscIds
   ) => {
     const characterSet = characterIds instanceof Set ? characterIds : new Set(characterIds || []);
     const locationSet = locationIds instanceof Set ? locationIds : new Set(locationIds || []);
     const muted = mutedIds instanceof Set ? mutedIds : new Set(mutedIds || []);
+    const miscSet = miscIds instanceof Set ? miscIds : new Set(miscIds || []);
     const budget = state.characters.reduce(
       (acc, character) => {
         const id = String(character.id);
@@ -528,6 +530,12 @@
     (state.locations || []).forEach((location) => {
       if (!locationSet.has(String(location.id))) return;
       const images = Number(location.image_count || 0);
+      budget.images += images;
+      budget.total += images;
+    });
+    (state.misc || []).forEach((preset) => {
+      if (!miscSet.has(String(preset.id))) return;
+      const images = Number(preset.image_count || 0);
       budget.images += images;
       budget.total += images;
     });
@@ -759,6 +767,7 @@
     has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
     selected_character_ids: Array.from(state.selectedCharacterIds).map(String),
     selected_location_ids: Array.from(state.selectedLocationIds || []).map(String),
+    selected_misc_ids: Array.from(state.selectedMiscIds || []).map(String),
     muted_character_ids: mutedCharacterIds().map(String),
   });
 

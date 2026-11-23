@@ -17,6 +17,7 @@
   api.setView?.(initialView, { updateHash: false });
   api.refreshCharacters?.();
   api.refreshLocations?.();
+  api.refreshMisc?.();
   api.refreshSystem?.();
   W.refreshState({ silent: true });
 

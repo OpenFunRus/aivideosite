@@ -258,7 +258,7 @@
   };
 
   const activatePresetTab = (name) => {
-    const next = name === "locations" ? "locations" : "characters";
+    const next = ["characters", "locations", "misc"].includes(name) ? name : "characters";
     state.presetTab = next;
     qsa("[data-v2-preset-tab]").forEach((button) => {
       const active = button.dataset.v2PresetTab === next;

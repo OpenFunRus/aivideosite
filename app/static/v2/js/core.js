@@ -21,6 +21,8 @@
     characterTab: "all",
     locations: [],
     selectedLocationIds: new Set(),
+    misc: [],
+    selectedMiscIds: new Set(),
     presetTab: "characters",
     uploadUrls: new Map(),
     draft: {
@@ -127,6 +129,7 @@
           ...state.draft,
           selectedCharacterIds: Array.from(state.selectedCharacterIds),
           selectedLocationIds: Array.from(state.selectedLocationIds),
+          selectedMiscIds: Array.from(state.selectedMiscIds),
         })
       );
       localStorage.setItem(keys.view, state.view);
@@ -149,6 +152,9 @@
       }
       if (Array.isArray(saved.selectedLocationIds)) {
         state.selectedLocationIds = new Set(saved.selectedLocationIds.map(String));
+      }
+      if (Array.isArray(saved.selectedMiscIds)) {
+        state.selectedMiscIds = new Set(saved.selectedMiscIds.map(String));
       }
     }
     const recent = readStoredJson(keys.recentCharacters, []);
