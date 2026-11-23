@@ -79,6 +79,9 @@
   W.selectedCharacterIds = () =>
     Array.from(api.state.selectedCharacterIds || []).map(String);
 
+  W.selectedLocationIds = () =>
+    Array.from(api.state.selectedLocationIds || []).map(String);
+
   W.mutedCharacterIds = () =>
     (api.mutedCharacterIds?.() || []).map(String);
 

@@ -150,8 +150,8 @@
             workspace: "create",
             generation_mode:
               (qs("#v2-first-frame")?.files?.[0] || qs("#v2-last-frame")?.files?.[0])
-                ? (api.selectedCharacters?.()?.length ? "multiframe" : "frames")
-                : (api.selectedCharacters?.()?.length ? "reference" : "frames"),
+                ? ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length) ? "multiframe" : "frames")
+                : ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length) ? "reference" : "frames"),
             has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
             has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
           },
@@ -185,11 +185,12 @@
     Boolean(firstFrameInput?.files?.length || lastFrameInput?.files?.length);
 
   const updateCreateCompatibility = () => {
-    const mixed = state.selectedCharacterIds.size > 0 && createHasFrames();
+    const hasPresets = state.selectedCharacterIds.size > 0 || state.selectedLocationIds.size > 0;
+    const mixed = hasPresets && createHasFrames();
     if (createWarning) {
       createWarning.hidden = !mixed;
       createWarning.textContent = mixed
-        ? "Characters задают внешность и сохранённые голоса, а First/Last используются как точные Timeline Guides. Их можно применять вместе."
+        ? "Персонажи и локации задают semantic references, а First/Last используются как точные Timeline Guides. Их можно применять вместе."
         : "";
     }
     if (generateButton && !generateButton.classList.contains("is-loading")) {
@@ -217,6 +218,7 @@
     formData.set("seed", state.draft.seed.trim());
     formData.set("generate_audio", state.draft.audio ? "true" : "false");
     formData.set("character_ids", JSON.stringify(Array.from(state.selectedCharacterIds)));
+    formData.set("location_ids", JSON.stringify(Array.from(state.selectedLocationIds)));
     formData.set("muted_character_ids", JSON.stringify(api.mutedCharacterIds?.() || []));
     if (firstFrameInput?.files?.[0]) formData.set("first_frame", firstFrameInput.files[0]);
     if (lastFrameInput?.files?.[0]) formData.set("last_frame", lastFrameInput.files[0]);
