@@ -105,38 +105,6 @@
     return { row, content };
   };
 
-  const appendReadyState = (root) => {
-    const last = messages[messages.length - 1];
-    if (busy || !last || last.role !== "assistant") return;
-
-    const row = document.createElement("div");
-    row.className = "v2-chat-ready";
-    row.appendChild(makeAvatar("assistant"));
-
-    const pill = document.createElement("div");
-    pill.className = "v2-chat-ready-pill";
-
-    const check = document.createElement("span");
-    check.className = "v2-chat-ready-check";
-    check.appendChild(makeIcon("icon-check"));
-    pill.appendChild(check);
-
-    const label = document.createElement("span");
-    label.textContent = "Готов ответить.";
-    pill.appendChild(label);
-
-    const timeText = formatTime(last.created_at);
-    if (timeText) {
-      const time = document.createElement("span");
-      time.className = "v2-chat-ready-time";
-      time.textContent = timeText;
-      pill.appendChild(time);
-    }
-
-    row.appendChild(pill);
-    root.appendChild(row);
-  };
-
   const render = () => {
     const root = qs("#v2-chat-messages");
     if (!root) return;
@@ -144,7 +112,6 @@
     messages.forEach((message) => {
       root.appendChild(makeMessageRow(message).row);
     });
-    appendReadyState(root);
     root.scrollTop = root.scrollHeight;
   };
 

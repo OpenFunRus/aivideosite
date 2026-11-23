@@ -17,7 +17,7 @@
 .v2-context-track{height:5px;margin-top:9px;overflow:hidden;border-radius:999px;background:#0c101b}
 .v2-context-track span{display:block;width:0;height:100%;border-radius:999px;background:linear-gradient(90deg,#6545dc,#895eff);transition:width .2s}
 .v2-context-meter small{display:block;margin-top:7px;color:#8590ae;font-size:10px}
-.v2-chat-messages{flex:1;min-height:0;overflow:auto;padding:19px 18px 20px;display:flex;flex-direction:column;gap:14px}
+.v2-chat-messages{flex:1;min-height:0;overflow:auto;padding:19px 18px 20px;display:flex;flex-direction:column;gap:14px;border:1px solid #2d3449;border-radius:15px;background:linear-gradient(180deg,#111520,#0d111a);box-shadow:inset 0 1px 0 rgba(255,255,255,.02),0 12px 34px rgba(0,0,0,.12)}
 .v2-chat-row{display:flex;width:100%;align-items:flex-start;gap:12px}
 .v2-chat-row.assistant{justify-content:flex-start}
 .v2-chat-row.user{justify-content:flex-end}
@@ -32,11 +32,6 @@
 .v2-chat-row.assistant .v2-chat-time{left:16px}
 .v2-chat-row.user .v2-chat-time{right:13px;color:#b7acd7}
 .v2-chat-row.pending .v2-chat-bubble{min-width:54px;min-height:42px;padding:10px 16px;opacity:.7}
-.v2-chat-ready{display:flex;align-items:center;gap:12px;width:100%}
-.v2-chat-ready-pill{min-height:38px;display:inline-flex;align-items:center;gap:9px;padding:0 12px;border:1px solid #30384f;border-radius:11px;background:#1d2436;color:#aeb7cc;font-size:11px}
-.v2-chat-ready-check{width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #7657ff;border-radius:50%;color:#9e87ff}
-.v2-chat-ready-check .icon{width:12px;height:12px}
-.v2-chat-ready-time{margin-left:7px;color:#78839e;font-size:10px}
 .v2-chat-composer{display:grid;grid-template-columns:minmax(0,1fr) 54px;align-items:end;gap:12px;padding-top:12px;border-top:1px solid #292f41}
 .v2-chat-input-wrap{position:relative;min-width:0}
 .v2-chat-composer textarea{display:block;width:100%;min-height:74px;max-height:200px;resize:vertical;border:1px solid #505778;border-radius:13px;background:linear-gradient(130deg,#1c2132,#191e2e);color:#f5f5ff;padding:12px 15px 27px;outline:none;font:inherit;font-size:13px;line-height:1.5}
