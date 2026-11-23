@@ -6,7 +6,7 @@
 >
 > Основная ветка: `main`
 >
-> Handoff обновлён после перехода на локальную Gemma4 26B A4B Heretic, dynamic GPU/CPU failover, 128k context, Thinking toggle и последних UI-фиксов. Старый Qwen3-8B assistant больше не используется.
+> Handoff обновлён после перехода на локальную Gemma4 26B A4B Heretic, dynamic GPU/CPU failover, 128k context, Thinking toggle и последних UI-фиксов.
 >
 > После чтения этого файла новый исполнитель ОБЯЗАН сначала перечитать актуальный `main` на GitHub: SHA намеренно не фиксируется внутри handoff, чтобы не создавать самоссылочный устаревающий checkpoint.
 
