@@ -281,6 +281,9 @@
     } finally { if(submit) submit.disabled=false; }
   });
 
+  // Render the add-card immediately, before /api/misc finishes. This keeps the
+  // creation entry point available even if the list request is slow or fails.
   renderSelectedMisc();
+  renderMiscGrid();
   Object.assign(api,{selectedMisc,refreshMisc,renderMiscGrid,renderSelectedMisc});
 })();

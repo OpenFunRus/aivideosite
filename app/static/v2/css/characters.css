@@ -155,6 +155,7 @@
   padding:0 6px 16px 4px;
   overflow-y:auto;
   overflow-x:hidden;
+  scrollbar-gutter:stable;
   align-content:start;
   align-items:start;
 }
@@ -342,12 +343,12 @@
 
 
 /* Reusable presets: Characters + Locations */
-.v2-preset-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:10px 0 2px;flex:0 0 auto}
-.v2-preset-tabs button{min-width:0;height:38px;display:flex;align-items:center;justify-content:center;gap:6px;padding:0 8px;border:1px solid #2d3245;border-radius:10px;background:#151823;color:#858da2;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.v2-preset-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:10px 0 2px;flex:0 0 auto}
+.v2-preset-tabs button{position:relative;min-width:0;height:38px;display:flex;align-items:center;justify-content:center;gap:4px;padding:0 5px;border:1px solid #2d3245;border-radius:10px;background:#151823;color:#858da2;font:inherit;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:visible}
 .v2-preset-tabs button:hover{border-color:#454d68;color:#d9ddea}
 .v2-preset-tabs button.active{background:#202436;color:#f1f3fa;border-color:#555f80}
-.v2-preset-tabs .icon{width:15px;height:15px;flex:0 0 auto}
-.v2-preset-tab-count{min-width:18px;height:18px;display:inline-grid;place-items:center;padding:0 5px;border-radius:999px;color:#fff;font-size:9px;line-height:18px;font-weight:850}
+.v2-preset-tabs .icon{width:13px;height:13px;flex:0 0 auto}
+.v2-preset-tab-count{position:absolute;z-index:3;top:-6px;right:-4px;min-width:18px;height:18px;display:grid;place-items:center;padding:0 4px;border:2px solid #121621;border-radius:999px;color:#fff;font-size:9px;line-height:14px;font-weight:850;box-sizing:border-box}
 .v2-preset-tab-count[hidden]{display:none!important}
 .v2-preset-tab-count-character{background:#4b7cff}
 .v2-preset-tab-count-location{background:#e55462}
@@ -366,3 +367,23 @@
 .v2-misc-add-card:hover{border-color:#d5a928!important;background:linear-gradient(145deg,#29230f,#18170f)!important;color:#fff1ad!important}
 .v2-misc-create-dialog .v2-kicker{color:#e6bd4c}
 .v2-misc-category-chip{position:absolute;z-index:4;left:8px;right:38px;top:40px;display:block;width:max-content;max-width:calc(100% - 52px);padding:4px 6px;border:1px solid rgba(213,169,40,.5);border-radius:6px;background:rgba(34,27,8,.84);color:#f3ce65;font-size:8px;font-weight:800;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;backdrop-filter:blur(4px)}
+
+/* Keep all three preset add-cards geometrically identical regardless of whether
+   another tab currently has enough cards to show a vertical scrollbar. */
+.v2-character-rail .v2-character-add-card,
+.v2-character-rail .v2-location-add-card,
+.v2-character-rail .v2-misc-add-card{
+  aspect-ratio:1/1!important;
+  width:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  box-sizing:border-box!important;
+}
+.v2-character-rail .v2-character-add-card strong{
+  width:100%;
+  padding:0 7px;
+  line-height:1.25;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  box-sizing:border-box;
+}
