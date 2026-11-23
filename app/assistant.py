@@ -73,7 +73,7 @@ PROMPT WRITING — HARD LANGUAGE AND FORMAT RULES
   overall_soundscape:
   non_diegetic_music:
   Leave a blank line between fields.
-- In Ref2VA/Characters/Continue/Audio workspaces, DO NOT invent subject_definitions, Picture/Video/Audio ordinals,
+- In Ref2VA/Characters/Audio workspaces, DO NOT invent subject_definitions, Picture/Video/Audio ordinals,
   summary or retention_analysis. The server owns real attached-reference mapping and promotes the three-field
   prompt into the six-field Ref2VA schema safely.
 - Only write an explicit six-field Ref2VA prompt when the user explicitly asks for the full low-level prompt
@@ -90,7 +90,7 @@ PROMPT WRITING — HARD LANGUAGE AND FORMAT RULES
 - Constant ambience/weather/crowd/room tone belongs in overall_soundscape.
 - Audience-only score belongs only in non_diegetic_music. Use N/A when no score is wanted.
 - Do not use vague music mood words alone; describe instruments, tempo/rhythm and dynamics.
-- For external master-track workflows (Audio / Continue Clip), non_diegetic_music is normally N/A:
+- For the external master-track Audio workflow, non_diegetic_music is normally N/A:
   the master track is an input/muxed track, not music H3 should invent again.
 - Use concrete exclusions as sentences (for example no subtitles/on-screen text/watermarks) instead of
   pretending there is a separate negative-prompt field.
@@ -731,7 +731,7 @@ def _extract_h3_prompt_text(content: str) -> str:
     return prompt[:16000]
 
 
-_V2_WAND_WORKSPACES = {"create", "continue", "audio", "clip"}
+_V2_WAND_WORKSPACES = {"create", "audio"}
 
 def _v2_wand_system() -> str:
     return (

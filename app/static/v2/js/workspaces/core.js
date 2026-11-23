@@ -118,10 +118,7 @@
   };
 
   W.populateMediaSelectors = () => {
-    W.populateSelect(qs("#v2-continue-library"), "Выберите ролик…");
-    W.populateSelect(qs("#v2-clip-library"), "Выберите ролик…");
     W.populateTrackSelect(qs("#v2-audio-track"), "Выберите сохранённый трек…");
-    W.populateTrackSelect(qs("#v2-clip-track"), "Выберите сохранённый трек…");
   };
 
   W.mediaResolution = (item) => {
@@ -205,7 +202,6 @@
       qsa("[data-value]", group).forEach((item) => {
         item.classList.toggle("active", item === button);
       });
-      W.updateClipRange?.();
       W.updateAudioRange?.();
     });
   });
