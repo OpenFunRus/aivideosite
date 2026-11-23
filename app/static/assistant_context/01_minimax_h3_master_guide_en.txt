@@ -1,7 +1,7 @@
 MINIMAX H3 MASTER GUIDE — AI VIDEO SITE V2
 Version: 2026-11-23
 Language: English
-Purpose: authoritative production knowledge for the local Gemma assistant and Magic Wand.
+Purpose: authoritative MiniMax H3 VIDEO production knowledge for the local Gemma assistant and Video Magic Wand. MiniMax H3 Image uses the separate h3-image-prompting-guide-ai.txt.
 
 ===============================================================================
 0. SOURCE PRIORITY AND SCOPE
@@ -99,15 +99,20 @@ overall_soundscape: ...
 
 non_diegetic_music: ...
 
-IMPORTANT FOR THIS SITE:
-The visible V2 prompt fields and Magic Wand use the THREE-field form even when
-Characters, Locations, or Audio cause the backend to use Ref2VA. The site backend
-owns the actual reference numbering and promotes the three-field user prompt into
-the six-section Ref2VA representation. Therefore the Magic Wand must NOT invent
-<Picture N>, <Video N>, <Audio N>, subject_definitions, or retention_analysis.
+IMPORTANT FOR THIS SITE — H3 VIDEO:
+The visible V2 Video / Video by Audio prompt fields and their Magic Wands use the
+THREE-field H3 Video form even when Characters, Locations, Misc, or Audio cause the
+backend to use Ref2VA. The site backend owns the actual reference numbering and
+promotes the three-field video prompt into the six-section Ref2VA representation.
+Therefore the Video Magic Wand must NOT invent <Picture N>, <Video N>, <Audio N>,
+subject_definitions, or retention_analysis.
 
-When discussing H3 generally, understand both syntaxes. When writing for this V2
-Magic Wand, obey the site's three-field contract.
+The separate Images workspace uses MiniMax H3 Image and a separate image guide.
+Its Magic Wand returns ONE still-image prompt/edit instruction — never this three-field
+Video schema, Shot timeline, timestamps, or audio fields.
+
+When discussing H3 generally, first distinguish H3 Video from H3 Image. When writing
+for a Video Magic Wand, obey this three-field Video contract.
 
 ===============================================================================
 3. BASE MODE ALIGNMENT RULES
@@ -610,15 +615,18 @@ When the user asks for an H3 prompt in ordinary chat:
 4. Be faithful rather than imaginative when the user specifies a scene precisely.
 5. Do not fabricate unavailable UI controls or references.
 
-When invoked by Magic Wand:
-- output only the final three-field H3 prompt;
+When invoked by a VIDEO Magic Wand:
+- output only the final three-field H3 Video prompt;
 - no markdown fences;
 - no explanation;
 - no JSON;
 - use CURRENT_SITE_STATE and CURRENT_WORKSPACE_STATE;
 - preserve exact user facts;
-- selected Characters and Locations are real constraints;
+- selected Characters, Locations and Misc are real constraints;
 - backend owns raw Ref2VA labels and retention wrappers.
+
+When invoked by the IMAGES Magic Wand, do not use this output contract. Follow the
+separate H3 Image guide: one still-image prompt/edit instruction, no Shots/timestamps/audio fields.
 
 ================================================================
 SITE MISC SEMANTIC PRESETS
