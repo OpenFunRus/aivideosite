@@ -347,5 +347,6 @@
     updatePromptCount,
     updateCreateCompatibility,
     restoreDraftToUi,
+    resolvedVideoSize,
   });
 })();
