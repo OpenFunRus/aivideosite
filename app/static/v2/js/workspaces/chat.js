@@ -129,6 +129,7 @@
       active_view: String(api.state?.view || "chat"),
       selected_character_ids: Array.from(api.state?.selectedCharacterIds || []).map(String),
       selected_location_ids: Array.from(api.state?.selectedLocationIds || []).map(String),
+      selected_misc_ids: Array.from(api.state?.selectedMiscIds || []).map(String),
       muted_character_ids: (api.mutedCharacterIds?.() || []).map(String),
       create_state: createState,
       audio_state: audioState,

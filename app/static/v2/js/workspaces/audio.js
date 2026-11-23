@@ -557,6 +557,7 @@
     data.set("seed", qs("#v2-audio-seed")?.value || "");
     data.set("character_ids", JSON.stringify(W.selectedCharacterIds()));
     data.set("location_ids", JSON.stringify(W.selectedLocationIds()));
+    data.set("misc_ids", JSON.stringify(W.selectedMiscIds()));
 
     await W.submitForm(
       "/api/v2/audio",

@@ -21,6 +21,7 @@
     generate_audio: Boolean(qs("#v2-audio-scene-sound")?.checked),
     selected_character_ids: W.selectedCharacterIds(),
     selected_location_ids: W.selectedLocationIds(),
+    selected_misc_ids: W.selectedMiscIds(),
     muted_character_ids: W.mutedCharacterIds(),
     track_id: String(qs("#v2-audio-track")?.value || ""),
     visual_reference_name: String(qs("#v2-audio-visual")?.files?.[0]?.name || ""),
