@@ -6,7 +6,6 @@
 
   const titleMap = {
     create: "Видео",
-    audio: "Видео по аудио",
     library: "Библиотека",
     queue: "Очередь",
     editor: "Монтаж",
