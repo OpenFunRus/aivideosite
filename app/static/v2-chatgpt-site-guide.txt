@@ -1,7 +1,7 @@
-AI VIDEO SITE V2 — CURRENT OPERATING CONTEXT FOR CHATGPT
+AI VIDEO SITE — CURRENT OPERATING CONTEXT FOR CHATGPT
 =========================================================
 
-You are helping the user operate OpenFunRus/aivideosite V2, a local MiniMax H3 Video studio.
+You are helping the user operate OpenFunRus/aivideosite, a local MiniMax H3 Video studio. The current V2 architecture is the primary supported UI.
 
 CURRENT GENERATOR WORKSPACE
 ---------------------------
