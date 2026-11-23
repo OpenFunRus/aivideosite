@@ -218,7 +218,7 @@
     const addCard =
       '<button class="v2-character-add-card v2-location-add-card" type="button" data-location-add-card>' +
         '<span class="v2-character-add-card-icon"><svg class="icon"><use href="/static/icons.svg#icon-plus"></use></svg></span>' +
-        "<strong>Добавить локацию</strong>" +
+        "<strong><span>Добавить</span><span>локацию</span></strong>" +
       "</button>";
 
     const cards = list.map((location) => {
