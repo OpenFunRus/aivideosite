@@ -35,13 +35,8 @@ from . import db
 from .config import settings
 from . import assistant as local_assistant
 from .comfy import ComfyUIClient
-from .h3_references import (
-    REFERENCE_TASKS,
-    build_reference_prompt,
-    parse_reference_manifest,
-    validate_reference_items,
-)
-from .worker import JobWorker, probe_duration, probe_has_audio
+from .h3_references import build_reference_prompt, validate_reference_items
+from .worker import JobWorker, probe_duration
 
 
 @asynccontextmanager
@@ -170,20 +165,9 @@ async def logout(request: Request):
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    if not _is_authenticated(request):
-        return RedirectResponse("/login", status_code=303)
-    user = _current_user(request)
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={"current_user": user},
-    )
-
-
 @app.get("/v2", response_class=HTMLResponse)
 @app.get("/v2/", response_class=HTMLResponse)
-async def dashboard_v2(request: Request):
+async def dashboard(request: Request):
     if not _is_authenticated(request):
         return RedirectResponse("/login", status_code=303)
     user = _current_user(request)
@@ -194,29 +178,10 @@ async def dashboard_v2(request: Request):
     )
 
 
-@app.get("/api/state")
-async def api_state(
-    media_page: int = Query(1, ge=1),
-    jobs_page: int = Query(1, ge=1),
-    user_id: str = Depends(require_user),
-):
-    media_data = db.list_media_page(media_page, 20, owner_id=user_id)
-    jobs_data = db.list_jobs_page(jobs_page, 20, owner_id=user_id)
-    return {
-        "server_now": time.time(),
-        "jobs": jobs_data["items"],
-        "media": media_data["items"],
-        "jobs_pagination": {
-            key: jobs_data[key] for key in ("page", "page_size", "total", "pages")
-        },
-        "media_pagination": {
-            key: media_data[key] for key in ("page", "page_size", "total", "pages")
-        },
-        "counts": db.state_counts(user_id),
-        "global_counts": db.state_counts(),
-        "user": {"id": user_id, "label": _user_label(user_id)},
-        "system": get_system_status(),
-    }
+@app.get("/api/v2/status")
+async def api_v2_status(user_id: str = Depends(require_user)):
+    del user_id
+    return {"system": get_system_status()}
 
 
 @app.get("/api/assistant/status")
@@ -992,415 +957,6 @@ async def misc_image(
     return FileResponse(path)
 
 
-@app.post("/api/generate")
-async def api_generate(
-    request: Request,
-    prompt: Annotated[str, Form()],
-    width: Annotated[int, Form()] = 1312,
-    height: Annotated[int, Form()] = 736,
-    seconds: Annotated[float, Form()] = 5.0,
-    fps: Annotated[int, Form()] = 24,
-    steps: Annotated[int, Form()] = 8,
-    seed: Annotated[int, Form()] = -1,
-    generate_audio: Annotated[bool, Form()] = False,
-    generation_mode: Annotated[str, Form()] = "frames",
-    keyframe_role: Annotated[str, Form()] = "first",
-    reference_task: Annotated[str, Form()] = "reference_generation",
-    ref_image_size: Annotated[str, Form()] = "match",
-    character_ids: Annotated[str, Form()] = "[]",
-    location_ids: Annotated[str, Form()] = "[]",
-    misc_ids: Annotated[str, Form()] = "[]",
-    muted_character_ids: Annotated[str, Form()] = "[]",
-    reference_manifest: Annotated[str, Form()] = "{}",
-    guide_manifest: Annotated[str, Form()] = "{}",
-    control_mode: Annotated[str, Form()] = "none",
-    control_strength: Annotated[float, Form()] = 1.0,
-    control_start_percent: Annotated[float, Form()] = 0.0,
-    control_end_percent: Annotated[float, Form()] = 1.0,
-    control_canny_low: Annotated[float, Form()] = 0.4,
-    control_canny_high: Annotated[float, Form()] = 0.8,
-    first_frame: UploadFile | None = File(None),
-    last_frame: UploadFile | None = File(None),
-    reference_images: list[UploadFile] | None = File(None),
-    reference_videos: list[UploadFile] | None = File(None),
-    reference_audios: list[UploadFile] | None = File(None),
-    guide_images: list[UploadFile] | None = File(None),
-    control_video: UploadFile | None = File(None),
-    control_source_video: UploadFile | None = File(None),
-    control_mask_video: UploadFile | None = File(None),
-    user_id: str = Depends(require_user),
-):
-    del request
-
-    prompt = " ".join(prompt.split()) if "\n" not in prompt else prompt.strip()
-    if not prompt:
-        raise HTTPException(400, "Введите prompt.")
-    if len(prompt) > 16000:
-        raise HTTPException(400, "Prompt слишком длинный.")
-
-    if width < 256 or width > 3072 or height < 256 or height > 3072:
-        raise HTTPException(400, "Размер должен быть от 256 до 3072.")
-    if width % 32 or height % 32:
-        raise HTTPException(400, "Ширина и высота должны делиться на 32.")
-    if seconds < 1 or seconds > 30:
-        raise HTTPException(400, "Длительность должна быть от 1 до 30 секунд.")
-    if fps < 6 or fps > 32:
-        raise HTTPException(400, "FPS должен быть от 6 до 32.")
-    if steps < 6 or steps > 24 or steps % 2:
-        raise HTTPException(400, "Шаги должны быть от 6 до 24 с шагом 2.")
-
-    generation_mode = generation_mode.strip().lower()
-    if generation_mode not in {"frames", "reference", "multiframe", "digital_human"}:
-        raise HTTPException(400, "Неизвестный режим H3.")
-    keyframe_role = "last" if keyframe_role == "last" else "first"
-    if reference_task not in REFERENCE_TASKS:
-        reference_task = "reference_generation"
-    if ref_image_size not in {"match", "1k", "1.5k", "2k", "original"}:
-        ref_image_size = "match"
-
-    control_mode = control_mode.strip().lower()
-    allowed_control_modes = {
-        "none",
-        "canny_auto",
-        "canny",
-        "pose",
-        "depth",
-        "hed",
-        "mlsd",
-        "inpaint",
-    }
-    if control_mode not in allowed_control_modes:
-        raise HTTPException(400, "Неизвестный режим H3 ControlNet.")
-    if not 0.0 <= control_strength <= 10.0:
-        raise HTTPException(400, "ControlNet strength должен быть от 0 до 10.")
-    if not 0.0 <= control_start_percent <= 1.0 or not 0.0 <= control_end_percent <= 1.0:
-        raise HTTPException(400, "ControlNet start/end должны быть от 0 до 1.")
-    if control_start_percent >= control_end_percent:
-        raise HTTPException(400, "ControlNet start должен быть меньше end.")
-    if not 0.01 <= control_canny_low <= 0.99 or not 0.01 <= control_canny_high <= 0.99:
-        raise HTTPException(400, "Canny thresholds должны быть от 0.01 до 0.99.")
-    if control_canny_low >= control_canny_high:
-        raise HTTPException(400, "Canny low threshold должен быть меньше high threshold.")
-
-    temporary_paths: list[Path] = []
-    image_paths: list[str] = []
-    reference_items: list[dict] = []
-    reference_map: list[dict] = []
-    guide_items: list[dict] = []
-    control_payload: dict = {"mode": "none"}
-    original_prompt = prompt
-
-    try:
-        if generation_mode == "multiframe":
-            active_guides = [item for item in (guide_images or []) if item.filename]
-            if not active_guides:
-                raise HTTPException(400, "Для Timeline Guides добавьте хотя бы один guide image.")
-            if len(active_guides) > 16:
-                raise HTTPException(400, "В одной задаче поддерживается до 16 timeline guide images.")
-            try:
-                raw_guide_manifest = json.loads(guide_manifest or "{}")
-            except json.JSONDecodeError as exc:
-                raise HTTPException(400, "Некорректный guide manifest.") from exc
-            specs = (
-                raw_guide_manifest.get("guides")
-                if isinstance(raw_guide_manifest, dict)
-                else None
-            )
-            if not isinstance(specs, list):
-                specs = []
-
-            for index, upload in enumerate(active_guides):
-                path = await save_upload(
-                    upload,
-                    kind="image",
-                    max_bytes=settings.max_image_upload_bytes,
-                )
-                temporary_paths.append(path)
-                fallback_time = (
-                    0.0
-                    if len(active_guides) == 1
-                    else float(seconds) * index / (len(active_guides) - 1)
-                )
-                spec = specs[index] if index < len(specs) and isinstance(specs[index], dict) else {}
-                try:
-                    time_seconds = float(spec.get("time", fallback_time))
-                except (TypeError, ValueError):
-                    time_seconds = fallback_time
-                if time_seconds < 0 or time_seconds > float(seconds):
-                    raise HTTPException(
-                        400,
-                        f"Guide {index + 1}: время должно быть от 0 до {seconds:g} сек.",
-                    )
-                frame_idx = spec.get("frame_idx")
-                if frame_idx is not None:
-                    try:
-                        frame_idx = int(frame_idx)
-                    except (TypeError, ValueError) as exc:
-                        raise HTTPException(
-                            400,
-                            f"Guide {index + 1}: некорректный frame_idx.",
-                        ) from exc
-                    if frame_idx < -9999 or frame_idx > 9999:
-                        raise HTTPException(
-                            400,
-                            f"Guide {index + 1}: frame_idx вне допустимого диапазона.",
-                        )
-                guide_items.append(
-                    {
-                        "path": str(path),
-                        "temporary": True,
-                        "source_name": Path(upload.filename or path.name).name,
-                        "time_seconds": round(time_seconds, 4),
-                        "frame_idx": frame_idx,
-                        "note": str(spec.get("note") or "").strip()[:240],
-                    }
-                )
-
-            reference_task = "timeline_guides"
-
-        if generation_mode == "frames":
-            has_first = first_frame is not None and bool(first_frame.filename)
-            has_last = last_frame is not None and bool(last_frame.filename)
-            if has_last and not has_first:
-                keyframe_role = "last"
-            elif has_first:
-                keyframe_role = "first"
-            for upload in (first_frame, last_frame):
-                if upload is not None and upload.filename:
-                    path = await save_upload(
-                        upload,
-                        kind="image",
-                        max_bytes=settings.max_image_upload_bytes,
-                    )
-                    temporary_paths.append(path)
-                    image_paths.append(str(path))
-            if len(image_paths) > 2:
-                raise HTTPException(400, "FL2VA принимает максимум два кадра.")
-        else:
-            try:
-                raw_character_ids = json.loads(character_ids or "[]")
-            except json.JSONDecodeError as exc:
-                raise HTTPException(400, "Некорректный список персонажей.") from exc
-            if not isinstance(raw_character_ids, list):
-                raise HTTPException(400, "Некорректный список персонажей.")
-
-            muted_characters = set(_v2_character_ids(muted_character_ids))
-            seen_characters: set[str] = set()
-            for value in raw_character_ids:
-                character_id = str(value).strip()
-                if not character_id or character_id in seen_characters:
-                    continue
-                seen_characters.add(character_id)
-                character = db.get_character(character_id, user_id)
-                if character is None:
-                    raise HTTPException(404, "Один из выбранных персонажей не найден.")
-                for path_value in character.get("images") or []:
-                    path = Path(path_value)
-                    if not path.is_file():
-                        raise HTTPException(409, f"У персонажа «{character['name']}» отсутствует файл изображения.")
-                    reference_items.append(
-                        {
-                            "type": "image",
-                            "path": str(path),
-                            "temporary": False,
-                            "source_name": path.name,
-                            "role": "character",
-                            "retention": "fully_preserved",
-                            "character_id": character_id,
-                            "character_name": character["name"],
-                            "character_description": character.get("description") or "",
-                        }
-                    )
-                voice_path = character.get("voice_file")
-                if voice_path and character_id not in muted_characters:
-                    path = Path(voice_path)
-                    if not path.is_file():
-                        raise HTTPException(409, f"У персонажа «{character['name']}» отсутствует файл голоса.")
-                    reference_items.append(
-                        {
-                            "type": "audio",
-                            "path": str(path),
-                            "temporary": False,
-                            "source_name": path.name,
-                            "role": "voice",
-                            "retention": "reference",
-                            "character_id": character_id,
-                            "character_name": character["name"],
-                            "character_description": character.get("description") or "",
-                        }
-                    )
-
-            reference_items.extend(
-                _v2_location_references(_v2_location_ids(location_ids), user_id)
-            )
-            reference_items.extend(
-                _v2_misc_references(_v2_misc_ids(misc_ids), user_id)
-            )
-
-            manifest = parse_reference_manifest(reference_manifest)
-
-            async def append_uploads(
-                uploads: list[UploadFile] | None,
-                media_type: str,
-                manifest_key: str,
-                kind: str,
-                max_bytes: int,
-            ) -> None:
-                active = [item for item in (uploads or []) if item.filename]
-                for index, upload in enumerate(active):
-                    path = await save_upload(upload, kind=kind, max_bytes=max_bytes)
-                    temporary_paths.append(path)
-                    spec = manifest.get(manifest_key, [])
-                    meta = spec[index] if index < len(spec) else {}
-                    item = {
-                        "type": media_type,
-                        "path": str(path),
-                        "temporary": True,
-                        "source_name": Path(upload.filename or path.name).name,
-                        "role": meta.get("role") or (
-                            "audio"
-                            if media_type == "audio"
-                            else "motion"
-                            if media_type == "video"
-                            else "character"
-                        ),
-                        "retention": meta.get("retention") or (
-                            "reference"
-                            if media_type == "audio"
-                            else "partially_preserved"
-                            if media_type == "video"
-                            else "fully_preserved"
-                        ),
-                        "note": meta.get("note") or "",
-                    }
-                    if media_type == "video":
-                        item["has_audio"] = probe_has_audio(path)
-                        item["audio_retention"] = "reference"
-                    reference_items.append(item)
-
-            await append_uploads(
-                reference_images, "image", "images", "image",
-                settings.max_image_upload_bytes,
-            )
-            await append_uploads(
-                reference_videos, "video", "videos", "video",
-                settings.max_video_upload_bytes,
-            )
-            await append_uploads(
-                reference_audios, "audio", "audios", "audio",
-                settings.max_audio_upload_bytes,
-            )
-
-            if generation_mode == "multiframe" and not any(
-                item.get("type") in {"image", "video"} for item in reference_items
-            ):
-                first_guide = guide_items[0]
-                reference_items.append(
-                    {
-                        "type": "image",
-                        "path": first_guide["path"],
-                        "temporary": True,
-                        "source_name": first_guide["source_name"],
-                        "role": "storyboard",
-                        "retention": "fully_preserved",
-                        "note": "Timeline guide also used as the semantic visual anchor.",
-                        "timeline_guide": True,
-                    }
-                )
-
-            media_order = {"image": 0, "video": 1, "audio": 2}
-            reference_items.sort(
-                key=lambda item: media_order.get(str(item.get("type") or ""), 99)
-            )
-
-            try:
-                validate_reference_items(
-                    reference_items,
-                    digital_human=generation_mode == "digital_human",
-                )
-            except ValueError as exc:
-                raise HTTPException(400, str(exc)) from exc
-
-            prompt, reference_map = build_reference_prompt(
-                prompt,
-                task=reference_task,
-                items=reference_items,
-            )
-
-        if control_mode != "none":
-            async def save_control_upload(upload: UploadFile | None, label: str) -> str | None:
-                if upload is None or not upload.filename:
-                    return None
-                path = await save_upload(
-                    upload,
-                    kind="video",
-                    max_bytes=settings.max_video_upload_bytes,
-                )
-                temporary_paths.append(path)
-                return str(path)
-
-            staged_control_video = await save_control_upload(control_video, "control")
-            staged_source_video = await save_control_upload(control_source_video, "source")
-            staged_mask_video = await save_control_upload(control_mask_video, "mask")
-
-            if control_mode == "inpaint":
-                if not staged_source_video or not staged_mask_video:
-                    raise HTTPException(
-                        400,
-                        "Inpaint требует source video и чёрно-белое mask video.",
-                    )
-            elif not staged_control_video:
-                raise HTTPException(
-                    400,
-                    "Для выбранного ControlNet режима загрузите control video.",
-                )
-
-            control_payload = {
-                "mode": control_mode,
-                "control_video_path": staged_control_video,
-                "source_video_path": staged_source_video,
-                "mask_video_path": staged_mask_video,
-                "strength": float(control_strength),
-                "start_percent": float(control_start_percent),
-                "end_percent": float(control_end_percent),
-                "canny_low": float(control_canny_low),
-                "canny_high": float(control_canny_high),
-            }
-
-        job_id = uuid.uuid4().hex
-        db.enqueue_job(
-            job_id,
-            "generate",
-            {
-                "prompt": prompt,
-                "user_prompt": original_prompt,
-                "width": width,
-                "height": height,
-                "seconds": seconds,
-                "fps": fps,
-                "steps": steps,
-                "seed": seed,
-                "generate_audio": bool(generate_audio),
-                "generation_mode": generation_mode,
-                "keyframe_role": keyframe_role,
-                "reference_task": reference_task,
-                "ref_image_size": ref_image_size,
-                "images": image_paths,
-                "references": reference_items,
-                "reference_map": reference_map,
-                "guides": guide_items,
-                "control": control_payload,
-            },
-            owner_id=user_id,
-        )
-    except Exception:
-        for path in temporary_paths:
-            path.unlink(missing_ok=True)
-        raise
-
-    return {"ok": True, "job_id": job_id}
-
-
 V2_RESOLUTION_SHORT_SIDE = {
     "480": 480,
     "720": 736,
@@ -1770,19 +1326,6 @@ def _v2_misc_references(misc_ids: list[str], user_id: str) -> list[dict]:
                 }
             )
     return items
-
-
-def _v2_fit_video_size(width: int, height: int) -> tuple[int, int]:
-    width = max(2, int(width))
-    height = max(2, int(height))
-    scale = min(1.0, 3072.0 / max(width, height))
-    width = int(round(width * scale))
-    height = int(round(height * scale))
-
-    def grid(value: int) -> int:
-        return max(256, min(3072, int(math.ceil(value / 32.0) * 32)))
-
-    return grid(width), grid(height)
 
 
 def _v2_enqueue_reference_job(
@@ -2417,7 +1960,7 @@ async def api_retry_job(
         raise HTTPException(404, "Задача не найдена.")
     if source["status"] != "failed":
         raise HTTPException(409, "Повторить можно только задачу с ошибкой.")
-    if source["kind"] not in {"generate", "audio_replace", "audio_remove", "editor_export"}:
+    if source["kind"] not in {"generate", "editor_export"}:
         raise HTTPException(409, "Этот тип задачи больше не поддерживается.")
 
     payload = source.get("payload") or {}
@@ -2487,49 +2030,6 @@ async def api_clear_jobs(
         "deleted": len(jobs),
         "running_kept": counts["running"],
     }
-
-
-@app.post("/api/media/{media_id}/audio")
-async def api_replace_audio(
-    media_id: str,
-    audio: UploadFile = File(...),
-    audio_start: Annotated[float, Form()] = 0.0,
-    user_id: str = Depends(require_user),
-):
-    _ensure_media(media_id, user_id)
-    audio_path = await save_upload(
-        audio,
-        kind="audio",
-        max_bytes=settings.max_audio_upload_bytes,
-    )
-    job_id = uuid.uuid4().hex
-    db.enqueue_job(
-        job_id,
-        "audio_replace",
-        {
-            "media_id": media_id,
-            "audio_path": str(audio_path),
-            "audio_start": max(0.0, audio_start),
-        },
-        owner_id=user_id,
-    )
-    return {"ok": True, "job_id": job_id}
-
-
-@app.post("/api/media/{media_id}/remove-audio")
-async def api_remove_audio(
-    media_id: str,
-    user_id: str = Depends(require_user),
-):
-    _ensure_media(media_id, user_id)
-    job_id = uuid.uuid4().hex
-    db.enqueue_job(
-        job_id,
-        "audio_remove",
-        {"media_id": media_id},
-        owner_id=user_id,
-    )
-    return {"ok": True, "job_id": job_id}
 
 
 @app.get("/api/editor/media")
@@ -3218,13 +2718,6 @@ def _editor_float(
             f"{label}: допустимый диапазон {minimum:g}–{maximum:g}.",
         )
     return number
-
-
-def _ensure_media(media_id: str, owner_id: str) -> dict:
-    media = db.get_media(media_id, owner_id)
-    if media is None:
-        raise HTTPException(404, "Ролик не найден.")
-    return media
 
 
 _system_cache_lock = threading.Lock()
