@@ -467,7 +467,7 @@
         const budget = characterBudget(state.selectedCharacterIds);
         if (
           state.selectedCharacterIds.has(editedId) &&
-          (budget.images > 9 || budget.audios > 3 || budget.total > 15)
+          referenceBudgetExceeded(budget)
         ) {
           state.selectedCharacterIds.delete(editedId);
           renderSelectedCharacters();
@@ -485,7 +485,7 @@
           const candidate = new Set(state.selectedCharacterIds);
           candidate.add(id);
           const budget = characterBudget(candidate);
-          if (budget.images <= 9 && budget.audios <= 3 && budget.total <= 15) {
+          if (!referenceBudgetExceeded(budget)) {
             state.selectedCharacterIds.add(id);
             state.recentCharacterIds = [id, ...state.recentCharacterIds.filter((value) => value !== id)].slice(0, 30);
             renderSelectedCharacters();
@@ -519,7 +519,7 @@
       (acc, character) => {
         const id = String(character.id);
         if (!characterSet.has(id)) return acc;
-        const voiceActive = Boolean(character.voice) && !muted.has(id);
+        const voiceActive = state.view !== "images" && Boolean(character.voice) && !muted.has(id);
         acc.images += Number(character.image_count || 0);
         acc.audios += voiceActive ? 1 : 0;
         acc.total += Number(character.image_count || 0) + (voiceActive ? 1 : 0);
@@ -542,6 +542,16 @@
     return budget;
   };
 
+  const referenceBudgetExceeded = (budget) =>
+    state.view === "images"
+      ? budget.images > 16
+      : (budget.images > 9 || budget.audios > 3 || budget.total > 15);
+
+  const referenceBudgetMessage = () =>
+    state.view === "images"
+      ? "Лимит H3 Image — до 16 reference images."
+      : "Лимит одной H3-задачи: до 9 изображений, 3 аудио и 15 reference media.";
+
   const characterBudget = (ids, mutedIds = state.mutedCharacterIds) =>
     referenceBudget(ids, state.selectedLocationIds, mutedIds);
 
@@ -556,9 +566,11 @@
       const candidateMuted = new Set(state.mutedCharacterIds);
       candidateMuted.delete(id);
       const budget = characterBudget(state.selectedCharacterIds, candidateMuted);
-      if (budget.audios > 3 || budget.total > 15) {
+      if (referenceBudgetExceeded(budget)) {
         showToast(
-          "Нельзя включить голос: лимит H3 — до 3 audio refs и 15 reference media.",
+          state.view === "images"
+            ? "Голос не используется H3 Image; выбранные изображения уже достигли лимита 16 references."
+            : "Нельзя включить голос: лимит H3 — до 3 audio refs и 15 reference media.",
           "error"
         );
         return;
@@ -659,9 +671,9 @@
       const candidate = new Set(state.selectedCharacterIds);
       candidate.add(id);
       const budget = characterBudget(candidate);
-      if (budget.images > 9 || budget.audios > 3 || budget.total > 15) {
+      if (referenceBudgetExceeded(budget)) {
         showToast(
-          "Лимит одной H3-задачи: до 9 изображений, 3 аудио и 15 reference media.",
+          referenceBudgetMessage(),
           "error"
         );
         return;
@@ -778,6 +790,8 @@
     mutedCharacterIds,
     characterBudget,
     referenceBudget,
+    referenceBudgetExceeded,
+    referenceBudgetMessage,
     refreshCharacters,
     currentCreateAssistantSettings,
     currentAssistantSettings: currentCreateAssistantSettings,
