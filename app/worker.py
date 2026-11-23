@@ -705,6 +705,19 @@ class JobWorker(threading.Thread):
             raise
 
 
+def _require_media(
+    media_id: str,
+    owner_id: str | None = None,
+) -> dict[str, Any]:
+    media = db.get_media(media_id, owner_id)
+    if media is None:
+        raise RuntimeError("Video no longer exists in the library.")
+    path = settings.library_dir / media["filename"]
+    if not path.is_file():
+        raise RuntimeError("Video file is missing from the library.")
+    return media
+
+
 def _prompt_title(prompt: str) -> str:
     compact = " ".join(prompt.split())
     if len(compact) <= 64:
