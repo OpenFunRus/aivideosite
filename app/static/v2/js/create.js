@@ -16,6 +16,7 @@
     const target = buttons.find((button) => button.dataset.value === String(value)) || buttons[0];
     buttons.forEach((button) => button.classList.toggle("active", button === target));
     if (target) state.draft[setting] = target.dataset.value;
+    if (setting === "seconds") window.AIVideoV2Workspaces?.updateAudioRange?.();
     if (save) saveDraft();
   };
 
@@ -118,9 +119,21 @@
       return;
     }
     const button = qs("#v2-wand");
+    const audioMode = Boolean(window.AIVideoV2Workspaces?.audioModeEnabled?.());
+    const audioContext = window.AIVideoV2Workspaces?.audioAssistantContext?.() || {};
     button.disabled = true;
-    showToast("Локальный ИИ улучшает промт…");
+    showToast(audioMode ? "Локальный ИИ улучшает промт под аудиодорожку…" : "Локальный ИИ улучшает промт…");
     try {
+      const modeInstruction = audioMode
+        ? (
+          "Это режим Digital Human с driving audio внутри единой страницы «Видео». " +
+          "Master track уже передаётся модели как управляющее аудио: синхронизируй артикуляцию, жесты и body motion с ним, но не проси H3 сочинять или повторять этот трек. " +
+          "non_diegetic_music: N/A. Если generate_scene_audio выключен — overall_soundscape: N/A; если включен — только физические/фоновые звуки сцены. " +
+          "First/Last при наличии backend закрепляет отдельно как exact native MiniMaxH3AddGuide anchors, поэтому не придумывай для них Picture labels и не добавляй FL2VA alignment line. "
+        )
+        : (
+          "Это обычный режим Video без driving master track. "
+        );
       const result = await fetchJson("/api/assistant/control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -128,7 +141,8 @@
           messages: [{
             role: "user",
             content:
-              "Перепиши только этот запрос для поля prompt раздела «Создать». " +
+              "Перепиши только этот запрос для поля prompt раздела «Видео». " +
+              modeInstruction +
               "Верни changes.prompt в каноническом формате MiniMax H3 из трёх полей: " +
               "integrated_multimodal_description, overall_soundscape, non_diegetic_music. " +
               "Соблюдай выбранную длительность: [Shot 1] без времени, каждый следующий cut с точным временем. " +
@@ -148,11 +162,18 @@
           }],
           settings: {
             ...(api.currentAssistantSettings?.() || {}),
+            ...audioContext,
             workspace: "create",
-            generation_mode:
-              (qs("#v2-first-frame")?.files?.[0] || qs("#v2-last-frame")?.files?.[0])
-                ? ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length || api.selectedMisc?.()?.length) ? "multiframe" : "frames")
-                : ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length || api.selectedMisc?.()?.length) ? "reference" : "frames"),
+            audio_mode: audioMode,
+            generation_mode: audioMode
+              ? "digital_human"
+              : (
+                (qs("#v2-first-frame")?.files?.[0] || qs("#v2-last-frame")?.files?.[0])
+                  ? ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length || api.selectedMisc?.()?.length) ? "multiframe" : "frames")
+                  : ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length || api.selectedMisc?.()?.length) ? "reference" : "frames")
+              ),
+            reference_task: audioMode ? "audio_reference" : undefined,
+            generate_audio: audioMode ? Boolean(audioContext.generate_scene_audio) : Boolean(qs("#v2-audio")?.checked),
             has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
             has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
           },
@@ -214,19 +235,35 @@
     }
 
     const formData = new FormData();
+    const audioSubmission = window.AIVideoV2Workspaces?.audioSubmission?.() || { enabled: false };
     formData.set("prompt", sourcePrompt);
     formData.set("quality", state.draft.quality);
     formData.set("ratio", state.draft.ratio);
     formData.set("seconds", state.draft.seconds);
     formData.set("steps", state.draft.steps);
     formData.set("seed", state.draft.seed.trim());
-    formData.set("generate_audio", state.draft.audio ? "true" : "false");
     formData.set("character_ids", JSON.stringify(Array.from(state.selectedCharacterIds)));
     formData.set("location_ids", JSON.stringify(Array.from(state.selectedLocationIds)));
     formData.set("misc_ids", JSON.stringify(Array.from(state.selectedMiscIds)));
-    formData.set("muted_character_ids", JSON.stringify(api.mutedCharacterIds?.() || []));
     if (firstFrameInput?.files?.[0]) formData.set("first_frame", firstFrameInput.files[0]);
     if (lastFrameInput?.files?.[0]) formData.set("last_frame", lastFrameInput.files[0]);
+
+    let endpoint = "/api/v2/generate";
+    if (audioSubmission.enabled) {
+      if (!audioSubmission.hasTrack || (!audioSubmission.uploadedAudio && !audioSubmission.trackId)) {
+        showToast("Выберите аудиодорожку.", "error");
+        return;
+      }
+      endpoint = "/api/v2/audio";
+      formData.set("track_id", audioSubmission.trackId || "");
+      if (audioSubmission.uploadedAudio) formData.set("audio", audioSubmission.uploadedAudio);
+      formData.set("audio_start", String(audioSubmission.audioStart ?? 0));
+      formData.set("embed_track", audioSubmission.embedTrack ? "true" : "false");
+      formData.set("generate_scene_audio", audioSubmission.generateSceneAudio ? "true" : "false");
+    } else {
+      formData.set("generate_audio", state.draft.audio ? "true" : "false");
+      formData.set("muted_character_ids", JSON.stringify(api.mutedCharacterIds?.() || []));
+    }
 
     if (generateButton) {
       generateButton.disabled = true;
@@ -235,7 +272,7 @@
     if (generateLabel) generateLabel.textContent = "Добавляем в очередь…";
 
     try {
-      const result = await fetchJson("/api/v2/generate", { method: "POST", body: formData });
+      const result = await fetchJson(endpoint, { method: "POST", body: formData });
       const shortId = String(result?.job_id || "").slice(0, 8);
       const resolved = result?.v2;
       const resolutionText =
