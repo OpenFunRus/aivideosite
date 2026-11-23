@@ -121,12 +121,14 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_media_owner_created "
             "ON media(owner_id, created_at DESC)"
         )
-        # The standalone still-image generator was retired. Purge its old jobs and
-        # legacy table once. Character/Location/Misc reference images live elsewhere.
+        # V2 is the only supported UI. Purge job kinds that belonged to retired
+        # V1 generators/edit actions so they cannot remain queued after an upgrade.
         legacy_image_table = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='image_results'"
         ).fetchone()
-        conn.execute("DELETE FROM jobs WHERE kind='image_generate'")
+        conn.execute(
+            "DELETE FROM jobs WHERE kind IN ('image_generate','audio_replace','audio_remove')"
+        )
         if legacy_image_table is not None:
             conn.execute("DROP TABLE image_results")
 
