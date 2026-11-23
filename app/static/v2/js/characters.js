@@ -769,8 +769,10 @@
       state.selectedLocationIds?.size ||
       state.selectedMiscIds?.size
     );
+    const audioDrivesH3 = audioMode && hasPresets;
 
     return {
+      ...audioContext,
       workspace: "create",
       prompt: String(qs("#v2-prompt")?.value ?? state.draft.prompt ?? ""),
       quality: String(qs('[data-setting="quality"] button.active')?.dataset.value || state.draft.quality || "720"),
@@ -782,10 +784,13 @@
         ? Number(qs("#v2-seed")?.value)
         : -1,
       audio_mode: audioMode,
-      generation_mode: audioMode
+      has_driving_audio: audioDrivesH3,
+      generation_mode: audioDrivesH3
         ? "digital_human"
         : (hasFrames ? (hasPresets ? "multiframe" : "frames") : (hasPresets ? "reference" : "frames")),
-      reference_task: audioMode ? "audio_reference" : (hasFrames && hasPresets ? "timeline_guides" : "reference_generation"),
+      reference_task: audioDrivesH3
+        ? "audio_reference"
+        : (hasFrames && hasPresets ? "timeline_guides" : "reference_generation"),
       generate_audio: audioMode
         ? Boolean(audioContext.generate_scene_audio)
         : Boolean(qs("#v2-audio")?.checked),
@@ -795,7 +800,6 @@
       selected_location_ids: Array.from(state.selectedLocationIds || []).map(String),
       selected_misc_ids: Array.from(state.selectedMiscIds || []).map(String),
       muted_character_ids: mutedCharacterIds().map(String),
-      ...audioContext,
     };
   };
 
