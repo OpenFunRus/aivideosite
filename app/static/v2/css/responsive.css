@@ -963,10 +963,11 @@ html {
 }
 
 
-/* Mobile Presets button: Characters (blue) + Locations (red) */
+/* Mobile Presets button: Characters + Locations + Misc */
 @media (max-width:820px){
   .v2-mobile-preset-count{position:absolute;top:-4px;min-width:18px;height:18px;display:grid;place-items:center;padding:0 4px;border:2px solid #0d0f17;border-radius:999px;color:#fff;font-size:9px;font-weight:800;line-height:14px}
   .v2-mobile-preset-count[hidden]{display:none!important}
   .v2-mobile-character-count{left:-4px;right:auto;background:#4b7cff}
   .v2-mobile-location-count{right:-4px;left:auto;background:#e55462}
+  .v2-mobile-misc-count{right:-4px;left:auto;top:auto;bottom:-4px;background:#d5a928;color:#181202}
 }

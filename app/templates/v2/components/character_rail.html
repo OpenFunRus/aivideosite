@@ -1,12 +1,13 @@
 <aside class="v2-character-rail" id="v2-character-rail" aria-label="Пресеты">
   <div class="v2-character-rail-head">
     <span class="v2-character-rail-icon" title="Пресеты"><svg class="icon"><use href="/static/icons.svg#icon-stack"></use></svg></span>
-    <span class="v2-character-rail-title"><strong>Пресеты</strong><small>Персонажи и локации</small></span>
+    <span class="v2-character-rail-title"><strong>Пресеты</strong><small>Персонажи, локации и прочее</small></span>
   </div>
   <div class="v2-character-panel">
     <div class="v2-preset-tabs" role="tablist" aria-label="Тип пресета">
       <button class="active" type="button" role="tab" aria-selected="true" data-v2-preset-tab="characters"><svg class="icon"><use href="/static/icons.svg#icon-users"></use></svg><span>Персонажи</span><b class="v2-preset-tab-count v2-preset-tab-count-character" id="v2-character-count" hidden>0</b></button>
       <button type="button" role="tab" aria-selected="false" data-v2-preset-tab="locations"><svg class="icon"><use href="/static/icons.svg#icon-map-pin"></use></svg><span>Локации</span><b class="v2-preset-tab-count v2-preset-tab-count-location" id="v2-location-count" hidden>0</b></button>
+      <button type="button" role="tab" aria-selected="false" data-v2-preset-tab="misc"><svg class="icon"><use href="/static/icons.svg#icon-stack"></use></svg><span>Прочее</span><b class="v2-preset-tab-count v2-preset-tab-count-misc" id="v2-misc-count" hidden>0</b></button>
     </div>
     <section class="v2-preset-panel" data-v2-preset-panel="characters">
       <label class="v2-search"><svg class="icon"><use href="/static/icons.svg#icon-search"></use></svg><input id="v2-character-search" type="search" placeholder="Поиск по имени..."></label>
@@ -19,6 +20,12 @@
       <div class="v2-character-grid v2-location-grid" id="v2-location-grid"></div>
       <div class="v2-character-empty" id="v2-location-empty" hidden>Локации не найдены.</div>
       <div class="v2-character-dialog-foot"><span id="v2-location-total">0 локаций</span><span class="v2-character-hint">Локация задаёт окружение сцены</span></div>
+    </section>
+    <section class="v2-preset-panel" data-v2-preset-panel="misc" hidden>
+      <label class="v2-search"><svg class="icon"><use href="/static/icons.svg#icon-search"></use></svg><input id="v2-misc-search" type="search" placeholder="Поиск по прочим пресетам..."></label>
+      <div class="v2-character-grid v2-misc-grid" id="v2-misc-grid"></div>
+      <div class="v2-character-empty" id="v2-misc-empty" hidden>Пресеты не найдены.</div>
+      <div class="v2-character-dialog-foot"><span id="v2-misc-total">0 пресетов</span><span class="v2-character-hint">Предметы, особенности и другие H3 references</span></div>
     </section>
   </div>
 </aside>
@@ -142,6 +149,43 @@
       <span class="v2-character-action-spacer"></span>
       <button class="v2-secondary-button" type="button" data-location-create-close>Отмена</button>
       <button class="v2-primary-button" id="v2-location-create-submit" type="submit"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg><span id="v2-location-submit-label">Сохранить локацию</span></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="v2-character-create-dialog v2-misc-create-dialog" id="v2-misc-create-dialog">
+  <form class="v2-character-create-form" id="v2-misc-create-form">
+    <div class="v2-character-create-head">
+      <div><span class="v2-kicker">MISC SEMANTIC PRESET</span><h2 id="v2-misc-form-title">Добавить пресет</h2><p id="v2-misc-form-subtitle">Сохраните предмет, особенность, одежду, транспорт, позу или другой повторяемый визуальный элемент для H3.</p></div>
+      <button class="v2-character-create-close" type="button" data-misc-create-close aria-label="Закрыть"><svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button>
+    </div>
+    <div class="v2-character-create-fields">
+      <label class="v2-character-field"><span>Название</span><input id="v2-misc-create-name" name="name" maxlength="80" autocomplete="off" placeholder="Например: Кассетный плеер" required></label>
+      <label class="v2-character-field"><span>Категория</span><select id="v2-misc-create-category" name="category" required>
+        <option value="prop">Предмет</option>
+        <option value="clothing_gear">Одежда и экипировка</option>
+        <option value="weapon">Оружие</option>
+        <option value="vehicle">Транспорт</option>
+        <option value="creature">Животное / существо</option>
+        <option value="environment_feature">Элемент окружения</option>
+        <option value="visual_trait">Визуальная особенность</option>
+        <option value="pose_action">Поза / действие</option>
+        <option value="style_look">Стиль / оформление</option>
+        <option value="other">Другое</option>
+      </select></label>
+      <label class="v2-character-field"><span>Описание / prompt <em>необязательно</em></span><textarea id="v2-misc-create-description" name="description" maxlength="4000" rows="6" placeholder="Опишите, что именно H3 должен перенести и сохранять: внешний вид, материал, форму, цвет, детали, способ ношения/использования, позу или визуальную особенность."></textarea></label>
+      <div class="v2-character-reference-block">
+        <div class="v2-character-reference-title"><div><strong>Референсы</strong><small>1–4 изображения · разные ракурсы одного и того же элемента</small></div><span id="v2-misc-reference-count">0 / 4</span></div>
+        <label class="v2-character-reference-drop" id="v2-misc-reference-drop"><input id="v2-misc-create-images" name="images" type="file" accept="image/png,image/jpeg,image/webp" multiple><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg><strong>Добавить изображения</strong><span>JPG, PNG или WEBP · до 4 файлов</span></label>
+        <div class="v2-character-reference-previews" id="v2-misc-reference-previews"></div>
+      </div>
+    </div>
+    <div class="v2-character-create-note"><svg class="icon"><use href="/static/icons.svg#icon-info"></use></svg><span>«Прочее» передаётся в MiniMax H3 как реальный semantic reference и делит общий лимит изображений с персонажами и локациями.</span></div>
+    <div class="v2-character-create-actions">
+      <button class="v2-character-delete-button" id="v2-misc-delete" type="button" hidden><svg class="icon"><use href="/static/icons.svg#icon-trash"></use></svg>Удалить пресет</button>
+      <span class="v2-character-action-spacer"></span>
+      <button class="v2-secondary-button" type="button" data-misc-create-close>Отмена</button>
+      <button class="v2-primary-button" id="v2-misc-create-submit" type="submit"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg><span id="v2-misc-submit-label">Сохранить пресет</span></button>
     </div>
   </form>
 </dialog>
