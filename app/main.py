@@ -1053,7 +1053,6 @@ def _v2_misc_ids(raw: str) -> list[str]:
 
 @app.post("/api/v2/generate")
 async def api_v2_generate(
-    request: Request,
     prompt: Annotated[str, Form()],
     quality: Annotated[str, Form()] = "720",
     ratio: Annotated[str, Form()] = "16:9",
@@ -1069,32 +1068,28 @@ async def api_v2_generate(
     last_frame: UploadFile | None = File(None),
     user_id: str = Depends(require_user),
 ):
-    if seconds not in V2_DURATIONS:
-        raise HTTPException(400, "V2 поддерживает длительность только 5, 10 или 15 секунд.")
-    if steps not in V2_STEPS:
-        raise HTTPException(400, "V2 поддерживает только 8, 12 или 16 шагов.")
+    _v2_validate_simple_settings(seconds, steps)
+
+    compact_prompt = " ".join(prompt.split()) if "\n" not in prompt else prompt.strip()
+    if not compact_prompt:
+        raise HTTPException(400, "Введите prompt.")
+    if len(compact_prompt) > 16000:
+        raise HTTPException(400, "Prompt слишком длинный.")
 
     width, height = _v2_resolution(quality, ratio)
+    seed_value = _v2_seed(seed)
     selected_characters = _v2_character_ids(character_ids)
     selected_locations = _v2_location_ids(location_ids)
     selected_misc = _v2_misc_ids(misc_ids)
+    muted_characters = set(_v2_character_ids(muted_character_ids))
+
     has_first = first_frame is not None and bool(first_frame.filename)
     has_last = last_frame is not None and bool(last_frame.filename)
-
-    seed_text = str(seed or "").strip()
-    if seed_text:
-        try:
-            seed_value = int(seed_text)
-        except ValueError as exc:
-            raise HTTPException(
-                400,
-                "Seed должен быть целым числом или пустым для Auto (-1).",
-            ) from exc
-    else:
-        seed_value = -1
-
     has_exact_frames = has_first or has_last
-    has_semantic_references = bool(selected_characters or selected_locations or selected_misc)
+    has_semantic_references = bool(
+        selected_characters or selected_locations or selected_misc
+    )
+
     if has_semantic_references and has_exact_frames:
         generation_mode = "multiframe"
     elif has_semantic_references:
@@ -1102,81 +1097,139 @@ async def api_v2_generate(
     else:
         generation_mode = "frames"
 
-    guide_uploads: list[UploadFile] = []
-    guide_specs: list[dict] = []
-    if generation_mode == "multiframe":
-        if has_first and first_frame is not None:
-            guide_uploads.append(first_frame)
-            guide_specs.append(
-                {"time": 0.0, "frame_idx": 0, "note": "Exact opening frame anchor."}
-            )
-        if has_last and last_frame is not None:
-            guide_uploads.append(last_frame)
-            guide_specs.append(
-                {
-                    "time": float(seconds),
-                    "frame_idx": -1,
-                    "note": "Exact ending frame anchor.",
-                }
-            )
-
-    result = await api_generate(
-        request=request,
-        prompt=prompt,
-        width=width,
-        height=height,
-        seconds=float(seconds),
-        fps=24,
-        steps=steps,
-        seed=seed_value,
-        generate_audio=generate_audio,
-        generation_mode=generation_mode,
-        keyframe_role="first",
-        reference_task=(
-            "timeline_guides"
-            if generation_mode == "multiframe"
-            else "reference_generation"
-        ),
-        ref_image_size="match",
-        character_ids=json.dumps(selected_characters),
-        location_ids=json.dumps(selected_locations),
-        misc_ids=json.dumps(selected_misc),
-        muted_character_ids=json.dumps(_v2_character_ids(muted_character_ids)),
-        reference_manifest="{}",
-        guide_manifest=json.dumps(
-            {"guides": guide_specs},
-            ensure_ascii=False,
-        ),
-        control_mode="none",
-        control_strength=1.0,
-        control_start_percent=0.0,
-        control_end_percent=1.0,
-        control_canny_low=0.4,
-        control_canny_high=0.8,
-        first_frame=first_frame if generation_mode == "frames" else None,
-        last_frame=last_frame if generation_mode == "frames" else None,
-        reference_images=None,
-        reference_videos=None,
-        reference_audios=None,
-        guide_images=guide_uploads if generation_mode == "multiframe" else None,
-        control_video=None,
-        control_source_video=None,
-        control_mask_video=None,
-        user_id=user_id,
-    )
-    result["v2"] = {
+    v2_context = {
+        "workspace": "create",
         "quality": str(quality),
         "ratio": str(ratio),
-        "width": width,
-        "height": height,
-        "seconds": seconds,
-        "steps": steps,
+        "seconds": int(seconds),
+        "steps": int(steps),
+        "has_first_frame": bool(has_first),
+        "has_last_frame": bool(has_last),
         "generation_mode": generation_mode,
-        "uses_timeline_guides": generation_mode == "multiframe",
-        "has_first_frame": has_first,
-        "has_last_frame": has_last,
+        "audio_mode": False,
     }
-    return result
+
+    temporary_paths: list[Path] = []
+    try:
+        if has_semantic_references:
+            items = _v2_character_references(
+                selected_characters,
+                user_id,
+                include_voice=True,
+                muted_character_ids=muted_characters,
+            )
+            items.extend(_v2_location_references(selected_locations, user_id))
+            items.extend(_v2_misc_references(selected_misc, user_id))
+
+            guides: list[dict] = []
+            if generation_mode == "multiframe":
+                for upload, time_seconds, frame_idx, note in (
+                    (first_frame, 0.0, 0, "Exact opening frame anchor."),
+                    (last_frame, float(seconds), -1, "Exact ending frame anchor."),
+                ):
+                    if upload is None or not upload.filename:
+                        continue
+                    path = await save_upload(
+                        upload,
+                        kind="image",
+                        max_bytes=settings.max_image_upload_bytes,
+                    )
+                    temporary_paths.append(path)
+                    guides.append(
+                        {
+                            "path": str(path),
+                            "temporary": True,
+                            "source_name": Path(upload.filename or path.name).name,
+                            "time_seconds": time_seconds,
+                            "frame_idx": frame_idx,
+                            "note": note,
+                        }
+                    )
+
+            job_id = _v2_enqueue_reference_job(
+                user_id=user_id,
+                prompt=compact_prompt,
+                width=width,
+                height=height,
+                seconds=seconds,
+                steps=steps,
+                seed=seed_value,
+                generate_audio=generate_audio,
+                generation_mode=generation_mode,
+                reference_task=(
+                    "timeline_guides"
+                    if generation_mode == "multiframe"
+                    else "reference_generation"
+                ),
+                items=items,
+                guides=guides,
+                v2_context=v2_context,
+            )
+        else:
+            frame_paths: list[str] = []
+            for upload in (first_frame, last_frame):
+                if upload is None or not upload.filename:
+                    continue
+                path = await save_upload(
+                    upload,
+                    kind="image",
+                    max_bytes=settings.max_image_upload_bytes,
+                )
+                temporary_paths.append(path)
+                frame_paths.append(str(path))
+
+            keyframe_role = "last" if has_last and not has_first else "first"
+            job_id = uuid.uuid4().hex
+            db.enqueue_job(
+                job_id,
+                "generate",
+                {
+                    "prompt": compact_prompt,
+                    "user_prompt": compact_prompt,
+                    "width": int(width),
+                    "height": int(height),
+                    "seconds": float(seconds),
+                    "fps": 24,
+                    "steps": int(steps),
+                    "seed": int(seed_value),
+                    "generate_audio": bool(generate_audio),
+                    "generation_mode": "frames",
+                    "keyframe_role": keyframe_role,
+                    "reference_task": "reference_generation",
+                    "ref_image_size": "match",
+                    "images": frame_paths,
+                    "references": [],
+                    "reference_map": [],
+                    "guides": [],
+                    "control": {"mode": "none"},
+                    "v2_context": v2_context,
+                    "final_audio": {},
+                },
+                owner_id=user_id,
+            )
+
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "width": width,
+            "height": height,
+            "v2": {
+                "quality": str(quality),
+                "ratio": str(ratio),
+                "width": width,
+                "height": height,
+                "seconds": seconds,
+                "steps": steps,
+                "generation_mode": generation_mode,
+                "uses_timeline_guides": generation_mode == "multiframe",
+                "has_first_frame": has_first,
+                "has_last_frame": has_last,
+            },
+        }
+    except Exception:
+        for path in temporary_paths:
+            path.unlink(missing_ok=True)
+        raise
 
 
 def _v2_seed(raw: object) -> int:
