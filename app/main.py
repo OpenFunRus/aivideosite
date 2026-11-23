@@ -205,7 +205,6 @@ async def api_assistant_chat(
     request: Request,
     user_id: str = Depends(require_user),
 ):
-    del user_id
     try:
         payload = await request.json()
     except (json.JSONDecodeError, ValueError) as exc:
@@ -218,6 +217,10 @@ async def api_assistant_chat(
     except local_assistant.AssistantUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
 
+    runtime_settings, _characters, _locations = _assistant_runtime_context(
+        user_id,
+        payload.get("settings"),
+    )
     headers = {
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",
@@ -225,7 +228,7 @@ async def api_assistant_chat(
     return StreamingResponse(
         local_assistant.stream_chat(
             payload.get("messages"),
-            settings=payload.get("settings"),
+            settings=runtime_settings,
             thinking=bool(payload.get("thinking")),
         ),
         media_type="text/plain; charset=utf-8",
@@ -245,13 +248,15 @@ async def api_assistant_control(
     if not isinstance(payload, dict):
         raise HTTPException(400, "Некорректный запрос управления.")
 
-    characters = [_character_public(item) for item in db.list_characters(user_id)]
-    locations = [_location_public(item) for item in db.list_locations(user_id)]
+    runtime_settings, characters, locations = _assistant_runtime_context(
+        user_id,
+        payload.get("settings"),
+    )
     try:
         return await asyncio.to_thread(
             local_assistant.control,
             payload.get("messages"),
-            settings=payload.get("settings"),
+            settings=runtime_settings,
             characters=characters,
             locations=locations,
             thinking=bool(payload.get("thinking")),
@@ -1758,17 +1763,20 @@ async def api_assistant_context(
     request: Request,
     user_id: str = Depends(require_user),
 ):
-    del user_id
     try:
         payload = await request.json()
     except (json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(400, "Некорректный запрос контекста.") from exc
     if not isinstance(payload, dict):
         raise HTTPException(400, "Некорректный запрос контекста.")
+    runtime_settings, _characters, _locations = _assistant_runtime_context(
+        user_id,
+        payload.get("settings"),
+    )
     return await asyncio.to_thread(
         local_assistant.context_usage,
         payload.get("messages"),
-        settings=payload.get("settings"),
+        settings=runtime_settings,
         thinking=bool(payload.get("thinking")),
     )
 
@@ -2613,6 +2621,70 @@ def _location_public(location: dict | None) -> dict:
         "created_at": location.get("created_at"),
         "updated_at": location.get("updated_at"),
     }
+
+
+
+def _assistant_selected_ids(value: object) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    return {
+        str(item)
+        for item in value
+        if isinstance(item, (str, int)) and str(item).strip()
+    }
+
+
+def _assistant_runtime_context(
+    user_id: str,
+    supplied_settings: object,
+) -> tuple[dict, list[dict], list[dict]]:
+    context = dict(supplied_settings) if isinstance(supplied_settings, dict) else {}
+    selected_character_ids = _assistant_selected_ids(context.get("selected_character_ids"))
+    selected_location_ids = _assistant_selected_ids(context.get("selected_location_ids"))
+    muted_character_ids = _assistant_selected_ids(context.get("muted_character_ids"))
+
+    characters: list[dict] = []
+    for raw in db.list_characters(user_id):
+        public = _character_public(raw)
+        character_id = str(public.get("id") or "")
+        preset_id = str(public.get("voice_preset_id") or "")
+        preset = VOICE_PRESETS.get(preset_id) if preset_id else None
+        has_voice = bool(public.get("voice"))
+        characters.append(
+            {
+                "id": character_id,
+                "name": str(public.get("name") or ""),
+                "description": str(public.get("description") or ""),
+                "image_count": int(public.get("image_count") or 0),
+                "voice": has_voice,
+                "voice_source": "preset" if preset_id else ("custom" if has_voice else "none"),
+                "voice_preset_id": preset_id,
+                "voice_preset_name": str((preset or {}).get("name") or ""),
+                "selected": character_id in selected_character_ids,
+                "voice_muted": character_id in muted_character_ids,
+            }
+        )
+
+    locations: list[dict] = []
+    for raw in db.list_locations(user_id):
+        public = _location_public(raw)
+        location_id = str(public.get("id") or "")
+        locations.append(
+            {
+                "id": location_id,
+                "name": str(public.get("name") or ""),
+                "prompt": str(public.get("prompt") or ""),
+                "image_count": int(public.get("image_count") or 0),
+                "selected": location_id in selected_location_ids,
+            }
+        )
+
+    context["available_characters"] = characters
+    context["available_locations"] = locations
+    context["selected_character_ids"] = sorted(selected_character_ids)
+    context["selected_location_ids"] = sorted(selected_location_ids)
+    context["muted_character_ids"] = sorted(muted_character_ids)
+    return context, characters, locations
 
 
 def _editor_float(
