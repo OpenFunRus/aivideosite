@@ -31,7 +31,7 @@
     });
     const title = qs("#v2-page-title");
     if (title) title.textContent = titleMap[view];
-    if (updateHash) history.replaceState(null, "", view === "create" ? "/v2" : "/v2#" + view);
+    if (updateHash) history.replaceState(null, "", view === "create" ? "/" : "/#" + view);
     saveDraft();
     closeMobileDrawers();
     window.dispatchEvent(new CustomEvent("v2:viewchange", { detail: { view } }));
