@@ -430,6 +430,8 @@ def _settings_context(settings: Any) -> str:
             "source_workspace",
             "master_track_title",
             "has_visual_reference",
+            "image_mode",
+            "source_image_selected",
         )
         if key in settings
     }
@@ -470,6 +472,8 @@ def _settings_context(settings: Any) -> str:
                 "track_title",
                 "has_visual_reference",
                 "visual_reference_name",
+                "image_mode",
+                "source_image_selected",
             )
             if key in block
         }
