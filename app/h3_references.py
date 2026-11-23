@@ -45,53 +45,6 @@ REFERENCE_TASKS = {
 }
 
 
-def parse_reference_manifest(raw: str | None) -> dict[str, list[dict[str, str]]]:
-    defaults = {"images": [], "videos": [], "audios": []}
-    if not raw:
-        return defaults
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError:
-        return defaults
-    if not isinstance(value, dict):
-        return defaults
-
-    result: dict[str, list[dict[str, str]]] = {}
-    for key, media_type in (("images", "visual"), ("videos", "visual"), ("audios", "audio")):
-        items = value.get(key)
-        if not isinstance(items, list):
-            result[key] = []
-            continue
-        normalized: list[dict[str, str]] = []
-        for item in items:
-            if not isinstance(item, dict):
-                normalized.append({})
-                continue
-            role = str(item.get("role") or "").strip().lower()
-            if role not in REFERENCE_ROLES:
-                role = (
-                    "audio"
-                    if media_type == "audio"
-                    else "motion"
-                    if key == "videos"
-                    else "character"
-                )
-            retention = str(item.get("retention") or "").strip().lower()
-            allowed = AUDIO_RETENTION if media_type == "audio" else VISUAL_RETENTION
-            if retention not in allowed:
-                retention = (
-                    "reference"
-                    if media_type == "audio"
-                    else "partially_preserved"
-                    if key == "videos"
-                    else "fully_preserved"
-                )
-            note = str(item.get("note") or "").strip()
-            normalized.append({"role": role, "retention": retention, "note": note})
-        result[key] = normalized
-    return result
-
-
 def validate_reference_items(items: list[dict[str, Any]], *, digital_human: bool = False) -> None:
     counts = {"image": 0, "video": 0, "audio": 0}
     for item in items:
