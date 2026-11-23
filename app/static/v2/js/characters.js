@@ -749,6 +749,8 @@
       );
       renderSelectedCharacters();
       renderCharacterGrid();
+      api.updateCreateCompatibility?.();
+      saveDraft();
     } catch (error) {
       showToast("Не удалось загрузить персонажей: " + error.message, "error");
     }
