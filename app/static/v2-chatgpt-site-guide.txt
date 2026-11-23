@@ -120,7 +120,7 @@ Two GPU lanes:
 - RTX3090 primary H3 Video;
 - RTX2080 secondary/overflow H3 Video.
 
-There is no H3 Image job type.
+There is no standalone image-generation job type.
 
 7. МОНТАЖ
 ---------
