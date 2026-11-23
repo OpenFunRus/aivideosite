@@ -1131,12 +1131,27 @@ async def api_generate(
                         400,
                         f"Guide {index + 1}: время должно быть от 0 до {seconds:g} сек.",
                     )
+                frame_idx = spec.get("frame_idx")
+                if frame_idx is not None:
+                    try:
+                        frame_idx = int(frame_idx)
+                    except (TypeError, ValueError) as exc:
+                        raise HTTPException(
+                            400,
+                            f"Guide {index + 1}: некорректный frame_idx.",
+                        ) from exc
+                    if frame_idx < -9999 or frame_idx > 9999:
+                        raise HTTPException(
+                            400,
+                            f"Guide {index + 1}: frame_idx вне допустимого диапазона.",
+                        )
                 guide_items.append(
                     {
                         "path": str(path),
                         "temporary": True,
                         "source_name": Path(upload.filename or path.name).name,
                         "time_seconds": round(time_seconds, 4),
+                        "frame_idx": frame_idx,
                         "note": str(spec.get("note") or "").strip()[:240],
                     }
                 )
@@ -1537,13 +1552,14 @@ async def api_v2_generate(
         if has_first and first_frame is not None:
             guide_uploads.append(first_frame)
             guide_specs.append(
-                {"time": 0.0, "note": "Exact opening frame anchor."}
+                {"time": 0.0, "frame_idx": 0, "note": "Exact opening frame anchor."}
             )
         if has_last and last_frame is not None:
             guide_uploads.append(last_frame)
             guide_specs.append(
                 {
                     "time": float(seconds),
+                    "frame_idx": -1,
                     "note": "Exact ending frame anchor.",
                 }
             )
@@ -2134,9 +2150,9 @@ async def api_v2_audio(
         guides: list[dict] = []
         frame_reference_candidates: list[dict] = []
 
-        for upload, time_seconds, label in (
-            (first_frame, 0.0, "Начальный кадр"),
-            (last_frame, float(seconds), "Конечный кадр"),
+        for upload, time_seconds, frame_idx, label in (
+            (first_frame, 0.0, 0, "Начальный кадр"),
+            (last_frame, float(seconds), -1, "Конечный кадр"),
         ):
             if upload is None or not upload.filename:
                 continue
@@ -2153,6 +2169,7 @@ async def api_v2_audio(
                     "temporary": True,
                     "source_name": source_name,
                     "time_seconds": time_seconds,
+                    "frame_idx": frame_idx,
                     "note": f"Exact {label.lower()} for audio-driven generation.",
                 }
             )
