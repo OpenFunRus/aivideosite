@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import signal
 import subprocess
 import tempfile
@@ -46,7 +45,7 @@ def _notify_llm_manager(action: str, gpu_index: int) -> None:
 
 class JobWorker(threading.Thread):
     VIDEO_GENERATION_KINDS = {"generate"}
-    CPU_KINDS = {"audio_replace", "audio_remove", "editor_export"}
+    CPU_KINDS = {"editor_export"}
 
     def __init__(self) -> None:
         super().__init__(name="aivideosite-dispatcher", daemon=True)
@@ -206,10 +205,6 @@ class JobWorker(threading.Thread):
             if comfy is None or not gpu_label:
                 raise RuntimeError("H3 generation was dispatched without a GPU backend.")
             return self._generate(job, comfy, gpu_label)
-        if kind == "audio_replace":
-            return self._replace_audio(job)
-        if kind == "audio_remove":
-            return self._remove_audio(job)
         if kind == "editor_export":
             return self._editor_export(job)
         raise RuntimeError(f"Unknown job type: {kind}")
@@ -440,124 +435,6 @@ class JobWorker(threading.Thread):
             _remove_uploads(cleanup_paths)
             return media_id
         except (JobCancelled, ComfyUICancelled):
-            output_path.unlink(missing_ok=True)
-            raise
-
-    def _replace_audio(self, job: dict[str, Any]) -> str:
-        payload = job["payload"]
-        job_id = job["id"]
-        source = _require_media(
-            payload["media_id"],
-            owner_id=str(job.get("owner_id") or "user1"),
-        )
-        source_path = settings.library_dir / source["filename"]
-        audio_path = Path(payload["audio_path"])
-        if not audio_path.is_file():
-            raise RuntimeError("Audio file is missing.")
-
-        media_id = uuid.uuid4().hex
-        output_path = settings.library_dir / f"{media_id}_audio.mp4"
-        start = max(0.0, float(payload.get("audio_start") or 0))
-        should_cancel = lambda: db.is_cancel_requested(job_id)
-
-        try:
-            db.update_job(job_id, progress=15, stage="FFmpeg: наложение аудио")
-            run_command(
-                [
-                    str(settings.ffmpeg_bin),
-                    "-y",
-                    "-i",
-                    str(source_path),
-                    "-ss",
-                    f"{start:.3f}",
-                    "-i",
-                    str(audio_path),
-                    "-map",
-                    "0:v:0",
-                    "-map",
-                    "1:a:0",
-                    "-c:v",
-                    "copy",
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "192k",
-                    "-shortest",
-                    str(output_path),
-                ],
-                should_cancel=should_cancel,
-            )
-            self._check_cancel(job_id)
-            db.update_job(job_id, progress=95, stage="FFmpeg: сохранение")
-
-            db.insert_media(
-                media_id=media_id,
-                owner_id=str(job.get("owner_id") or "user1"),
-                filename=output_path.name,
-                kind="audio",
-                title=f"{source['title']} · Audio",
-                parent_id=source["id"],
-                metadata={
-                    **_generation_context(source),
-                    "operation": "audio_replace",
-                    "audio_start": start,
-                },
-                size_bytes=output_path.stat().st_size,
-                duration=probe_duration(output_path),
-            )
-            _remove_uploads([audio_path])
-            return media_id
-        except JobCancelled:
-            output_path.unlink(missing_ok=True)
-            raise
-
-    def _remove_audio(self, job: dict[str, Any]) -> str:
-        payload = job["payload"]
-        job_id = job["id"]
-        source = _require_media(
-            payload["media_id"],
-            owner_id=str(job.get("owner_id") or "user1"),
-        )
-        source_path = settings.library_dir / source["filename"]
-
-        media_id = uuid.uuid4().hex
-        output_path = settings.library_dir / f"{media_id}_silent.mp4"
-
-        try:
-            db.update_job(job_id, progress=20, stage="FFmpeg: удаление аудио")
-            run_command(
-                [
-                    str(settings.ffmpeg_bin),
-                    "-y",
-                    "-i",
-                    str(source_path),
-                    "-map",
-                    "0:v:0",
-                    "-c:v",
-                    "copy",
-                    "-an",
-                    str(output_path),
-                ],
-                should_cancel=lambda: db.is_cancel_requested(job_id),
-            )
-            self._check_cancel(job_id)
-
-            db.insert_media(
-                media_id=media_id,
-                owner_id=str(job.get("owner_id") or "user1"),
-                filename=output_path.name,
-                kind="silent",
-                title=f"{source['title']} · Без звука",
-                parent_id=source["id"],
-                metadata={
-                    **_generation_context(source),
-                    "operation": "audio_remove",
-                },
-                size_bytes=output_path.stat().st_size,
-                duration=probe_duration(output_path),
-            )
-            return media_id
-        except JobCancelled:
             output_path.unlink(missing_ok=True)
             raise
 
@@ -821,38 +698,6 @@ class JobWorker(threading.Thread):
         except Exception:
             output_path.unlink(missing_ok=True)
             raise
-
-
-def _require_media(
-    media_id: str,
-    owner_id: str | None = None,
-) -> dict[str, Any]:
-    media = db.get_media(media_id, owner_id)
-    if media is None:
-        raise RuntimeError("Video no longer exists in the library.")
-    path = settings.library_dir / media["filename"]
-    if not path.is_file():
-        raise RuntimeError("Video file is missing from the library.")
-    return media
-
-
-def _generation_context(source: dict[str, Any]) -> dict[str, Any]:
-    meta = source.get("meta") or {}
-    keys = (
-        "prompt",
-        "width",
-        "height",
-        "seconds",
-        "fps",
-        "steps",
-        "profile",
-        "seed",
-        "generate_audio",
-        "reference_count",
-        "comfy_prompt_id",
-        "gpu_backend",
-    )
-    return {key: meta.get(key) for key in keys if key in meta}
 
 
 def _prompt_title(prompt: str) -> str:
