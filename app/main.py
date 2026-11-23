@@ -1237,12 +1237,15 @@ def _v2_seed(raw: object) -> int:
     if not text:
         return -1
     try:
-        return int(text)
+        value = int(text)
     except ValueError as exc:
         raise HTTPException(
             400,
             "Seed должен быть целым числом или пустым для Auto (-1).",
         ) from exc
+    if value < -1 or value > 4294967295:
+        raise HTTPException(400, "Seed должен быть от -1 до 4294967295.")
+    return value
 
 
 def _v2_validate_simple_settings(seconds: int, steps: int) -> None:
