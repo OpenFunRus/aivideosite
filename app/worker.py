@@ -45,7 +45,8 @@ def _notify_llm_manager(action: str, gpu_index: int) -> None:
 
 
 class JobWorker(threading.Thread):
-    GENERATION_KINDS = {"generate"}
+    VIDEO_GENERATION_KINDS = {"generate"}
+    IMAGE_GENERATION_KINDS = {"image_generate"}
     CPU_KINDS = {"audio_replace", "audio_remove", "editor_export"}
 
     def __init__(self) -> None:
@@ -81,11 +82,23 @@ class JobWorker(threading.Thread):
         while not self._stop_event.is_set():
             dispatched = False
 
-            lane = self._first_available_gpu_lane()
-            if lane is not None:
-                job = db.claim_next_job(self.GENERATION_KINDS)
+            primary = self._available_gpu_lane("primary")
+            if primary is not None:
+                job = db.claim_next_job(self.VIDEO_GENERATION_KINDS)
                 if job is not None:
-                    self._start_gpu_job(lane, job)
+                    self._start_gpu_job(primary, job)
+                    dispatched = True
+
+            secondary = self._available_gpu_lane("secondary")
+            if secondary is not None:
+                # H3 Image is intentionally pinned to the RTX2080. If there is
+                # no image job waiting, the secondary lane remains available as
+                # the existing overflow lane for H3 Video.
+                job = db.claim_next_job(self.IMAGE_GENERATION_KINDS)
+                if job is None:
+                    job = db.claim_next_job(self.VIDEO_GENERATION_KINDS)
+                if job is not None:
+                    self._start_gpu_job(secondary, job)
                     dispatched = True
 
             if self._cpu_lane_available():
@@ -104,10 +117,10 @@ class JobWorker(threading.Thread):
             client = self._job_clients.get(job_id)
         return client.cancel_prompt(prompt_id) if client is not None else False
 
-    def _first_available_gpu_lane(self) -> dict[str, Any] | None:
+    def _available_gpu_lane(self, key: str) -> dict[str, Any] | None:
         with self._lock:
             for lane in self._gpu_lanes:
-                if not lane["busy"]:
+                if lane["key"] == key and not lane["busy"]:
                     return lane
         return None
 
@@ -199,6 +212,10 @@ class JobWorker(threading.Thread):
             if comfy is None or not gpu_label:
                 raise RuntimeError("H3 generation was dispatched without a GPU backend.")
             return self._generate(job, comfy, gpu_label)
+        if kind == "image_generate":
+            if comfy is None or not gpu_label:
+                raise RuntimeError("H3 Image generation was dispatched without a GPU backend.")
+            return self._generate_image(job, comfy, gpu_label)
         if kind == "audio_replace":
             return self._replace_audio(job)
         if kind == "audio_remove":
@@ -211,6 +228,93 @@ class JobWorker(threading.Thread):
     def _check_cancel(job_id: str) -> None:
         if db.is_cancel_requested(job_id):
             raise JobCancelled("Task cancelled by user.")
+
+    def _generate_image(
+        self,
+        job: dict[str, Any],
+        comfy: ComfyUIClient,
+        gpu_label: str,
+    ) -> None:
+        payload = job["payload"]
+        job_id = str(job["id"])
+        owner_id = str(job.get("owner_id") or "user1")
+        image_id = uuid.uuid4().hex
+        owner_dir = settings.image_dir / owner_id
+        owner_dir.mkdir(parents=True, exist_ok=True)
+        output_path = owner_dir / f"{image_id}.png"
+
+        if not comfy.health():
+            raise RuntimeError(
+                f"H3 Image backend for {gpu_label} is not reachable at {comfy.base_url}."
+            )
+
+        def should_cancel() -> bool:
+            return db.is_cancel_requested(job_id)
+
+        def progress(value: float, stage: str) -> None:
+            self._check_cancel(job_id)
+            db.update_job(
+                job_id,
+                progress=value,
+                stage=f"H3 Image · {gpu_label}: {stage}",
+            )
+
+        try:
+            result = comfy.generate_h3_image(
+                job_id=job_id,
+                payload=payload,
+                destination=output_path,
+                progress=progress,
+                on_prompt_id=lambda prompt_id: db.update_job(
+                    job_id,
+                    external_id=prompt_id,
+                ),
+                should_cancel=should_cancel,
+            )
+            self._check_cancel(job_id)
+
+            filename = output_path.relative_to(settings.image_dir).as_posix()
+            db.insert_image_result(
+                image_id=image_id,
+                owner_id=owner_id,
+                filename=filename,
+                prompt=str(payload.get("prompt") or ""),
+                user_prompt=str(payload.get("user_prompt") or payload.get("prompt") or ""),
+                width=int(payload.get("width") or 0),
+                height=int(payload.get("height") or 0),
+                seed=int(result.get("seed") or 0),
+                mode=str(payload.get("mode") or "generate"),
+                source_image_id=(
+                    str(payload.get("source_image_id"))
+                    if payload.get("source_image_id")
+                    else None
+                ),
+                metadata={
+                    "reference_map": payload.get("reference_map") or [],
+                    "reference_count": len(payload.get("reference_paths") or []),
+                    "selected_character_ids": payload.get("selected_character_ids") or [],
+                    "selected_location_ids": payload.get("selected_location_ids") or [],
+                    "selected_misc_ids": payload.get("selected_misc_ids") or [],
+                    "comfy_prompt_id": result.get("prompt_id"),
+                    "gpu_backend": gpu_label,
+                    "model": settings.h3_image_model,
+                    "vae": settings.h3_image_vae,
+                },
+            )
+
+            for old in db.prune_image_results(owner_id, keep=8):
+                old_path = (settings.image_dir / str(old.get("filename") or "")).resolve()
+                try:
+                    old_path.relative_to(settings.image_dir.resolve())
+                except ValueError:
+                    continue
+                old_path.unlink(missing_ok=True)
+
+            db.update_job(job_id, progress=99, stage=f"H3 Image · {gpu_label}: сохранено")
+            return None
+        except Exception:
+            output_path.unlink(missing_ok=True)
+            raise
 
     def _generate(
         self,
