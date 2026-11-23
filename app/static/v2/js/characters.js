@@ -396,7 +396,6 @@
     try {
       await fetchJson("/api/characters/" + encodeURIComponent(editingCharacterId), { method: "DELETE" });
       state.selectedCharacterIds.delete(editingCharacterId);
-      state.recentCharacterIds = state.recentCharacterIds.filter((id) => String(id) !== editingCharacterId);
       createDialog?.close();
       await refreshCharacters();
       api.updateCreateCompatibility?.();
@@ -487,7 +486,6 @@
           const budget = characterBudget(candidate);
           if (!referenceBudgetExceeded(budget)) {
             state.selectedCharacterIds.add(id);
-            state.recentCharacterIds = [id, ...state.recentCharacterIds.filter((value) => value !== id)].slice(0, 30);
             renderSelectedCharacters();
             renderCharacterGrid();
             api.updateCreateCompatibility?.();
@@ -673,7 +671,6 @@
         return;
       }
       state.selectedCharacterIds.add(id);
-      state.recentCharacterIds = [id, ...state.recentCharacterIds.filter((value) => value !== id)].slice(0, 30);
     }
     renderSelectedCharacters();
     renderCharacterGrid();
