@@ -19,6 +19,9 @@
     selectedCharacterIds: new Set(),
     recentCharacterIds: [],
     characterTab: "all",
+    locations: [],
+    selectedLocationIds: new Set(),
+    presetTab: "characters",
     uploadUrls: new Map(),
     draft: {
       prompt: "",
@@ -123,6 +126,7 @@
         JSON.stringify({
           ...state.draft,
           selectedCharacterIds: Array.from(state.selectedCharacterIds),
+          selectedLocationIds: Array.from(state.selectedLocationIds),
         })
       );
       localStorage.setItem(keys.view, state.view);
@@ -142,6 +146,9 @@
       if (typeof saved.audio === "boolean") state.draft.audio = saved.audio;
       if (Array.isArray(saved.selectedCharacterIds)) {
         state.selectedCharacterIds = new Set(saved.selectedCharacterIds.map(String));
+      }
+      if (Array.isArray(saved.selectedLocationIds)) {
+        state.selectedLocationIds = new Set(saved.selectedLocationIds.map(String));
       }
     }
     const recent = readStoredJson(keys.recentCharacters, []);

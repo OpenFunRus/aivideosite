@@ -505,13 +505,18 @@
   const selectedCharacters = () =>
     state.characters.filter((character) => state.selectedCharacterIds.has(String(character.id)));
 
-  const characterBudget = (ids, mutedIds = state.mutedCharacterIds) => {
-    const set = ids instanceof Set ? ids : new Set(ids);
+  const referenceBudget = (
+    characterIds = state.selectedCharacterIds,
+    locationIds = state.selectedLocationIds,
+    mutedIds = state.mutedCharacterIds
+  ) => {
+    const characterSet = characterIds instanceof Set ? characterIds : new Set(characterIds || []);
+    const locationSet = locationIds instanceof Set ? locationIds : new Set(locationIds || []);
     const muted = mutedIds instanceof Set ? mutedIds : new Set(mutedIds || []);
-    return state.characters.reduce(
+    const budget = state.characters.reduce(
       (acc, character) => {
         const id = String(character.id);
-        if (!set.has(id)) return acc;
+        if (!characterSet.has(id)) return acc;
         const voiceActive = Boolean(character.voice) && !muted.has(id);
         acc.images += Number(character.image_count || 0);
         acc.audios += voiceActive ? 1 : 0;
@@ -520,7 +525,17 @@
       },
       { images: 0, audios: 0, total: 0 }
     );
+    (state.locations || []).forEach((location) => {
+      if (!locationSet.has(String(location.id))) return;
+      const images = Number(location.image_count || 0);
+      budget.images += images;
+      budget.total += images;
+    });
+    return budget;
   };
+
+  const characterBudget = (ids, mutedIds = state.mutedCharacterIds) =>
+    referenceBudget(ids, state.selectedLocationIds, mutedIds);
 
   const mutedCharacterIds = () => Array.from(state.mutedCharacterIds).map(String);
 
@@ -737,6 +752,7 @@
     seed: state.draft.seed.trim() ? Number(state.draft.seed) : -1,
     generate_audio: Boolean(state.draft.audio),
     selected_character_ids: Array.from(state.selectedCharacterIds),
+    selected_location_ids: Array.from(state.selectedLocationIds || []),
     muted_character_ids: mutedCharacterIds(),
     available_characters: state.characters.map((item) => ({
       id: item.id,
@@ -753,6 +769,7 @@
     selectedCharacters,
     mutedCharacterIds,
     characterBudget,
+    referenceBudget,
     refreshCharacters,
     currentCreateAssistantSettings,
     currentAssistantSettings: currentCreateAssistantSettings,
