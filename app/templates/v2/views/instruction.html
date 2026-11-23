@@ -4,9 +4,9 @@
       <div>
         <span class="v2-kicker">AI VIDEO SITE V2 · АКТУАЛЬНАЯ ИНСТРУКЦИЯ</span>
         <h2>Как работать с сайтом и MiniMax H3</h2>
-        <p>Практическая инструкция именно для текущего V2: Видео, Видео по аудио, Изображения, библиотека, очередь, монтаж, чат, система и отдельные prompting guides для H3 Video и H3 Image.</p>
+        <p>Практическая инструкция именно для текущего V2: Видео, Видео по аудио, библиотека, очередь, монтаж, чат, система и prompting guide для MiniMax H3 Video.</p>
         <div class="v2-instruction-tags">
-          <span>V2 current</span><span>H3 Video</span><span>H3 Image</span><span>Characters</span><span>Audio workflow</span>
+          <span>V2 current</span><span>H3 Video</span><span>5 / 10 / 15 сек</span><span>Characters</span><span>Audio workflow</span>
         </div>
       </div>
       <button class="v2-primary-button" id="v2-copy-chatgpt" type="button">
@@ -17,7 +17,7 @@
 
     <div class="v2-instruction-source">
       <svg class="icon"><use href="/static/icons.svg#icon-info"></use></svg>
-      <span>Video prompting адаптирован под нашу локальную H3 Video реализацию; для вкладки «Изображения» используется отдельный H3 Image guide и другой формат prompt.</span>
+      <span>Правила H3 адаптированы под нашу локальную MiniMax H3 Video реализацию и реальные ограничения сайта.</span>
       <a href="https://www.mage.space/ru/models/minimax-h3/prompting-guide" target="_blank" rel="noopener">Открыть исходный guide ↗</a>
     </div>
 
@@ -38,9 +38,9 @@
         <div><h3>Быстрый старт</h3><p>Нормальный рабочий цикл без знания внутренних нод H3.</p></div>
       </div>
       <div class="v2-steps-grid">
-        <article><b>1</b><strong>Выберите задачу</strong><p>Новый ролик — «Видео», клип под песню — «Видео по аудио», отдельный кадр или перерисовка — «Изображения».</p></article>
+        <article><b>1</b><strong>Выберите задачу</strong><p>Новый ролик и продолжение через финальный PNG-кадр — «Видео», клип под песню — «Видео по аудио».</p></article>
         <article><b>2</b><strong>Опишите сцену обычными словами</strong><p>Кто в кадре, что делает по порядку, как движется камера, нужен ли звук. Не обязательно вручную писать H3-разметку.</p></article>
-        <article><b>3</b><strong>Нажмите волшебную палочку</strong><p>Для видео Gemma соберёт три H3-поля и Shot-тайминг; для изображений — отдельный still-image prompt или точную edit-инструкцию без video-разметки.</p></article>
+        <article><b>3</b><strong>Нажмите волшебную палочку</strong><p>Gemma соберёт правильные три H3-поля, Shot-тайминг и сохранит точные реплики на исходном языке.</p></article>
         <article><b>4</b><strong>Проверьте настройки</strong><p>Качество, формат, 5/10/15 секунд, 8/12/16 шагов, Seed и звук. Палочка сама их не меняет.</p></article>
         <article><b>5</b><strong>Сгенерируйте и следите в «Очереди»</strong><p>Задача уйдёт на одну из двух GPU. Готовый результат появится в «Библиотеке».</p></article>
       </div>
@@ -54,7 +54,6 @@
       <div class="v2-site-guide-grid">
         <article><span>01</span><h4>Видео</h4><p>Новый ролик из текста. Первый/последний кадры работают вместе с Characters, Locations и «Прочее»: пресеты задают semantic references, кадры — точные Timeline Guides.</p><small>480 / 720 / 1080 · 1:1 / 16:9 / 9:16 · 5 / 10 / 15 сек</small></article>
         <article><span>02</span><h4>Видео по аудио</h4><p>Master track — главный вход. Вы выбираете фрагмент waveform и описываете видимое исполнение: артикуляцию, жесты, танец, тело и камеру.</p><small>Вклеить трек · фоновые звуки H3</small></article>
-        <article><span>03</span><h4>Изображения</h4><p>H3 Image: генерация с нуля, референсы из правой панели и перерисовка одного выбранного результата. История хранит до 8 изображений.</p><small>480 / 720 / 1080 · 1:1 / 16:9 / 9:16 · кнопки 1 / 2 кадр</small></article>
         <article><span>03</span><h4>Библиотека</h4><p>Готовые ролики: открыть, скачать, извлечь стартовый или финальный кадр в PNG, удалить. Для продолжения экспортируйте финальный кадр и используйте его как First Frame в «Создать».</p><small>Стартовый кадр · Финальный кадр · поиск</small></article>
         <article><span>04</span><h4>Очередь</h4><p>RTX 3090 / RTX 2080 Ti и rolling log последних 20 задач. Пагинации и ручного удаления строк нет.</p><small>Stop · Result · Retry · автоочистка старых записей</small></article>
         <article><span>05</span><h4>Монтаж</h4><p>Библиотека, viewer, inspector, ruler/playhead и timeline. Реальный export: последовательная V1 + одна Music-дорожка.</p><small>Trim · split · drag · delete · fades · undo/redo · FFmpeg</small></article>
@@ -74,7 +73,7 @@
 
       <div class="v2-guide-callout important">
         <strong>ВАЖНО ИМЕННО ДЛЯ НАШЕГО САЙТА</strong>
-        <p>В «Видео» и «Видео по аудио» палочка возвращает три H3 Video-поля. В «Изображениях» палочка работает по отдельному H3 Image guide и возвращает один still-image prompt/edit instruction без Shot-блоков, времени и audio-полей. Номера references во всех режимах назначает backend.</p>
+        <p>В «Видео» и «Видео по аудио» палочка возвращает три H3 Video-поля. Для Characters / Locations / Misc / Audio backend сам назначает настоящие reference labels; вручную номера references придумывать не надо.</p>
       </div>
 
       <div class="v2-format-grid">
@@ -237,7 +236,7 @@ non_diegetic_music: [Instruments, tempo, rhythm and dynamics, or N/A].</pre>
       <div>
         <span class="v2-kicker">ДЛЯ CHATGPT / ДРУГОГО АССИСТЕНТА</span>
         <h3>Скопировать весь актуальный контекст</h3>
-        <p>Кнопка объединит описание текущего V2, H3 Video machine guide и отдельный H3 Image guide. В новом чате можно сразу просить prompts и для видео, и для изображений.</p>
+        <p>Кнопка объединит описание текущего V2 и полный H3 Video machine guide. В новом чате можно сразу просить готовые prompts под наши видео-разделы.</p>
       </div>
       <div class="v2-chatgpt-actions">
         <button class="v2-primary-button" id="v2-copy-chatgpt-bottom" type="button">
@@ -245,7 +244,6 @@ non_diegetic_music: [Instruments, tempo, rhythm and dynamics, or N/A].</pre>
           Скопировать всё
         </button>
         <a class="v2-secondary-button" href="/static/h3-prompting-guide-ai.txt" target="_blank" rel="noopener">H3 Video guide</a>
-        <a class="v2-secondary-button" href="/static/h3-image-prompting-guide-ai.txt" target="_blank" rel="noopener">H3 Image guide</a>
       </div>
     </article>
   </div>
