@@ -164,14 +164,14 @@
         }),
       });
       const used = Number(usage.estimated_tokens || 0);
-      const limit = Number(usage.context_limit || 32768);
+      const limit = Number(usage.context_limit || 131072);
       label.textContent = (used / 1000).toFixed(1) + "k / " + Math.round(limit / 1000) + "k";
       fill.style.width = Math.min(100, (used / limit) * 100) + "%";
       note.textContent = usage.dropped_messages
         ? "Старых сообщений не отправлено модели: " + usage.dropped_messages
         : "В активный контекст помещается вся текущая история";
     } catch {
-      label.textContent = "— / 32k";
+      label.textContent = "— / 128k";
       note.textContent = "Не удалось посчитать контекст";
     }
   };

@@ -51,15 +51,15 @@ V2 уже содержит отдельные рабочие пространс�
 - **Продолжить клип** — previous video + сохранённый per-user master track, автоматическая нарезка следующего аудиосегмента и перенос позиции в следующий клип;
 - **Библиотека** и **Очередь** — V2-native просмотр результатов, jobs и занятость обеих GPU;
 - **Монтаж** — последовательный Video 1 timeline, reorder, zoom/snap/timecode, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
-- **Чат** — streaming Qwen3-8B с Thinking и управлением реальным 32k context budget;
-- **Система** — GPU/VRAM/load/temp, Qwen, ComfyUI, RAM/CPU/disk;
+- **Чат** — streaming Gemma4 26B A4B Heretic с Thinking и управлением реальным 128k context budget;
+- **Система** — GPU/VRAM/load/temp, Gemma, ComfyUI, RAM/CPU/disk;
 - **Инструкция** — обучение по сайту/H3 и полный copy-paste context для ChatGPT.
 
 Подробный статус и ограничения: [docs/v2/PLAN.md](docs/v2/PLAN.md).
 
 ## Опциональный локальный ИИ-помощник
 
-В сайт встроен плавающий локальный чат с 32k context на `w3joe/Qwen3-8B-abliterated Q4_K_M` через `llama.cpp`:
+В сайт встроен плавающий локальный чат с 128k context на `llmfan46/gemma-4-26B-A4B-it-uncensored-heretic-GGUF` Q4_K_M через `llama.cpp`:
 
 - **Разговор** — обычный стриминговый чат, помощь по H3 и готовые промты;
 - **Управление** — модель получает текущую форму генератора, возвращает серверно валидируемый JSON и может менять промт, режим, длительность, FPS, steps, seed, H3 Audio, формат/размер, Ref2VA/ControlNet и выбранных сохранённых персонажей;

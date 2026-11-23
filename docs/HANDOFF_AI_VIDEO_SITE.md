@@ -1459,7 +1459,7 @@ COMFYUI_INPUT_DIR/aivideosite/<job_id>/
 
 ---
 
-## 26. Локальный Qwen3-ассистент / чат / управление
+## 26. Локальный Gemma4 26B A4B Heretic / чат / управление
 
 Добавлено 20 ноября 2026.
 
@@ -1475,7 +1475,7 @@ Q4_K_M GGUF
 Файл модели:
 
 \`\`\`text
-/opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf
+/opt/ai/models/llm/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf
 \`\`\`
 
 Runtime:
@@ -1548,10 +1548,10 @@ POST 127.0.0.1:8091/release
 Реальный context запуска:
 
 \`\`\`text
-LLM_CTX_SIZE=32768
+LLM_CTX_SIZE=131072
 \`\`\`
 
-То есть Qwen работает с контекстом 32k tokens.
+То есть Gemma работает с контекстом 128k tokens.
 
 System prompt использует:
 
@@ -1757,7 +1757,7 @@ watch -n 0.5 nvidia-smi
 
 ### Что ещё требует runtime проверки пользователем
 
-- фактический 32k context после установки нового systemd service;
+- фактический 128k context после установки нового systemd service;
 - Thinking ON/OFF в browser;
 - отсутствие reasoning в visible output;
 - prompt generation всегда English при русском запросе;

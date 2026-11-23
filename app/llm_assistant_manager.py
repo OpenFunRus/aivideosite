@@ -15,13 +15,13 @@ from typing import Any
 LLAMA_BIN = os.getenv("LLM_SERVER_BIN", "/opt/ai/llama.cpp/build/bin/llama-server")
 MODEL = os.getenv(
     "LLM_MODEL",
-    "/opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf",
+    "/opt/ai/models/llm/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf",
 )
 HOST = os.getenv("LLM_HOST", "127.0.0.1")
 PORT = int(os.getenv("LLM_PORT", "8090"))
 CONTROL_HOST = os.getenv("LLM_CONTROL_HOST", "127.0.0.1")
 CONTROL_PORT = int(os.getenv("LLM_CONTROL_PORT", "8091"))
-CTX_SIZE = int(os.getenv("LLM_CTX_SIZE", "32768"))
+CTX_SIZE = int(os.getenv("LLM_CTX_SIZE", "131072"))
 THREADS = int(os.getenv("LLM_THREADS", "18"))
 POLL_SECONDS = float(os.getenv("LLM_GPU_POLL_SECONDS", "2.0"))
 

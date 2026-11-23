@@ -53,13 +53,13 @@
   const llmCard = (assistant) => {
     const online = Boolean(assistant && assistant.online);
     const process = assistant?.llama_alive ? 'Loaded' : assistant?.loading ? 'Loading' : 'Offline';
-    return '<article class="v2-system-card">' + cardHead('Local Qwen3-8B', 'brain', online) +
+    return '<article class="v2-system-card">' + cardHead('Gemma4 26B A4B Heretic', 'brain', online) +
       '<div class="v2-system-card-body v2-system-llm-body">' +
       '<div class="v2-system-llm-badge">' + icon('brain') + '</div>' +
       '<div class="v2-system-table">' +
       tableRow('Цель (TARGET)', assistant?.target || '—') +
       tableRow('Процесс', process) +
-      tableRow('Контекст', '32k') +
+      tableRow('Контекст', '128k') +
       tableRow('Резервный GPU', (assistant?.reserved_gpus || []).join(', ') || '—') +
       '</div></div></article>';
   };

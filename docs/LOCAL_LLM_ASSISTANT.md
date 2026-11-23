@@ -1,6 +1,6 @@
 # Локальный ИИ-помощник для AI Video Site
 
-Актуальное состояние на 2026-11-20.
+Актуальное состояние после перехода на Gemma4 26B A4B Heretic.
 
 Модель:
 
@@ -83,7 +83,7 @@ cmake --build build --config Release -j 18 -t llama-server
 ## Model file
 
 \`\`\`text
-/opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf
+/opt/ai/models/llm/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf
 \`\`\`
 
 Если модель нужно скачать заново:
@@ -92,8 +92,8 @@ cmake --build build --config Release -j 18 -t llama-server
 sudo install -d -o openfun -g openfun /opt/ai/models/llm
 
 sudo -u openfun curl -L --fail --retry 5 \
-  'https://huggingface.co/w3joe/Qwen3-8B-abliterated/resolve/main/gguf/Qwen3-8B-abliterated-Q4_K_M.gguf?download=true' \
-  -o /opt/ai/models/llm/Qwen3-8B-abliterated-Q4_K_M.gguf
+  'https://huggingface.co/llmfan46/gemma-4-26B-A4B-it-uncensored-heretic-GGUF/resolve/main/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf?download=true' \
+  -o /opt/ai/models/llm/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf
 \`\`\`
 
 ## Context
@@ -101,10 +101,10 @@ sudo -u openfun curl -L --fail --retry 5 \
 Service запускает модель с:
 
 \`\`\`text
-LLM_CTX_SIZE=32768
+LLM_CTX_SIZE=131072
 \`\`\`
 
-То есть context = 32k tokens.
+То есть context = 128k tokens.
 
 System prompt состоит из:
 
@@ -113,7 +113,7 @@ System prompt состоит из:
 - текущего generator state;
 - conversation history.
 
-Текущий full H3 guide — около 20k chars. Цель — держать system prompt компактным, чтобы в 32k context оставался запас под историю, generator state и output.
+Текущий full H3 guide — около 20k chars. Цель — держать system prompt компактным, чтобы в 128k context оставался запас под историю, generator state и output.
 
 ## Thinking
 
@@ -284,7 +284,7 @@ watch -n 0.5 nvidia-smi
 3. Copy в assistant и guide.
 4. Dynamic move RTX2080 -> RTX3090 -> CPU при H3 load.
 5. Возврат LLM на GPU после завершения H3.
-6. Реальный 32k context после установки systemd service.
+6. Реальный 128k context после установки systemd service.
 7. Desktop/mobile UI.
 
 

@@ -13,10 +13,10 @@ import requests
 
 LLM_URL = os.getenv("LLM_ASSISTANT_URL", "http://127.0.0.1:8090").rstrip("/")
 LLM_MANAGER_URL = os.getenv("LLM_MANAGER_URL", "http://127.0.0.1:8091").rstrip("/")
-MODEL_NAME = os.getenv("LLM_ASSISTANT_MODEL", "local-h3-assistant")
+MODEL_NAME = os.getenv("LLM_ASSISTANT_MODEL", "gemma-4-26B-A4B-it-uncensored-heretic")
 MAX_HISTORY_MESSAGES = 200
-MAX_HISTORY_CHARS = 160000
-CONTEXT_TOKENS = 32768
+MAX_HISTORY_CHARS = 500000
+CONTEXT_TOKENS = 131072
 CONTEXT_SAFETY_TOKENS = 1200
 
 H3_GUIDE_PATH = Path(__file__).resolve().parent / "static" / "h3-prompting-guide-ai.txt"
@@ -433,9 +433,9 @@ def _chat_payload(
     if not normalized or normalized[-1]["role"] != "user":
         raise ValueError("Сообщение пользователя отсутствует.")
 
-    think_directive = "/think" if thinking else "/no_think"
+    think_directive = "<|think|>\n" if thinking else ""
     prepared: list[dict[str, str]] = [
-        {"role": "system", "content": system_prompt + "\n\n" + think_directive}
+        {"role": "system", "content": think_directive + system_prompt}
     ]
     settings_json = _settings_context(settings)
     if settings_json:
@@ -480,9 +480,9 @@ def context_usage(
 ) -> dict[str, int]:
     normalized = normalize_messages(messages)
     max_tokens = 2400 if thinking else 1400
-    think_directive = "/think" if thinking else "/no_think"
+    think_directive = "<|think|>\n" if thinking else ""
     system_messages: list[dict[str, str]] = [
-        {"role": "system", "content": CHAT_SYSTEM + "\n\n" + think_directive}
+        {"role": "system", "content": think_directive + CHAT_SYSTEM}
     ]
     settings_json = _settings_context(settings)
     if settings_json:
@@ -555,7 +555,7 @@ def stream_chat(
                     continue
                 delta = choices[0].get("delta") or {}
 
-                # llama.cpp may expose Qwen reasoning separately.
+                # llama.cpp may expose Gemma reasoning separately.
                 # Never forward reasoning_content to the browser.
                 content = delta.get("content")
                 if not content:
@@ -601,7 +601,14 @@ def stream_chat(
 
 
 def _strip_think_blocks(text: str) -> str:
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL).strip()
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(
+        r"<\|channel>thought.*?<channel\|>",
+        "",
+        cleaned,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return cleaned.strip()
 
 
 def _extract_json(text: str) -> dict[str, Any]:

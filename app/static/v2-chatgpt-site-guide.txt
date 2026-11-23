@@ -170,11 +170,11 @@ Do NOT claim compositing/multiple active video layers or several independent aud
 
 9. ЧАТ
 ------
-Local Qwen3-8B streaming **conversation/advice** chat.
+Local Gemma4 26B A4B Heretic streaming **conversation/advice** chat.
 - It is NOT Magic Wand and does not mutate generator forms.
 - It should talk naturally, brainstorm, explain results and give H3/site advice.
 - It writes a production prompt only when the user explicitly asks for one.
-- 32k context meter;
+- 128k context meter;
 - Thinking toggle;
 - per-user browser history;
 - oldest complete turns are dropped from active model request when needed, while browser history remains.
@@ -183,7 +183,7 @@ Local Qwen3-8B streaming **conversation/advice** chat.
 -----------
 Operational dashboard:
 - RTX 3090 + RTX 2080 metrics;
-- Local Qwen status;
+- Local Gemma status;
 - ComfyUI primary/secondary;
 - RAM/CPU;
 - disk;
