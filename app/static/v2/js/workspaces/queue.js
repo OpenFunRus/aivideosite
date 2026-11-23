@@ -14,6 +14,7 @@
     const payload = job.payload || {};
     if (job.kind === "editor_export") return payload.title || "Экспорт видео";
     if (job.kind === "generate") return String(payload.user_prompt || payload.prompt || "MiniMax H3").slice(0, 140);
+    if (job.kind === "image_generate") return String(payload.user_prompt || payload.prompt || "MiniMax H3 Image").slice(0, 140);
     return job.kind || "Задача";
   };
   const jobProgress = (job) => job.status === "done"
@@ -31,8 +32,9 @@
     if (status === "failed") actions.push('<button type="button" data-job-action="retry">' + icon("refresh") + 'Повторить</button>');
     if (job.result_media_id) actions.push('<button class="v2-queue-result" type="button" data-job-action="open">' + icon("player-play") + 'Результат</button>');
     const subtitle = [job.stage || "H3", job.gpu_backend || ""].filter(Boolean).join(" · ");
+    const jobIcon = job.kind === "image_generate" ? "photo" : "video";
     return '<article class="v2-job" data-job-id="' + escapeHtml(job.id) + '" data-status="' + escapeHtml(status) + '">' +
-      '<span class="v2-job-icon">' + icon("video") + '</span>' +
+      '<span class="v2-job-icon">' + icon(jobIcon) + '</span>' +
       '<div class="v2-job-main"><strong title="' + escapeHtml(jobTitle(job)) + '">' + escapeHtml(jobTitle(job)) + '</strong><small>' + escapeHtml(subtitle) + '</small></div>' +
       '<span class="v2-job-status">' + (status === "done" ? icon("check") : "") + escapeHtml(statusLabels[status] || status) + '</span>' +
       '<div class="v2-job-progress-info"><b>' + progress + '%</b><div class="v2-job-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + progress + '"><span style="width:' + progress + '%"></span></div></div>' +
