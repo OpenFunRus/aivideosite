@@ -278,6 +278,7 @@
     qsa("[data-v2-preset-panel]").forEach((panel) => {
       panel.hidden = panel.dataset.v2PresetPanel !== next;
     });
+    saveDraft();
   };
 
   qsa("[data-v2-preset-tab]").forEach((button) => {
