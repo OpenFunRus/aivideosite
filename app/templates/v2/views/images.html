@@ -14,8 +14,11 @@
       </div>
       <div class="v2-tool-textarea v2-prompt-panel-box">
         <textarea id="v2-image-prompt" name="prompt" maxlength="16000" placeholder="Опишите обычным языком: кто в кадре, где находится, поза, одежда, предметы, свет, камера и атмосфера."></textarea>
+        <button class="v2-inline-wand" id="v2-image-wand" type="button" title="Улучшить prompt для MiniMax H3 Image">
+          <svg class="icon"><use href="/static/icons.svg#icon-wand"></use></svg>
+        </button>
       </div>
-      <p class="v2-help" id="v2-image-prompt-help">Выбранные справа персонажи, локации и прочее используются как референсы H3 Image.</p>
+      <p class="v2-help" id="v2-image-prompt-help">Пишите обычным языком. Палочка соберёт prompt именно для H3 Image; выбранные справа персонажи, локации и «Прочее» используются как референсы.</p>
     </section>
 
     <section class="v2-tool-card v2-image-results-card">
@@ -32,22 +35,28 @@
     </section>
 
     <section class="v2-settings-card v2-image-settings">
-      <div class="v2-image-setting">
-        <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Разрешение</span>
-        <select id="v2-image-size" class="v2-image-select">
-          <option value="2688x1536">2688 × 1536 (16:9)</option>
-          <option value="2048x2048">2048 × 2048 (1:1)</option>
-          <option value="1536x2688">1536 × 2688 (9:16)</option>
-        </select>
+      <div class="v2-setting-group">
+        <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-adjustments"></use></svg>Качество</span>
+        <div class="v2-segmented" data-image-setting="quality">
+          <button type="button" data-value="480">480p</button>
+          <button class="active" type="button" data-value="720">720p</button>
+          <button type="button" data-value="1080">1080p</button>
+        </div>
       </div>
-      <div class="v2-image-setting">
-        <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>Шаги</span>
-        <div class="v2-image-fixed-value">6 <small>H3 Image</small></div>
+      <div class="v2-setting-group">
+        <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Формат</span>
+        <div class="v2-segmented" data-image-setting="ratio">
+          <button type="button" data-value="1:1">1:1</button>
+          <button class="active" type="button" data-value="16:9">16:9</button>
+          <button type="button" data-value="9:16">9:16</button>
+        </div>
       </div>
-      <label class="v2-image-setting v2-image-seed">
-        <span class="v2-setting-label"># Seed</span>
-        <input id="v2-image-seed" type="number" inputmode="numeric" placeholder="Авто (-1)">
-      </label>
+      <div class="v2-settings-bottom">
+        <label class="v2-seed-field">
+          <span># Seed</span>
+          <input id="v2-image-seed" type="number" inputmode="numeric" placeholder="Авто (-1)">
+        </label>
+      </div>
     </section>
 
     <div class="v2-create-warning" id="v2-image-warning" hidden></div>
