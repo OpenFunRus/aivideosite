@@ -9,7 +9,7 @@
     library: "Библиотека",
     queue: "Очередь",
     editor: "Монтаж",
-    chat: "Чат",
+    chat: "Чат с ИИ",
     system: "Система",
     instruction: "Инструкция",
   };
