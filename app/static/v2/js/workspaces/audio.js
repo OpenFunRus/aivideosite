@@ -310,6 +310,10 @@
 
   W.updateAudioRange = updateRange;
   W.audioModeEnabled = () => Boolean(useTrack.checked);
+  W.restoreAudioMode = () => {
+    useTrack.checked = Boolean(state.draft.useTrack);
+    renderMode();
+  };
   W.audioAssistantContext = () => ({
     audio_mode: Boolean(useTrack.checked),
     audio_start: Number(audioStart.toFixed(3)),
