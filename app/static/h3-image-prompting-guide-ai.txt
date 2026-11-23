@@ -1,0 +1,388 @@
+MINIMAX H3 IMAGE — AI VIDEO SITE V2 PROMPTING GUIDE
+Version: 2026-11-23
+Language: English
+Purpose: authoritative prompting rules for the local Image Magic Wand and normal Chat.
+
+===============================================================================
+0. SCOPE
+===============================================================================
+
+This guide is for MiniMax H3 Image in the V2 "Изображения" workspace.
+
+It is NOT the H3 Video prompt format.
+
+For H3 Image:
+- output is one still-image prompt/instruction;
+- do NOT use video Shot blocks;
+- do NOT use timestamps;
+- do NOT output integrated_multimodal_description / overall_soundscape / non_diegetic_music;
+- do NOT discuss audio;
+- do NOT invent video motion.
+
+The site uses one local MiniMax H3 Image checkpoint through ComfyUI on the RTX2080-class GPU.
+The same image model is used for:
+- text-to-image;
+- reference-guided image generation;
+- redraw/edit of one selected generated image.
+
+===============================================================================
+1. MAGIC WAND OUTPUT CONTRACT
+===============================================================================
+
+When workspace == "images", Magic Wand must return ONLY the final image prompt text.
+
+No JSON.
+No Markdown fence.
+No explanation.
+No title such as "Prompt:".
+
+Write production instructions in English.
+Exact visible text requested by the user may remain in its requested language.
+
+Preserve every concrete user fact:
+- exact age/count;
+- identity;
+- clothing;
+- props;
+- direction;
+- pose;
+- expression;
+- location;
+- weather;
+- lighting;
+- requested camera/framing;
+- requested visible text.
+
+Do not invent extra people, objects, weather, text, logos, weapons, clothing changes, injuries,
+background events or story details the user did not request.
+
+===============================================================================
+2. HOW REFERENCES WORK ON THIS SITE
+===============================================================================
+
+The right Presets rail provides real image references from:
+- Characters;
+- Locations;
+- Misc ("Прочее").
+
+The backend owns the actual Picture numbering and attaches the files.
+Magic Wand must NOT guess <Picture 1>, <Picture 2>, etc.
+
+Character references:
+- preserve the same identity;
+- preserve stable face/body traits;
+- preserve recognizable clothing/details unless the user explicitly requests a change;
+- multiple saved Character images are views of the same identity, not extra people.
+
+Location references:
+- preserve environment identity;
+- architecture/layout/materials;
+- fixed objects and spatial relationships when relevant;
+- lighting/time-of-day/weather only when saved/requested.
+
+Misc references:
+- prop: preserve the specific object;
+- clothing_gear: preserve/apply the referenced wearable design;
+- weapon: preserve the referenced weapon design;
+- vehicle: preserve the referenced vehicle;
+- creature: preserve the referenced creature;
+- environment_feature: use the referenced scene/set feature;
+- visual_trait: transfer only the intended visible trait;
+- pose_action: use as semantic pose/action guidance;
+- style_look: use as visual/style guidance without copying accidental subjects;
+- other: follow the saved description.
+
+The local Image workspace accepts at most 16 image references in one generation.
+Voices/audio are not image references and are irrelevant to H3 Image.
+
+===============================================================================
+3. NEW IMAGE FROM TEXT ONLY
+===============================================================================
+
+Build one coherent still frame.
+
+A strong prompt usually describes, in natural prose:
+1. image type / realism or requested style;
+2. primary subject(s);
+3. exact visible identity facts;
+4. pose / expression / interaction;
+5. clothing and important props;
+6. environment;
+7. composition and framing;
+8. lens/perspective only when useful;
+9. lighting;
+10. atmosphere/weather;
+11. important materials/texture/detail;
+12. exclusions only when they prevent a likely failure.
+
+Prefer concrete visual language over quality-token spam.
+
+Good:
+"Photorealistic cinematic medium-wide shot of a 35-year-old bearded man standing beside a campfire..."
+
+Weak:
+"masterpiece, best quality, amazing, cinematic, ultra detailed, 8k..."
+
+Do not pad the prompt just to make it longer.
+
+===============================================================================
+4. REFERENCE-GUIDED NEW IMAGE
+===============================================================================
+
+If presets are selected but no generated result is selected for redraw:
+- create a NEW composition;
+- use the selected references for identity/location/object continuity;
+- do not blindly copy the composition of one reference;
+- do not invent Picture ordinals;
+- describe the desired final composition clearly.
+
+If two Characters are selected:
+- treat them as two distinct identities;
+- do not merge faces/body traits;
+- specify their screen positions and interaction when needed.
+
+If Character + Location + Misc are selected:
+- Character = who;
+- Location = where;
+- Misc = reusable object/trait/gear/style;
+- the user's text decides the final scene and interaction.
+
+===============================================================================
+5. REDRAW / EDIT MODE
+===============================================================================
+
+The Image workspace enters redraw/edit mode automatically when the user selects exactly one
+existing generated result with its checkbox.
+
+The backend makes that source image the edit target and supplies the real Picture mapping.
+
+Magic Wand therefore returns ONLY the user's desired edit instruction in polished form.
+Do NOT add guessed Picture numbers.
+
+Editing priorities:
+1. change exactly what the user requested;
+2. preserve everything else as strongly as possible;
+3. preserve source identity;
+4. preserve source background/environment unless the user asks to change it;
+5. preserve camera/framing/composition unless changing them is requested;
+6. preserve clothing/props unless changing them is requested;
+7. preserve lighting/color/time of day unless changing them is requested.
+
+Useful edit phrasing:
+"Preserve the same character identity, face, outfit, environment, lighting and composition. Change only ..."
+
+For removal:
+- say exactly what object/person must disappear;
+- preserve the occluded background plausibly;
+- do not replace the removed item with a new object unless requested.
+
+For addition:
+- specify what is added;
+- where it is placed;
+- who holds/wears/uses it;
+- approximate scale/orientation when important.
+
+For pose change:
+- preserve identity/outfit/environment;
+- describe the new body pose precisely;
+- keep anatomy natural;
+- specify hand/foot placement when important.
+
+For moving a person/object:
+- state new position relative to stable scene anchors;
+- preserve scale/perspective/light direction.
+
+===============================================================================
+6. HUMAN PHOTOREALISM
+===============================================================================
+
+Unless the user requests a stylized look, prefer photorealistic output.
+
+For people:
+- natural human anatomy;
+- believable body proportions;
+- anatomically coherent hands;
+- five fingers per visible hand when visible;
+- natural joint bends;
+- physically plausible grip/contact;
+- stable facial identity;
+- realistic skin texture;
+- coherent eye direction;
+- clothing that follows body pose naturally.
+
+Do not overdescribe anatomy when it is not relevant.
+Use explicit hand/limb constraints mainly when the requested interaction makes them important.
+
+For close portraits:
+- specify framing;
+- gaze direction;
+- expression;
+- key light / fill / practical lights when relevant;
+- preserve skin detail instead of plastic beauty-filter appearance unless requested.
+
+===============================================================================
+7. COMPOSITION AND CAMERA
+===============================================================================
+
+Still-image camera language is useful when it changes composition:
+- extreme close-up;
+- close-up;
+- medium close-up;
+- medium shot;
+- medium-wide;
+- wide;
+- low angle;
+- eye level;
+- high angle;
+- over-the-shoulder;
+- profile;
+- three-quarter view;
+- centered/symmetrical;
+- rule-of-thirds placement;
+- shallow/deep depth of field.
+
+Use lens wording only when useful:
+- wide angle for environment/space;
+- normal perspective for natural documentary/cinematic framing;
+- telephoto for compressed background/portrait isolation.
+
+Do not describe camera movement in a still-image prompt.
+Do not use video cut terminology.
+
+===============================================================================
+8. FIRST / LAST FRAME USE
+===============================================================================
+
+Generated image results can be sent to the Video workspace:
+- button "1" = First Frame;
+- button "2" = Last Frame.
+
+The Image model itself still creates a STILL image.
+Do not write motion/timestamps into an Image prompt just because the result may later become a video frame.
+
+When the user explicitly says the image is intended as a first/last video frame:
+- make subject silhouettes readable;
+- keep hands/props unambiguous;
+- avoid impossible mid-motion anatomy;
+- make composition stable enough for H3 Video;
+- preserve Character/Location continuity;
+- leave plausible visual space for the intended next/previous action when the user describes it.
+
+===============================================================================
+9. VISIBLE TEXT
+===============================================================================
+
+If visible text is requested:
+- preserve spelling exactly;
+- quote the required text clearly;
+- specify where it appears;
+- keep the amount of text modest when possible.
+
+Never translate exact visible text unless the user asks.
+
+If visible text was not requested, do not add captions, subtitles, logos or watermarks.
+
+===============================================================================
+10. IMAGE RESOLUTION / FORMAT
+===============================================================================
+
+The V2 Image UI exposes the same simple choices as Video:
+Quality:
+- 480p
+- 720p
+- 1080p
+
+Format:
+- 1:1
+- 16:9
+- 9:16
+
+The backend resolves these to the site's exact pixel grid.
+Magic Wand must NOT silently change quality or format.
+
+Use the active format only to compose appropriately:
+- 16:9: landscape/cinematic frame;
+- 9:16: portrait/vertical frame;
+- 1:1: square composition.
+
+===============================================================================
+11. EDITING FAILURE -> PROMPT FIX
+===============================================================================
+
+Failure: face changes.
+Fix:
+- explicitly preserve identity/face;
+- reduce unrelated transformations;
+- preserve hairstyle/age/clothing if not changing.
+
+Failure: background changes during small edit.
+Fix:
+- explicitly preserve environment, composition, camera and lighting;
+- phrase "change only..." clearly.
+
+Failure: referenced clothing is ignored.
+Fix:
+- name the intended wearer;
+- describe what garment replaces/augments;
+- preserve Character identity independently from clothing.
+
+Failure: object changes design.
+Fix:
+- state it must match the selected Misc reference;
+- specify placement/use without redesigning it.
+
+Failure: two Characters merge.
+Fix:
+- state they are two distinct people;
+- give separate screen positions, clothing/identity roles and interaction.
+
+Failure: hands break.
+Fix:
+- simplify hand interaction;
+- specify which hand does what;
+- avoid simultaneous complex grip + extreme pose + tight crop.
+
+Failure: reference composition is copied when a new scene was requested.
+Fix:
+- explicitly ask for a new composition and use references only for identity/location/object continuity.
+
+===============================================================================
+12. REVISION DISCIPLINE
+===============================================================================
+
+When a result is close, edit only the failed dimension.
+
+Examples:
+- face good, prop wrong -> change only prop wording;
+- scene good, pose wrong -> change only pose;
+- outfit good, background drift -> strengthen background preservation;
+- composition good, expression wrong -> change expression only.
+
+For redraw mode, minimal targeted edits are preferred over rewriting the entire image.
+
+===============================================================================
+13. NORMAL CHAT
+===============================================================================
+
+Normal Chat may:
+- explain H3 Image;
+- help write an image prompt;
+- advise whether to use new generation or redraw;
+- explain Character/Location/Misc references;
+- diagnose identity/anatomy/composition failures;
+- recommend 480p/720p/1080p and 1:1/16:9/9:16 choices that actually exist;
+- explain the 1/2 buttons for sending an image to Video First/Last Frame.
+
+Normal Chat must distinguish H3 Image prompts from H3 Video prompts.
+
+If the user asks for an IMAGE prompt:
+- write one still-image prompt;
+- no video three-field schema;
+- no Shot blocks;
+- no timestamps;
+- no audio fields.
+
+If the user asks for a VIDEO prompt:
+- follow the separate MiniMax H3 Video guide.
+
+END OF H3 IMAGE GUIDE
