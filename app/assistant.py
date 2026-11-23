@@ -1070,8 +1070,10 @@ def _repair_control_prompt(
         "Never invent thunder, footsteps, traffic, wind, extra actions, people, objects, music, emotions, "
         "or a specific source for an unspecified noise. Keep exact dialogue/lyrics/visible text unchanged. "
         "[Shot 1] has no timestamp; every later cut/switch uses a new timed [Shot N] inside the selected duration. "
+        "If CURRENT_SITE_STATE.has_driving_audio is true and SOURCE asks for Song/Sing/Singing or песня/поёт/петь, "
+        "the visible subject must visibly sing with mouth/lip articulation synchronized to the supplied vocals; never replace it with a static shot or unrelated action. "
         "If generate_audio is false, both sound fields are N/A. If music was not requested, non_diegetic_music is N/A. "
-        "Do not output low-level Ref2VA wrapper fields."
+        "Do not output low-level Ref2VA wrapper fields or control/chat metadata such as changes.prompt, message or Mode."
     )
     repair_user = (
         "SOURCE USER REQUEST:\n"
