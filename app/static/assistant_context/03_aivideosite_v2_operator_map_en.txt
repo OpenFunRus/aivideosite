@@ -318,13 +318,17 @@ create_state:
 - has_first_frame
 - has_last_frame
 - audio_mode
+- has_master_track
 - has_driving_audio
 - embed_track
 - generate_scene_audio
 - master_track_title
+- track_id / track_title
 - source_kind
 - audio_start
 - audio_end
+- endpoint_mode
+- resolved resolution
 
 selected_character_ids
 selected_location_ids
@@ -351,8 +355,8 @@ Magic Wand exists only in Video.
 
 It receives:
 1. static H3 Video knowledge;
-2. current unified Video settings;
-3. authoritative Character/Location/Misc metadata;
+2. exact current unified Video settings (quality, resolved resolution, ratio, duration, FPS, steps, seed, H3 audio, endpoint mode, master-track state/range and audio toggles);
+3. authoritative Character/Location/Misc metadata and muted voice state;
 4. user's ordinary-language request.
 
 It returns only the final H3 Video prompt text:
