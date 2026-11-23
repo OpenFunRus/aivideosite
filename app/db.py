@@ -84,6 +84,24 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_misc_presets_owner_created
                 ON misc_presets(owner_id, created_at DESC);
 
+            CREATE TABLE IF NOT EXISTS image_results (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                filename TEXT NOT NULL UNIQUE,
+                prompt TEXT NOT NULL,
+                user_prompt TEXT NOT NULL,
+                width INTEGER NOT NULL,
+                height INTEGER NOT NULL,
+                seed INTEGER NOT NULL,
+                mode TEXT NOT NULL DEFAULT 'generate',
+                source_image_id TEXT,
+                meta_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_image_results_owner_created
+                ON image_results(owner_id, created_at DESC);
+
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
                 owner_id TEXT NOT NULL DEFAULT 'user1',
@@ -446,6 +464,111 @@ def insert_media(
                 utcnow(),
             ),
         )
+
+
+def insert_image_result(
+    *,
+    image_id: str,
+    owner_id: str,
+    filename: str,
+    prompt: str,
+    user_prompt: str,
+    width: int,
+    height: int,
+    seed: int,
+    mode: str,
+    source_image_id: str | None,
+    metadata: dict[str, Any],
+) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO image_results(
+                id, owner_id, filename, prompt, user_prompt, width, height,
+                seed, mode, source_image_id, meta_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                image_id,
+                owner_id,
+                filename,
+                prompt,
+                user_prompt,
+                int(width),
+                int(height),
+                int(seed),
+                mode,
+                source_image_id,
+                json.dumps(metadata, ensure_ascii=False),
+                utcnow(),
+            ),
+        )
+
+
+def get_image_result(image_id: str, owner_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM image_results WHERE id=? AND owner_id=?",
+            (image_id, owner_id),
+        ).fetchone()
+    return _decode_image_result(row) if row else None
+
+
+def list_image_results(owner_id: str, limit: int = 8) -> list[dict[str, Any]]:
+    limit = max(1, min(100, int(limit)))
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+              FROM image_results
+             WHERE owner_id=?
+             ORDER BY created_at DESC, rowid DESC
+             LIMIT ?
+            """,
+            (owner_id, limit),
+        ).fetchall()
+    return [_decode_image_result(row) for row in rows]
+
+
+def delete_image_result(image_id: str, owner_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT * FROM image_results WHERE id=? AND owner_id=?",
+            (image_id, owner_id),
+        ).fetchone()
+        if row is None:
+            conn.execute("COMMIT")
+            return None
+        conn.execute(
+            "DELETE FROM image_results WHERE id=? AND owner_id=?",
+            (image_id, owner_id),
+        )
+        conn.execute("COMMIT")
+    return _decode_image_result(row)
+
+
+def prune_image_results(owner_id: str, keep: int = 8) -> list[dict[str, Any]]:
+    keep = max(0, int(keep))
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute(
+            """
+            SELECT *
+              FROM image_results
+             WHERE owner_id=?
+             ORDER BY created_at DESC, rowid DESC
+             LIMIT -1 OFFSET ?
+            """,
+            (owner_id, keep),
+        ).fetchall()
+        if rows:
+            conn.executemany(
+                "DELETE FROM image_results WHERE id=?",
+                [(row["id"],) for row in rows],
+            )
+        conn.execute("COMMIT")
+    return [_decode_image_result(row) for row in rows]
 
 
 def get_media(media_id: str, owner_id: str | None = None) -> dict[str, Any] | None:
@@ -1157,6 +1280,16 @@ def _decode_job(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def _decode_media(row: sqlite3.Row) -> dict[str, Any]:
+    item = dict(row)
+    try:
+        item["meta"] = json.loads(item.pop("meta_json"))
+    except Exception:
+        item["meta"] = {}
+        item.pop("meta_json", None)
+    return item
+
+
+def _decode_image_result(row: sqlite3.Row) -> dict[str, Any]:
     item = dict(row)
     try:
         item["meta"] = json.loads(item.pop("meta_json"))
