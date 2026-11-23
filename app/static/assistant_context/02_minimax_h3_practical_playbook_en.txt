@@ -1,0 +1,553 @@
+MINIMAX H3 PRACTICAL PLAYBOOK — FIELD NOTES, FAILURE FIXES, AND ADULT-CONTENT SAFETY
+Version: 2026-11-23
+Language: English
+Purpose: practical heuristics layered on top of the authoritative H3 master guide.
+
+===============================================================================
+0. EVIDENCE LABELS
+===============================================================================
+
+Each rule in this file falls into one of three classes:
+
+[OFFICIAL]
+Directly supported by MiniMax or ComfyUI documentation.
+
+[STRONG HEURISTIC]
+Repeated across official examples, ComfyUI guidance, or multiple experienced users.
+Useful in production but not a formal model guarantee.
+
+[COMMUNITY / LOW-TRUST]
+Anecdotal reports, third-party tests, or model-specific observations that may change.
+Never override official syntax or this site's actual runtime.
+
+Useful community research sources:
+- ComfyUI prompt guide and workflow docs.
+- r/StableDiffusion reports from 2026 about H3 structured prompting.
+- Community H3 director/prompting projects that preserve official syntax.
+- Third-party adult-oriented H3 tests. Treat those as low-trust for capability claims,
+  not as authoritative safety or model specification.
+
+===============================================================================
+1. THE SINGLE BIGGEST HACK: STRUCTURE BEATS ADJECTIVES
+===============================================================================
+
+[OFFICIAL + STRONG HEURISTIC]
+
+H3 responds much better to its trained prompt structure than to a large free-form
+cinematic paragraph.
+
+Bad optimization:
+- more adjectives;
+- "masterpiece, stunning, cinematic, ultra detailed";
+- random camera jargon;
+- repeated identity text;
+- huge negative lists.
+
+Better optimization:
+- correct mode;
+- correct field order;
+- clear shot chronology;
+- stable speaker IDs;
+- clear reference roles;
+- concrete camera movement;
+- explicit final state;
+- clean sound separation.
+
+Community reports repeatedly describe gibberish dialogue, wrong speakers, random cuts,
+and ignored instructions improving dramatically once the official base/ref syntax is used.
+
+===============================================================================
+2. START SIMPLE, THEN ADD ONE CONTROL AXIS AT A TIME
+===============================================================================
+
+[STRONG HEURISTIC]
+
+For a difficult scene, prototype in layers:
+
+Pass A:
+- one subject;
+- one location;
+- one action;
+- static or slow camera;
+- no dialogue.
+
+Pass B:
+- add the required dialogue or sound.
+
+Pass C:
+- add camera movement.
+
+Pass D:
+- add secondary character interaction.
+
+Pass E:
+- add exact last-frame landing, extra reference, or complex lighting only if needed.
+
+This isolates failure causes. If identity breaks after adding a fast arc shot, you know
+the camera/motion load caused the regression rather than the Character reference itself.
+
+Change one major variable per revision whenever practical.
+
+===============================================================================
+3. DURATION IS A BUDGET, NOT A LABEL
+===============================================================================
+
+[OFFICIAL + STRONG HEURISTIC]
+
+A 5-second video is not a 15-second screenplay rendered faster.
+
+Dialogue timing:
+- Natural Russian/English speech varies with delivery.
+- Do not squeeze a long sentence plus gestures plus a camera reveal into 5 seconds.
+- If a line must be exact, make other action simpler.
+
+Action timing:
+- entrance + approach + object pickup + conversation + exit is too much for a short clip.
+- Choose the one beat that matters.
+
+If the written action finishes early, H3 may pad with:
+- idle drift;
+- extra mouth movement;
+- extra speech-like gibberish;
+- unnecessary camera motion;
+- repeated gestures.
+
+If the written action is too long, H3 may:
+- skip beats;
+- compress dialogue;
+- overlap speakers;
+- teleport objects;
+- miss the final frame.
+
+===============================================================================
+4. MULTI-CHARACTER DIALOGUE RELIABILITY
+===============================================================================
+
+[OFFICIAL + COMMUNITY]
+
+For two or more speakers:
+- define each speaker clearly;
+- assign stable S1/S2 IDs in actual speaking order;
+- put each line beside that person's action;
+- state "S2 remains silent" when only S1 should speak;
+- avoid simultaneous camera chaos during critical dialogue;
+- avoid giving both characters similar unnamed voice descriptions;
+- if using voice references, use one voice reference per intended speaker when possible.
+
+If H3 starts with gibberish before the real line:
+- reduce silent lead-in time;
+- start with a visible preparatory action;
+- make overall_soundscape explicit;
+- state that no one speaks before S1's exact line;
+- ensure there is enough real dialogue/action to occupy the timeline without inventing filler.
+
+If speakers overlap:
+- state "S2 waits until S1 finishes completely";
+- tie the second line to a visible event that occurs after the first finishes;
+- reduce the number of independent actions happening during speech.
+
+===============================================================================
+5. RUSSIAN DIALOGUE
+===============================================================================
+
+[OFFICIAL + PRACTICAL]
+
+Use exact Russian words inside:
+<d>[Russian] ...</d>
+
+Keep the rest of the production prompt in English.
+
+Pronunciation fixes:
+- prefer ordinary punctuation;
+- avoid excessive ellipses;
+- avoid creative spellings unless the desired pronunciation truly needs them;
+- if one word is mis-stressed consistently, rewrite the sentence around that word
+  rather than adding phonetic clutter everywhere;
+- do not mix Italian/English/Russian instructions in the spoken-content tag;
+- do not put stage directions inside <d>.
+
+A reliable pattern:
+The adult woman with a warm calm voice (S1) looks at him and says:
+<d>[Russian] Не переживай, милый.</d>
+
+Stage direction remains outside the tag.
+
+===============================================================================
+6. IDENTITY LOCK: WHAT ACTUALLY HELPS
+===============================================================================
+
+[OFFICIAL + STRONG HEURISTIC]
+
+Best ingredients:
+- 2–4 consistent reference images of the same exact look;
+- useful angle diversity;
+- no contradictory wardrobe/hair/age references;
+- concise text description of immutable features;
+- moderate camera motion;
+- reasonable pose changes;
+- no unnecessary transformation.
+
+Identity failure often rises when all of these happen at once:
+- face turns fully away;
+- fast orbit camera;
+- strong body motion;
+- complex hand interaction;
+- another similar-looking person;
+- dark/occluded lighting;
+- wardrobe change;
+- expression change;
+- low reference strength / turbo path.
+
+When identity matters more than spectacle:
+- simplify motion first;
+- keep face visible at important moments;
+- avoid extreme perspective distortion;
+- use a continuous shot;
+- let the Character references do identity work instead of repeating a novel-length face description.
+
+===============================================================================
+7. LOCATION CONSISTENCY
+===============================================================================
+
+[STRONG HEURISTIC]
+
+Treat a location like a character:
+- stable architecture;
+- stable furniture;
+- stable materials;
+- stable window/door positions;
+- stable light source;
+- stable weather/time of day;
+- stable damage/decay state.
+
+When using several location images:
+- say they are multiple views of the same place;
+- do not describe mutually incompatible layouts;
+- do not select three different Location presets unless the scene transitions between them.
+
+For interior continuity:
+- mention where the camera is relative to the main anchor (door, table, window, stove);
+- preserve left/right relationships when the next clip starts from a final frame.
+
+===============================================================================
+8. FIRST-FRAME CONTINUATION
+===============================================================================
+
+[STRONG HEURISTIC FOR THIS SITE]
+
+The removed "Continue" workspace is intentionally replaced by a more controllable method:
+
+1. Export the previous video's final PNG frame from Library.
+2. Put it into Create -> First Frame.
+3. Re-select the same Characters/Location presets.
+4. Keep the same aspect ratio and quality unless a change is intentional.
+5. Write only the next action.
+6. State continuity where H3 can otherwise reinterpret:
+   - same person;
+   - same clothing;
+   - same held objects;
+   - same location;
+   - same lighting/time of day;
+   - same screen direction;
+   - same camera height and orientation.
+7. Start motion from the exact visible pose rather than re-describing an earlier state.
+
+For a seamless cut, avoid a large camera jump in the first few frames of the new clip.
+
+===============================================================================
+9. FIRST + LAST FRAME RELIABILITY
+===============================================================================
+
+[OFFICIAL + STRONG HEURISTIC]
+
+To improve endpoint landing:
+- make start and end compositions compatible;
+- minimize unrelated location changes;
+- describe the physical interpolation;
+- keep one continuous shot if possible;
+- describe final body/prop/camera state explicitly;
+- avoid adding a late event after the landing;
+- if the last frame differs radically, give the model enough time.
+
+If the output ignores the last frame:
+- reduce intermediate complexity;
+- remove extra cuts;
+- reduce camera motion;
+- increase the proportion of prompt devoted to the transition path;
+- verify both endpoint images use compatible dimensions/aspect ratios.
+
+===============================================================================
+10. CAMERA HACKS
+===============================================================================
+
+[OFFICIAL + COMMUNITY]
+
+Specific camera language is better than vague "camera moves cinematically".
+
+Good:
+- "The camera pushes in with small amplitude at slow speed toward his face."
+
+Weak:
+- "The camera slowly moves closer."
+
+For dialogue:
+- static or slow push-in is often safer than large orbiting.
+
+For action:
+- tracking shot follows translation well.
+- truck is useful for lateral reveal.
+- pan rotates in place; truck translates the camera. Do not confuse them.
+- zoom changes focal length; push-in moves the camera physically.
+
+Avoid stacking three camera moves unless the shot truly needs them.
+
+===============================================================================
+11. AUDIO AND UNWANTED MUSIC
+===============================================================================
+
+[OFFICIAL]
+
+If no score:
+non_diegetic_music: N/A
+
+If no H3 ambience/sound:
+overall_soundscape: N/A
+
+Do not rely on "no music" hidden inside a huge visual paragraph.
+Use the dedicated field.
+
+For the site's Audio workspace:
+- master track is external;
+- non_diegetic_music is normally N/A;
+- H3 background sounds should be N/A when the UI toggle is off;
+- do not describe the external song as if H3 must compose it;
+- do not invent missing lyrics.
+
+===============================================================================
+12. REFERENCE BUDGET STRATEGY
+===============================================================================
+
+[OFFICIAL + SITE-SPECIFIC]
+
+Upstream official mixed-reference cap is 12 files.
+Current local site validator still allows 15 total references, with:
+- <= 9 images;
+- <= 3 videos;
+- <= 3 audio.
+
+Treat 12 as the conservative H3 upstream budget even if the current site UI/backend
+permits 13–15 total media. If quality/adherence is unstable, reduce references rather
+than filling every slot.
+
+Priority order for a character scene:
+1. essential identity views;
+2. essential location views;
+3. voice reference if needed;
+4. exact guide frames;
+5. optional style/motion references last.
+
+More references are not automatically better.
+
+===============================================================================
+13. TURBO VS BASE
+===============================================================================
+
+[OFFICIAL/COMFYUI + HEURISTIC]
+
+Turbo/Lightning LoRAs are useful for iteration speed but may weaken:
+- small identity details;
+- reference adherence;
+- audio quality;
+- complex motion.
+
+Practical workflow:
+- validate composition/action fast;
+- move to the more stable base/higher-step path for a final difficult shot;
+- do not judge a complex character-reference failure solely from the fastest turbo run.
+
+This V2 exposes 8/12/16 steps rather than the full raw ComfyUI space.
+Respect the site's buttons; do not invent a 25-step UI value.
+
+===============================================================================
+14. PROMPT LENGTH
+===============================================================================
+
+[OFFICIAL + COMMUNITY INTERPRETATION]
+
+Do not pad prompts to hit a word target.
+
+A prompt is complete when it contains every necessary:
+- subject;
+- state;
+- action;
+- camera;
+- timing;
+- dialogue;
+- sound;
+- music;
+- continuity constraint.
+
+Dense scenes need more words. Simple scenes need fewer.
+Redundant prose competes with the important constraints.
+
+A useful editing pass:
+- delete repeated adjectives;
+- delete repeated identity descriptions;
+- delete irrelevant backstory;
+- keep physical facts;
+- keep chronology;
+- keep exact dialogue;
+- keep reference roles;
+- keep final state.
+
+===============================================================================
+15. NSFW / ADULT CONTENT — PRACTICAL, SAFETY-AWARE NOTES
+===============================================================================
+
+[COMMUNITY / LOW-TRUST FOR CAPABILITY; SAFETY RULES ARE HARD]
+
+This section is only for consensual adult fictional/synthetic content or consenting adults.
+Never use it to sexualize minors, youthful/ambiguous-age subjects, coercion, sexual violence,
+incest, bestiality, or non-consensual sexual deepfakes.
+
+Do not attempt to evade platform moderation, rewrite prohibited requests to bypass filters,
+or provide jailbreak wording. Hosted products may enforce moderation independently of the
+local open-weight model. Respect the endpoint's rules.
+
+Community observations from 2026 suggest local base H3 can be more permissive than some
+hosted H3 Max routes, but this is not an official guarantee and can change.
+
+Adult-scene reliability principles that are still just normal H3 engineering:
+- explicitly establish every participant as an adult when age could be visually ambiguous;
+- prefer fictional/synthetic characters or people whose likeness use is authorized;
+- keep identity references consistent;
+- keep staging simple;
+- use one primary interaction beat per short shot;
+- use clear body positions and screen positions;
+- avoid impossible anatomy or simultaneous contradictory limb actions;
+- use calmer camera behavior when close body interaction is already complex;
+- keep lighting adequate for anatomy/identity consistency;
+- avoid mixing multiple conflicting reference bodies or outfits;
+- describe only the requested level of nudity/intimacy rather than adding escalation;
+- keep consent and agency unambiguous when multiple adults interact;
+- use exact speaker IDs for adult dialogue just as in any other scene;
+- keep score/ambience in their proper fields.
+
+If an adult scene produces anatomy drift:
+- reduce simultaneous body motion;
+- reduce camera amplitude;
+- simplify hand interactions;
+- use fewer characters;
+- use a stronger/cleaner identity reference;
+- shorten the requested beat;
+- split a complicated sequence into multiple clips.
+
+If a hosted endpoint refuses content:
+- do not advise filter bypass;
+- use a permitted concept or a local workflow only when lawful and consistent with the user's rights.
+
+Real-person sexual content:
+- treat it as especially sensitive;
+- do not create non-consensual sexualized impersonation/deepfake content;
+- use synthetic/fictional adult characters or authorized likenesses.
+
+===============================================================================
+16. COMMON FAILURE -> FIX TABLE
+===============================================================================
+
+Failure: wrong person speaks
+Fix:
+- stable S IDs;
+- line beside visible speaker;
+- explicit silence for others;
+- one voice ref per speaker where possible.
+
+Failure: gibberish before/after dialogue
+Fix:
+- exact <d> structure;
+- less empty timeline;
+- state no speech outside the exact line;
+- simplify actions.
+
+Failure: random cut
+Fix:
+- one-shot wording;
+- explicit static/tracking camera;
+- remove vague "dynamic cinematic montage" language.
+
+Failure: face changes
+Fix:
+- stronger cleaner references;
+- fewer simultaneous transformations;
+- calmer camera;
+- better light;
+- preserve wardrobe/hair/age explicitly.
+
+Failure: location changes
+Fix:
+- one Location preset;
+- lock architecture/layout/materials/light;
+- avoid contradictory location refs.
+
+Failure: prop switches hands/disappears
+Fix:
+- state initial hand;
+- describe grasp path;
+- state final hand/position;
+- keep prop visible.
+
+Failure: final frame missed
+Fix:
+- simplify path;
+- remove cuts;
+- explicitly converge on final geometry;
+- ensure enough duration.
+
+Failure: extra music
+Fix:
+- non_diegetic_music: N/A.
+
+Failure: extra dialogue
+Fix:
+- exact lines only;
+- explicit silence otherwise;
+- fill runtime with visible nonverbal action instead of empty time.
+
+Failure: master-track audio is re-created badly
+Fix:
+- non_diegetic_music: N/A;
+- treat master track as external;
+- only request H3 scene sounds if toggle is on.
+
+Failure: too many references weaken adherence
+Fix:
+- remove nonessential refs;
+- assign one clear role to each;
+- prioritize identity/location/voice.
+
+===============================================================================
+17. REVISION DISCIPLINE
+===============================================================================
+
+When a generation is close:
+- do not rewrite the entire prompt;
+- identify the single failed dimension;
+- patch only that dimension;
+- preserve all successful details.
+
+Examples:
+- dialogue correct, camera bad -> only repair camera wording;
+- identity correct, location drifts -> strengthen location constraints;
+- endpoint correct, speech rushed -> shorten line or simplify action;
+- motion correct, unwanted music -> set music field to N/A.
+
+This makes iteration predictable and preserves successful latent behavior.
+
+===============================================================================
+18. FINAL RULE
+===============================================================================
+
+The best "hack" is not a secret keyword.
+It is:
+correct mode + correct structure + concrete chronology + clean reference roles +
+stable identity + explicit audio separation + realistic duration budget.

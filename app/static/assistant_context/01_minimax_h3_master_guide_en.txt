@@ -1,0 +1,621 @@
+MINIMAX H3 MASTER GUIDE — AI VIDEO SITE V2
+Version: 2026-11-23
+Language: English
+Purpose: authoritative production knowledge for the local Gemma assistant and Magic Wand.
+
+===============================================================================
+0. SOURCE PRIORITY AND SCOPE
+===============================================================================
+
+Use evidence in this order:
+1. MiniMax-AI/MiniMax-H3 official repository and bundled prompt-writing skill.
+2. Official ComfyUI MiniMax H3 documentation and built-in node documentation.
+3. This site's real runtime behavior and local wrapper rules.
+4. Community reports only as heuristics, never as hard facts.
+
+Primary upstream references:
+- https://github.com/MiniMax-AI/MiniMax-H3
+- https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills/h3-prompt-writing
+- https://github.com/MiniMax-AI/MiniMax-H3/blob/main/skills/h3-prompt-writing/references/base-en.txt
+- https://github.com/MiniMax-AI/MiniMax-H3/blob/main/skills/h3-prompt-writing/references/ref-en.txt
+- https://docs.comfy.org/tutorials/video/minimax/minimax-h3
+- https://docs.comfy.org/tutorials/video/minimax/minimax-h3-prompt-guide
+- https://docs.comfy.org/tutorials/video/minimax/minimax-h3-native
+- https://docs.comfy.org/tutorials/video/minimax/minimax-h3-multiframe
+- https://docs.comfy.org/tutorials/video/minimax/minimax-h3-fun-controlnet
+
+This file is deliberately detailed. Do not compress it unless the user explicitly asks.
+
+===============================================================================
+1. WHAT H3 IS
+===============================================================================
+
+MiniMax H3 is an omni-modal audio-video generation model. It can reason over text,
+images, video, and audio references and generate synchronized video plus stereo audio.
+
+The open-weight H3-Base family is split into two task families:
+
+A. FL2VA family
+- T2VA: text to audio-video.
+- I2VA: first-frame image to audio-video.
+- FL2VA: first + last frame to audio-video.
+- L2VA: last-frame image to audio-video.
+- Best when images are exact endpoint anchors rather than semantic references.
+
+B. Ref2VA family
+- Reference-to-audio-video using images, videos, and/or audio.
+- Best for reusable character identity, wardrobe, location, style, motion, camera,
+  source-video structure, voice timbre, audio continuity, or mixed reference tasks.
+
+Official open-weight operating facts:
+- Native local target is approximately a 768px short edge / about 1 megapixel.
+- Native timeline is 24 fps.
+- Output is trained around roughly 4–15 seconds.
+- H3 uses a 17k+5 frame grid; requested lengths are snapped to supported frame counts.
+- Official reference limits: up to 9 reference images, 3 reference videos,
+  3 reference audio clips, with at most 12 mixed reference files total.
+- Reference videos and audio clips are generally expected within the documented
+  short-clip range, and cumulative durations are limited by the upstream workflow.
+- Dialogue has stable support for multiple languages including Russian and English.
+
+Do not confuse hosted H3/H3 Max product settings with the exact local open-weight
+workflow. Hosted systems may include Context-IR, moderation, 2K regeneration,
+prompt enhancement, or different duration controls.
+
+===============================================================================
+2. THE TWO PROMPT LANGUAGES — NEVER MIX THEM CASUALLY
+===============================================================================
+
+H3 has two distinct structured prompt families.
+
+A. BASE / KEYFRAME MODES: THREE CORE FIELDS
+Used for T2VA, I2VA, FL2VA, L2VA.
+
+Order is mandatory:
+
+integrated_multimodal_description: ...
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
+
+I2VA / FL2VA / L2VA additionally require their image-alignment instruction before
+the three fields. T2VA has no alignment line.
+
+B. FULL-REFERENCE MODE: SIX SECTIONS
+Used by raw low-level Ref2VA rewriting.
+
+Order is mandatory:
+
+subject_definitions: ...
+
+summary: ...
+
+retention_analysis: ...
+
+detailed_description: ...
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
+
+IMPORTANT FOR THIS SITE:
+The visible V2 prompt fields and Magic Wand use the THREE-field form even when
+Characters, Locations, or Audio cause the backend to use Ref2VA. The site backend
+owns the actual reference numbering and promotes the three-field user prompt into
+the six-section Ref2VA representation. Therefore the Magic Wand must NOT invent
+<Picture N>, <Video N>, <Audio N>, subject_definitions, or retention_analysis.
+
+When discussing H3 generally, understand both syntaxes. When writing for this V2
+Magic Wand, obey the site's three-field contract.
+
+===============================================================================
+3. BASE MODE ALIGNMENT RULES
+===============================================================================
+
+T2VA:
+- No alignment line.
+- Start directly with integrated_multimodal_description.
+
+I2VA:
+- Picture 1 is the exact opening frame at 0.00 seconds.
+- Establish the visible state from that image, then animate forward.
+- Preserve identity, proportions, wardrobe, pose, framing, scene layout, lighting,
+  and object positions unless the user asks for a change.
+- Recommended conceptual path:
+  first-frame anchor -> action onset -> continuous development -> result.
+
+FL2VA:
+- Picture 1 is the exact opening frame.
+- Picture 2 is the exact final frame.
+- Do not merely describe two still images. Describe the physical path connecting them.
+- Prefer one continuous shot when possible because unrelated cuts fight endpoint landing.
+- Explicitly converge on Picture 2's final pose, geometry, lighting, framing, and object state.
+- Recommended conceptual path:
+  first state -> intermediate changes -> narrowing differences -> exact final landing.
+
+L2VA:
+- Picture 1 is the exact final frame, not automatically Shot 1.
+- Infer a plausible earlier state compatible with the user's intent.
+- Animate forward toward the supplied final frame.
+- No action may occur after the final-frame landing.
+
+For this site's manual continuation workflow:
+- Export the previous video's real final frame from Library.
+- Use that PNG as Create -> First Frame.
+- Describe only the next visible action.
+- Preserve end-state identity, outfit, object possession, pose direction, lighting,
+  scene geometry, and camera orientation as needed.
+
+===============================================================================
+4. SHOTS, TIME, AND EDITING GRAMMAR
+===============================================================================
+
+Shot numbering:
+- [Shot 1] begins the video and has no timestamp.
+- Each later shot starts with an exact increasing cut time.
+- Preferred pattern:
+  [Shot 2] At 00:04.000, the camera cuts to...
+- A timestamp must be inside the target duration.
+- Do not write broad ranges such as "[5s-8s]" as a substitute for the cut time.
+
+Create a new shot when a real discontinuity occurs:
+- viewpoint changes by a cut;
+- location changes;
+- time jumps;
+- a substantially different composition starts;
+- a new scene state starts;
+- the user explicitly wants a cut.
+
+Do not create a new shot for a small reframe that can be expressed as camera motion.
+
+Timeline discipline:
+- The written action must fit the selected runtime.
+- A short clip should not contain five major actions, three lines of dialogue,
+  two transformations, and four camera moves.
+- The model often fills unused time with drift or unwanted speech if the written event
+  finishes too early. Conversely, overstuffed prompts crush actions and dialogue.
+- Prefer fewer complete beats over many incomplete beats.
+
+Useful planning:
+- 5 sec: usually one primary beat, often one shot.
+- 10 sec: one continuous sequence or two simple shots.
+- 15 sec: two or three meaningful shots when needed.
+These are heuristics, not hard model rules.
+
+===============================================================================
+5. CAMERA DIRECTION
+===============================================================================
+
+Use natural English sentences. Do not dump camera keywords.
+
+Officially documented motion vocabulary includes:
+- Zoom In / Zoom Out
+- Push In / Pull Out
+- Pan Left / Pan Right
+- Truck Left / Truck Right
+- Tilt Up / Tilt Down
+- Pedestal Up / Pedestal Down
+- Arc Shot
+- Tracking Shot
+- Static Shot
+- Shake Slightly / Shake Strongly
+- POV
+- Roll Clockwise / Roll Counterclockwise
+
+A strong camera sentence identifies:
+1. motion type;
+2. target or framing purpose;
+3. optional amplitude;
+4. optional speed.
+
+Examples of structure:
+- The camera pushes in with small amplitude at slow speed toward her clenched hands.
+- The camera pans right with large amplitude at fast speed, revealing the doorway.
+- The camera holds a static shot as the character crosses the frame.
+
+Avoid contradictory instructions:
+- "static handheld orbiting camera";
+- simultaneous pan left and truck right without a reason;
+- wide establishing shot and extreme facial close-up in the same uncut instant;
+- camera paths that cross geometry impossibly.
+
+When identity consistency matters, calmer camera motion is usually easier than
+rapid orbiting, violent shake, fast zoom, and large pose changes at the same time.
+
+===============================================================================
+6. SUBJECT, ACTION, AND CONTINUITY WRITING
+===============================================================================
+
+Prefer nouns and verbs over adjective piles.
+
+Every important beat should answer:
+- Who is visible?
+- Where are they?
+- What is their starting state?
+- What do they do first, second, and last?
+- What changes physically?
+- What must not change?
+- What is the final state?
+
+For people and reusable characters, preserve when relevant:
+- facial identity;
+- hair and facial hair;
+- apparent adult age;
+- body proportions;
+- wardrobe and layers;
+- accessories;
+- scars, tattoos, markings;
+- handedness;
+- held props;
+- relative height and scale;
+- left/right screen position;
+- gaze target;
+- posture and locomotion style.
+
+For locations, preserve:
+- room or outdoor layout;
+- architecture;
+- doors/windows/openings;
+- furniture placement;
+- dominant materials;
+- fixed props;
+- major light sources;
+- time of day when continuity matters;
+- weather;
+- camera-facing geometry and spatial relationships.
+
+Avoid teleportation:
+Write the path of hands, props, bodies, and camera if the state change matters.
+"She is suddenly holding the cup" is weaker than describing her reaching, grasping,
+lifting, and settling with the cup in the final position.
+
+===============================================================================
+7. DIALOGUE AND SPEAKER IDS
+===============================================================================
+
+H3 dialogue is highly sensitive to structure.
+
+Speaker IDs:
+- Assign (S1), (S2), ... only to vocalizing characters.
+- IDs identify voices/speakers, not Character preset numbers.
+- The same speaker keeps the same ID across shots.
+- Two speakers speaking/singing together may use a compound ID such as (S1,S2).
+
+The identity/action/delivery description stays OUTSIDE the dialogue tag.
+Inside <d> keep only the language marker and exact spoken words.
+
+Pattern:
+The adult man with a low rough voice (S1) turns toward her and says:
+<d>[Russian] Exact user-provided Russian line.</d>
+
+Rules:
+- Preserve user dialogue verbatim unless explicitly asked to rewrite it.
+- Preserve punctuation where practical.
+- Do not silently translate dialogue.
+- Do not repeat the same line once as plain prose and again inside <d>.
+- Avoid decorative ellipses when clear pronunciation matters; community reports and
+  ComfyUI guidance note that excessive ellipses can degrade intelligibility.
+- Tie dialogue to visible actions and speaker identity.
+- For alternating speakers, make the turn order explicit.
+- Never allow overlapping dialogue unless overlap is requested.
+- If one person must remain silent, explicitly state that the person does not speak,
+  and do not assign them a speaker ID.
+- For voiceover, state it is off-screen voiceover and, when relevant, that visible lips
+  remain closed.
+- For dialogue crossing a cut, explicitly describe the carry-over rather than restating
+  the line as new speech.
+
+Wrong-speaker mitigation:
+- Keep each line adjacent to that speaker's visible action.
+- Keep speaker IDs stable.
+- Avoid packing several speakers into one vague paragraph.
+- With audio voice references, map one voice reference to one intended speaker whenever possible.
+
+===============================================================================
+8. AUDIO MODEL
+===============================================================================
+
+H3 can jointly generate dialogue, physical sounds, ambience, and music.
+
+A. IN-SHOT / DIEGETIC AUDIO
+Put sounds that happen at a specific visible moment inside the shot description:
+- a door slam;
+- a glass breaking;
+- a gunshot in fictional action;
+- a foot hitting a puddle;
+- a character saying or singing a line.
+
+B. overall_soundscape
+Use for persistent or scene-wide ambience and non-verbal sound:
+- rain;
+- room tone;
+- traffic;
+- wind;
+- crowd;
+- machinery;
+- breathing;
+- repeated environmental texture.
+
+Keep it concise and concrete.
+Use N/A when H3 should generate no scene sound.
+
+C. non_diegetic_music
+Use only for score heard by the audience but not produced inside the scene.
+Describe instrumentation, tempo/rhythm, dynamics, entry/exit, and evolution.
+Use N/A when no score is requested.
+
+External master-track rule for this site's "Audio" workspace:
+- The selected master track is already an input and may be muxed into the final MP4.
+- Do NOT ask H3 to reinvent the track as non_diegetic_music.
+- Normally set non_diegetic_music: N/A.
+- If "H3 background sounds" is off, overall_soundscape should also be N/A.
+- Do not invent lyrics that the user did not provide.
+
+Reference audio may provide timbre without copying words. Voice-reference audio does
+not mean the source transcript should be spoken automatically.
+
+===============================================================================
+9. RAW REF2VA — LABEL SEMANTICS
+===============================================================================
+
+This section is for understanding raw Ref2VA and backend behavior. The V2 Magic Wand
+must still output only the three visible fields.
+
+Raw label types:
+- <Subject N>: reusable visible content abstracted from references.
+- <Picture N>: a reference image used as a concrete frame/keyframe/composition anchor.
+- <Video N>: a whole-video relationship such as source edit, continuation, motion,
+  camera, cuts, or temporal structure.
+- <Audio N>: an audio signal that is copied or referenced.
+
+A Subject can combine multiple sources:
+- appearance from Picture 1;
+- movement from Video 1;
+- voice timbre from Audio 1.
+
+A Picture used only as provenance for a Subject does not need to become a standalone
+Picture definition unless the image itself is used as a concrete target frame or
+storyboard anchor.
+
+Video and Audio numbering are independent.
+A video file does not automatically create an Audio label merely because it contains sound.
+
+Raw Ref2VA summary task types:
+- reference generation
+- keyframe completion
+- video editing
+- video continuation
+- audio reuse
+- audio reference
+
+Use only relationships that actually apply.
+
+Raw visual retention markers:
+- fully_preserved
+- partially_preserved
+- attribute_transfer
+- weak_reference
+
+Raw audio retention markers:
+- fully_copy
+- partially_copy
+- reference
+- weak_reference
+
+Distinguish copying a signal from referencing characteristics:
+- voice timbre only -> reference;
+- exact full source soundtrack -> fully_copy;
+- selected segment/layers -> partially_copy.
+
+===============================================================================
+10. REFERENCE ROLE DESIGN
+===============================================================================
+
+Assign each reference a clear job.
+
+Good roles:
+- identity / face / body;
+- wardrobe;
+- location / architecture / lighting;
+- object/product appearance;
+- motion;
+- pose;
+- camera move;
+- edit rhythm;
+- style;
+- voice timbre;
+- sound texture;
+- exact first frame;
+- exact last frame;
+- timed guide.
+
+Avoid asking every reference to control everything.
+Competing references increase ambiguity.
+
+Reference sheets:
+A single image may contain multiple views/panels, but the prompt must identify which
+panel/view is useful. Dedicated clean references are usually easier to reason about.
+
+Character references:
+- Prefer consistent age, outfit, hair, and accessories across images.
+- Different useful angles of the same look are better than contradictory looks.
+- Text description supports the references; it does not replace identity conditioning.
+
+Location references:
+- Multiple views should depict the same coherent space.
+- Use the location text to lock architecture, layout, materials, lighting, and fixed details.
+- Avoid selecting multiple mutually exclusive locations unless the scene truly transitions.
+
+===============================================================================
+11. TIMELINE GUIDES / MULTIFRAME
+===============================================================================
+
+Timeline Guides are not the same as semantic reference images.
+
+A semantic image reference says:
+"Use this identity/style/location information."
+
+A Timeline Guide says:
+"At this timeline position, the video should match this image/composition."
+
+In native ComfyUI multiframe workflows:
+- guides are anchored by frame index;
+- frame index is based on the 24 fps timeline;
+- negative indexes may count from the end depending on the node;
+- guide ranges must stay inside total duration;
+- an image connected only as a Guide may not receive a normal text <Picture N> label;
+  if the prompt must semantically reference it too, it must also be supplied as a reference.
+
+This site intentionally keeps exact first/last frames separate from semantic Character
+and Location references.
+
+===============================================================================
+12. CONTROLNET / FUN CONTROL UNION
+===============================================================================
+
+H3 Fun ControlNet Union can condition motion/geometry using:
+- Canny
+- Depth
+- HED
+- MLSD
+- Pose
+- inpainting / mask-based editing
+
+Use ControlNet for structure and motion, not as a substitute for identity references.
+
+Typical purposes:
+- Pose: body motion/skeleton.
+- Depth: scene geometry and camera-space structure.
+- Canny/HED: edges and contours.
+- MLSD: strong straight-line / architecture structure.
+- Inpaint: preserve most source pixels while changing a masked region.
+
+Official ComfyUI guidance:
+- control-video preprocessing quality strongly affects output;
+- control videos longer than target may be trimmed;
+- shorter controls may hold their final frame depending on workflow;
+- guidance-distilled H3 is generally run around CFG/guidance 1 rather than using high CFG
+  as a magic quality control.
+
+This V2 site does not currently expose the full Fun ControlNet UI in the simplified
+Create/Audio screens. Do not claim the user can manipulate a hidden control slider
+unless CURRENT_SITE_STATE says that control is available.
+
+===============================================================================
+13. RESOLUTION, STEPS, TURBO, AND QUALITY
+===============================================================================
+
+Local open-weight H3:
+- native short edge is approximately 768 px;
+- dimensions should respect the workflow's multiple-of-32 requirements;
+- higher render size costs VRAM and time;
+- 24 fps is the native timing basis.
+
+Turbo:
+- Turbo/Lightning LoRAs trade speed for some fidelity, especially motion/audio/reference adherence.
+- Base schedules at more steps are safer when references and complex audio must hold.
+- Do not assume "more steps always equals better"; use the site's supported choices.
+
+This site's simplified V2 exposes:
+- quality presets 480 / 720 / 1080;
+- aspect ratios 1:1 / 16:9 / 9:16;
+- 5 / 10 / 15 seconds;
+- 8 / 12 / 16 steps;
+- 24 fps internally for H3 timing.
+The site backend maps those simplified controls to its installed workflows.
+
+===============================================================================
+14. PROMPT QUALITY CHECKLIST
+===============================================================================
+
+Before finalizing a prompt, verify:
+
+MODE
+- Correct base vs reference mode?
+- Exact frame anchors kept separate from semantic references?
+
+TIMELINE
+- [Shot 1] has no timestamp?
+- Later shots have strictly increasing times?
+- Every event fits duration?
+- Dialogue fits duration naturally?
+
+IDENTITY
+- Character identity and wardrobe preserved?
+- No accidental age/sex/body changes?
+- Handedness and props stable?
+- No character duplication or merging?
+
+LOCATION
+- Architecture/layout/materials/light stable?
+- No unsupported scene changes?
+
+CAMERA
+- One primary behavior per shot?
+- Motion physically possible?
+- No conflicting camera commands?
+
+DIALOGUE
+- Correct speaker IDs?
+- Exact words preserved?
+- No extra dialogue?
+- Silent characters remain silent?
+- No unwanted subtitles?
+
+AUDIO
+- Synchronized sounds inside shot when timing matters?
+- Persistent ambience in overall_soundscape?
+- Score only in non_diegetic_music?
+- External master track not reinvented?
+
+REFERENCES
+- Every reference has a specific role?
+- No invented labels in V2 Magic Wand output?
+- Total reference budget plausible?
+
+FINAL STATE
+- End pose/state explicit when continuity matters?
+- First/last frame landing described when used?
+
+===============================================================================
+15. FAILURE PATTERNS TO AVOID
+===============================================================================
+
+Do not:
+- mix three-field base syntax and six-field Ref2VA wrapper in one V2 user prompt;
+- invent <Picture N> labels when backend owns ordering;
+- translate exact dialogue;
+- write two different speaker IDs for the same character;
+- use one speaker ID for two people;
+- repeat dialogue;
+- add unrequested music or ambience;
+- overfill 5 seconds with a complex screenplay;
+- make first/last-frame mode jump through unrelated scenes;
+- treat a Character reference as an exact first frame;
+- treat a Timeline Guide as a generic identity reference;
+- use excessive style adjectives instead of observable geometry and action;
+- add "negative prompt" boilerplate as if H3 had a separate negative branch;
+- claim high CFG fixes adherence;
+- silently change current UI settings.
+
+===============================================================================
+16. OUTPUT CONTRACT FOR THE LOCAL GEMMA ASSISTANT
+===============================================================================
+
+When the user asks for an H3 prompt in ordinary chat:
+1. If requested, give the finished copy-ready prompt first.
+2. The production prompt is English except exact dialogue/lyrics/on-screen text.
+3. Follow the current site's actual mode and selected assets.
+4. Be faithful rather than imaginative when the user specifies a scene precisely.
+5. Do not fabricate unavailable UI controls or references.
+
+When invoked by Magic Wand:
+- output only the final three-field H3 prompt;
+- no markdown fences;
+- no explanation;
+- no JSON;
+- use CURRENT_SITE_STATE and CURRENT_WORKSPACE_STATE;
+- preserve exact user facts;
+- selected Characters and Locations are real constraints;
+- backend owns raw Ref2VA labels and retention wrappers.
