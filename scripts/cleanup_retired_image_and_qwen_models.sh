@@ -10,13 +10,17 @@ if [[ -d /opt/ai/ComfyUI/models ]]; then
 fi
 
 echo "Removing retired Qwen3-8B assistant GGUF files..."
-if [[ -d /opt/ai/models/llm ]]; then
-  find /opt/ai/models/llm -maxdepth 1 -type f \( \
+if [[ -d /opt/ai ]]; then
+  find /opt/ai -type f \( \
     -iname '*qwen3-8b*.gguf' -o \
     -iname '*qwen3_8b*.gguf' -o \
     -iname '*qwen3-8b*.gguf.part' -o \
     -iname '*qwen3_8b*.gguf.part' \
   \) -print -delete
+fi
+
+if [[ -f /opt/ai/aivideosite/.env ]]; then
+  sed -i '/^H3_IMAGE_MODEL=/d;/^H3_IMAGE_VAE=/d' /opt/ai/aivideosite/.env
 fi
 
 echo "Removing retired generated-image storage..."
