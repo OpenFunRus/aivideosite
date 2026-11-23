@@ -48,13 +48,13 @@ Main inputs:
 - Characters;
 - Locations;
 - Misc semantic references;
-- optional driving master track enabled by "Использовать аудиодорожку".
+- optional master track enabled by "Использовать аудиодорожку"; it becomes H3 driving audio only when semantic visual presets are selected.
 
 Prompt:
 - one textarea up to 16,000 characters;
 - one inline Magic Wand;
 - Magic Wand always returns the canonical H3 Video three-field prompt;
-- when audio_mode=true it automatically follows Digital Human/driving-audio rules.
+- when audio_mode=true it follows runtime generation_mode/has_driving_audio: FL2VA master-track rules without semantic presets, Digital Human rules with semantic presets.
 
 Frame inputs:
 - First Frame;
@@ -76,30 +76,37 @@ Normal Video mode:
 - semantic presets + endpoint frames -> Ref2VA semantic references plus exact native Timeline Guides;
 - "Генерировать звук" controls ordinary H3-generated audio.
 
-Driving-audio mode:
+Master-track mode:
 - user enables "Использовать аудиодорожку";
 - user selects a saved master track OR uploads one;
 - waveform selects the start of the 5/10/15-second fragment;
-- the selected fragment becomes the single Digital Human driving audio;
-- there is NO separate arbitrary visual-reference upload;
-- Character/Location/Misc images remain semantic visual references;
-- if no preset visual reference exists, First Frame is reused as the required semantic
-  visual reference; if First is absent, Last Frame is reused instead;
-- First Frame is additionally attached as an exact native MiniMaxH3AddGuide at 0 seconds;
-- Last Frame is additionally attached as an exact native MiniMaxH3AddGuide at the selected duration;
-- endpoint guide images are NOT Picture labels the Magic Wand should invent;
 - normal "Генерировать звук" is hidden in this mode;
 - "Вклеить трек в видео" controls final mux of the original selected fragment;
-- "Фоновые звуки H3" controls only additional generated diegetic/foley scene sound.
+- "Фоновые звуки H3" controls optional generated diegetic/foley scene sound.
 
-Driving-audio prompt rules:
-- master track is already supplied as driving audio;
-- non_diegetic_music: N/A;
+Without Character/Location/Misc semantic visual presets:
+- the master track is NOT supplied to H3 as Digital Human driving audio;
+- no visual reference is required;
+- prompt-only generation uses the ordinary FL2VA/text-to-video path;
+- First/Last use ordinary FL2VA exact endpoint conditioning.
+
+With Character/Location/Misc semantic visual presets:
+- the selected fragment becomes the single Digital Human driving audio;
+- preset images are the required semantic visual references;
+- First Frame is additionally attached as an exact native MiniMaxH3AddGuide at 0 seconds;
+- Last Frame is additionally attached as an exact native MiniMaxH3AddGuide at the selected duration;
+- endpoint guide images are NOT Picture labels the Magic Wand should invent.
+
+Prompt rules:
+- runtime generation_mode and has_driving_audio are authoritative;
+- if has_driving_audio=true, visible articulation/body motion should synchronize to the supplied audio;
+- if has_driving_audio=false, never describe the master track as H3 driving audio and never require a visual reference;
+- with audio_mode=true: non_diegetic_music: N/A;
 - if H3 background sound is OFF: overall_soundscape: N/A;
 - if ON: overall_soundscape contains only additional physical/diegetic scene sound;
-- never invent lyrics;
-- visible articulation/body motion should synchronize to the driving audio.
+- never invent lyrics.
 
+Manual continuation:
 Manual continuation:
 - Library -> export Final Frame PNG;
 - Video -> load it as First Frame;
