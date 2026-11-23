@@ -208,7 +208,7 @@ GPU lanes:
 - RTX3090 primary H3 Video lane;
 - RTX2080 secondary/overflow H3 Video lane.
 
-The retired H3 Image job type no longer exists.
+The retired standalone image-generation job type no longer exists.
 
 Jobs:
 - rolling latest 20 user jobs;
@@ -276,8 +276,8 @@ Shows:
 - RAM/CPU/disk;
 - queue counts and charts.
 
-Both ComfyUI backends remain useful for H3 Video. Removing the H3 Image generator does
-NOT remove the secondary Video backend.
+Both ComfyUI backends remain useful for H3 Video. Removing the standalone image generator
+does NOT remove the secondary Video backend.
 
 ===============================================================================
 12. INSTRUCTION
