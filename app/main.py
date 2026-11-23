@@ -2783,6 +2783,13 @@ def _editor_float(
     return number
 
 
+def _ensure_media(media_id: str, owner_id: str) -> dict:
+    media = db.get_media(media_id, owner_id)
+    if media is None:
+        raise HTTPException(404, "Ролик не найден.")
+    return media
+
+
 _system_cache_lock = threading.Lock()
 _system_cache_at = 0.0
 _system_cache: dict = {}
