@@ -57,6 +57,19 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_characters_owner_created
                 ON characters(owner_id, created_at DESC);
 
+            CREATE TABLE IF NOT EXISTS locations (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                prompt TEXT NOT NULL DEFAULT '',
+                images_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_locations_owner_created
+                ON locations(owner_id, created_at DESC);
+
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
                 owner_id TEXT NOT NULL DEFAULT 'user1',
@@ -642,6 +655,28 @@ def active_character_ids(owner_id: str) -> set[str]:
     return protected
 
 
+def active_location_ids(owner_id: str) -> set[str]:
+    protected: set[str] = set()
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT payload_json
+              FROM jobs
+             WHERE owner_id=? AND status IN ('queued', 'running')
+            """,
+            (owner_id,),
+        ).fetchall()
+    for row in rows:
+        try:
+            payload = json.loads(row["payload_json"])
+        except Exception:
+            continue
+        for item in payload.get("references") or []:
+            if isinstance(item, dict) and item.get("location_id"):
+                protected.add(str(item["location_id"]))
+    return protected
+
+
 def active_media_ids(owner_id: str | None = None) -> set[str]:
     protected: set[str] = set()
     with connect() as conn:
@@ -804,6 +839,101 @@ def delete_character(character_id: str, owner_id: str) -> dict[str, Any] | None:
     return _decode_character(row)
 
 
+def insert_location(
+    *,
+    location_id: str,
+    owner_id: str,
+    name: str,
+    prompt: str,
+    images: list[str],
+) -> None:
+    now = utcnow()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO locations(
+                id, owner_id, name, prompt, images_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                location_id,
+                owner_id,
+                name,
+                prompt,
+                json.dumps(images, ensure_ascii=False),
+                now,
+                now,
+            ),
+        )
+
+
+def list_locations(owner_id: str) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+              FROM locations
+             WHERE owner_id=?
+             ORDER BY created_at DESC
+            """,
+            (owner_id,),
+        ).fetchall()
+    return [_decode_location(row) for row in rows]
+
+
+def get_location(location_id: str, owner_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM locations WHERE id=? AND owner_id=?",
+            (location_id, owner_id),
+        ).fetchone()
+    return _decode_location(row) if row else None
+
+
+def update_location(
+    location_id: str,
+    owner_id: str,
+    *,
+    name: str,
+    prompt: str,
+    images: list[str],
+) -> dict[str, Any] | None:
+    with connect() as conn:
+        cur = conn.execute(
+            """
+            UPDATE locations
+               SET name=?, prompt=?, images_json=?, updated_at=?
+             WHERE id=? AND owner_id=?
+            """,
+            (
+                name,
+                prompt,
+                json.dumps(images, ensure_ascii=False),
+                utcnow(),
+                location_id,
+                owner_id,
+            ),
+        )
+        if cur.rowcount == 0:
+            return None
+    return get_location(location_id, owner_id)
+
+
+def delete_location(location_id: str, owner_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM locations WHERE id=? AND owner_id=?",
+            (location_id, owner_id),
+        ).fetchone()
+        if row is None:
+            return None
+        conn.execute(
+            "DELETE FROM locations WHERE id=? AND owner_id=?",
+            (location_id, owner_id),
+        )
+    return _decode_location(row)
+
+
 def state_counts(owner_id: str | None = None) -> dict[str, int]:
     with connect() as conn:
         if owner_id is None:
@@ -868,6 +998,17 @@ def _decode_media(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def _decode_character(row: sqlite3.Row) -> dict[str, Any]:
+    item = dict(row)
+    try:
+        images = json.loads(item.pop("images_json"))
+        item["images"] = [str(value) for value in images if value]
+    except Exception:
+        item["images"] = []
+        item.pop("images_json", None)
+    return item
+
+
+def _decode_location(row: sqlite3.Row) -> dict[str, Any]:
     item = dict(row)
     try:
         images = json.loads(item.pop("images_json"))

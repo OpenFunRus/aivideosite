@@ -232,6 +232,7 @@ def build_reference_prompt(
     subject_lines: list[str] = []
     retention_lines: list[str] = []
     character_subjects: dict[str, dict[str, Any]] = {}
+    location_subjects: dict[str, dict[str, Any]] = {}
 
     for entry in reference_map:
         char_id = str(entry.get("character_id") or "").strip()
@@ -247,6 +248,20 @@ def build_reference_prompt(
         )
         group["labels"].append(str(entry["label"]))
 
+    for entry in reference_map:
+        location_id = str(entry.get("location_id") or "").strip()
+        if not location_id:
+            continue
+        group = location_subjects.setdefault(
+            location_id,
+            {
+                "name": str(entry.get("location_name") or "Location").strip(),
+                "prompt": str(entry.get("location_prompt") or "").strip(),
+                "labels": [],
+            },
+        )
+        group["labels"].append(str(entry["label"]))
+
     subject_index = 0
     for group in character_subjects.values():
         subject_index += 1
@@ -257,11 +272,25 @@ def build_reference_prompt(
             f"defined by {labels}.{description}".strip()
         )
 
+    for group in location_subjects.values():
+        labels = ", ".join(group["labels"])
+        location_prompt = (
+            f" Location prompt: {group['prompt']}"
+            if group["prompt"]
+            else ""
+        )
+        subject_lines.append(
+            f"Reusable setting \"{group['name']}\" is defined by {labels}. "
+            "Use it as the scene environment/background and preserve its architecture, "
+            "layout, furniture, materials, lighting and spatial continuity."
+            f"{location_prompt}".strip()
+        )
+
     for entry in reference_map:
         label = str(entry["label"])
         role = str(entry.get("role") or "reference").replace("_", " ")
         source_name = str(entry.get("source_name") or "reference")
-        if not entry.get("character_id"):
+        if not entry.get("character_id") and not entry.get("location_id"):
             note = str(entry.get("note") or "").strip()
             note_text = f" {note}" if note else ""
             subject_lines.append(f"{label}: {role} reference \"{source_name}\".{note_text}".strip())

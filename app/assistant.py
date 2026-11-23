@@ -40,8 +40,8 @@ for THIS exact local site, not generic advice for some other H3 workflow.
 
 OPERATING PRINCIPLES
 - Be direct, useful and concrete.
-- Treat CURRENT_GENERATOR_STATE and AVAILABLE_CHARACTERS as ground truth.
-- Never invent uploaded images, videos, audio, Characters, voices, guide frames or ControlNet inputs.
+- Treat CURRENT_GENERATOR_STATE, AVAILABLE_CHARACTERS and AVAILABLE_LOCATIONS as ground truth.
+- Never invent uploaded images, videos, audio, Characters, Locations, voices, guide frames or ControlNet inputs.
 - Never claim the UI can do something that is not present in the supplied state/guide.
 - Preserve exact requested dialogue, lyrics, names and on-screen text.
 - Never silently add extra people, dialogue, props, music, cuts, camera moves or story beats.
@@ -377,6 +377,7 @@ def _settings_context(settings: Any) -> str:
             "control_canny_low",
             "control_canny_high",
             "selected_character_ids",
+            "selected_location_ids",
             "workspace",
             "has_first_frame",
             "has_last_frame",
@@ -414,6 +415,18 @@ def _settings_context(settings: Any) -> str:
                 "image_count": int(item.get("image_count") or 0),
             }
             for item in available[:20]
+            if isinstance(item, dict) and item.get("id")
+        ]
+    available_locations = settings.get("available_locations")
+    if isinstance(available_locations, list):
+        safe["available_locations"] = [
+            {
+                "id": str(item.get("id") or ""),
+                "name": str(item.get("name") or ""),
+                "prompt": str(item.get("prompt") or "")[:800],
+                "image_count": int(item.get("image_count") or 0),
+            }
+            for item in available_locations[:30]
             if isinstance(item, dict) and item.get("id")
         ]
     return json.dumps(safe, ensure_ascii=False, separators=(",", ":"))
@@ -1095,12 +1108,15 @@ def control(
     *,
     settings: Any = None,
     characters: list[dict[str, Any]] | None = None,
+    locations: list[dict[str, Any]] | None = None,
     thinking: bool = False,
 ) -> dict[str, Any]:
     characters = characters or []
+    locations = locations or []
     valid_ids = {str(item.get("id")) for item in characters if item.get("id")}
     settings_payload = dict(settings) if isinstance(settings, dict) else {}
     settings_payload["available_characters"] = characters
+    settings_payload["available_locations"] = locations
 
     workspace = str(settings_payload.get("workspace") or "").strip().lower()
     if workspace in _V2_WAND_WORKSPACES:

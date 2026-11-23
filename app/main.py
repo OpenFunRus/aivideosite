@@ -245,12 +245,14 @@ async def api_assistant_control(
         raise HTTPException(400, "Некорректный запрос управления.")
 
     characters = [_character_public(item) for item in db.list_characters(user_id)]
+    locations = [_location_public(item) for item in db.list_locations(user_id)]
     try:
         return await asyncio.to_thread(
             local_assistant.control,
             payload.get("messages"),
             settings=payload.get("settings"),
             characters=characters,
+            locations=locations,
             thinking=bool(payload.get("thinking")),
         )
     except local_assistant.AssistantUnavailable as exc:
@@ -575,6 +577,183 @@ async def character_image(
     return FileResponse(path)
 
 
+@app.get("/api/locations")
+async def api_locations(user_id: str = Depends(require_user)):
+    return {"locations": [_location_public(item) for item in db.list_locations(user_id)]}
+
+
+@app.post("/api/locations")
+async def api_create_location(
+    name: Annotated[str, Form()],
+    prompt: Annotated[str, Form()] = "",
+    images: list[UploadFile] | None = File(None),
+    user_id: str = Depends(require_user),
+):
+    name = name.strip()
+    prompt = prompt.strip()
+    if not name or len(name) > 80:
+        raise HTTPException(400, "Название локации должно содержать 1–80 символов.")
+    if len(prompt) > 4000:
+        raise HTTPException(400, "Промпт локации слишком длинный.")
+    uploads = [item for item in (images or []) if item.filename]
+    if not uploads:
+        raise HTTPException(400, "Добавьте хотя бы одно изображение локации.")
+    if len(uploads) > 4:
+        raise HTTPException(400, "Для одной локации можно сохранить до 4 изображений.")
+
+    location_id = uuid.uuid4().hex
+    target_dir = settings.location_dir / user_id / location_id
+    target_dir.mkdir(parents=True, exist_ok=False)
+    image_files: list[str] = []
+    temp_paths: list[Path] = []
+    try:
+        for index, upload in enumerate(uploads, start=1):
+            path = await save_upload(upload, kind="image", max_bytes=settings.max_image_upload_bytes)
+            temp_paths.append(path)
+            destination = target_dir / f"image_{index}{path.suffix.lower()}"
+            shutil.move(str(path), str(destination))
+            temp_paths.remove(path)
+            image_files.append(str(destination))
+        db.insert_location(
+            location_id=location_id,
+            owner_id=user_id,
+            name=name,
+            prompt=prompt,
+            images=image_files,
+        )
+    except Exception:
+        for path in temp_paths:
+            path.unlink(missing_ok=True)
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
+    return {"ok": True, "location": _location_public(db.get_location(location_id, user_id))}
+
+
+@app.post("/api/locations/{location_id}")
+async def api_update_location(
+    location_id: str,
+    name: Annotated[str, Form()],
+    prompt: Annotated[str, Form()] = "",
+    images: list[UploadFile] | None = File(None),
+    keep_image_indices: Annotated[str, Form()] = "",
+    user_id: str = Depends(require_user),
+):
+    name = name.strip()
+    prompt = prompt.strip()
+    if not name or len(name) > 80:
+        raise HTTPException(400, "Название локации должно содержать 1–80 символов.")
+    if len(prompt) > 4000:
+        raise HTTPException(400, "Промпт локации слишком длинный.")
+    location = db.get_location(location_id, user_id)
+    if location is None:
+        raise HTTPException(404, "Локация не найдена.")
+
+    existing_images = list(location.get("images") or [])
+    raw_keep_indices = keep_image_indices.strip()
+    if raw_keep_indices:
+        try:
+            parsed_keep_indices = json.loads(raw_keep_indices)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise HTTPException(400, "Некорректный список сохранённых изображений.") from exc
+        if not isinstance(parsed_keep_indices, list):
+            raise HTTPException(400, "Некорректный список сохранённых изображений.")
+        keep_indices: list[int] = []
+        seen_indices: set[int] = set()
+        for value in parsed_keep_indices:
+            if type(value) is not int or value < 0 or value >= len(existing_images):
+                raise HTTPException(400, "Некорректный индекс изображения локации.")
+            if value not in seen_indices:
+                seen_indices.add(value)
+                keep_indices.append(value)
+        keep_indices.sort()
+    else:
+        keep_indices = list(range(len(existing_images)))
+
+    uploads = [item for item in (images or []) if item.filename]
+    if len(keep_indices) + len(uploads) < 1:
+        raise HTTPException(400, "У локации должно остаться хотя бы одно изображение.")
+    if len(keep_indices) + len(uploads) > 4:
+        raise HTTPException(400, "Для одной локации можно сохранить до 4 изображений.")
+    media_changed = keep_indices != list(range(len(existing_images))) or bool(uploads)
+    if media_changed and location_id in db.active_location_ids(user_id):
+        raise HTTPException(
+            409,
+            "Локация используется активной задачей. Референсы можно менять после её завершения.",
+        )
+
+    target_dir = settings.location_dir / user_id / location_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    next_images = [existing_images[index] for index in keep_indices]
+    created_paths: list[Path] = []
+    temp_paths: list[Path] = []
+    try:
+        for upload in uploads:
+            path = await save_upload(upload, kind="image", max_bytes=settings.max_image_upload_bytes)
+            temp_paths.append(path)
+            destination = target_dir / f"image_{uuid.uuid4().hex[:12]}{path.suffix.lower()}"
+            shutil.move(str(path), str(destination))
+            temp_paths.remove(path)
+            created_paths.append(destination)
+            next_images.append(str(destination))
+        updated = db.update_location(
+            location_id,
+            user_id,
+            name=name,
+            prompt=prompt,
+            images=next_images,
+        )
+        if updated is None:
+            raise HTTPException(404, "Локация не найдена.")
+    except Exception:
+        for path in temp_paths:
+            path.unlink(missing_ok=True)
+        for path in created_paths:
+            path.unlink(missing_ok=True)
+        raise
+
+    kept_paths = set(next_images)
+    for old_path in existing_images:
+        if old_path in kept_paths:
+            continue
+        try:
+            Path(old_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+    return {"ok": True, "location": _location_public(updated)}
+
+
+@app.delete("/api/locations/{location_id}")
+async def api_delete_location(location_id: str, user_id: str = Depends(require_user)):
+    if location_id in db.active_location_ids(user_id):
+        raise HTTPException(
+            409,
+            "Локация используется активной задачей. Дождитесь завершения или отмените задачу.",
+        )
+    location = db.delete_location(location_id, user_id)
+    if location is None:
+        raise HTTPException(404, "Локация не найдена.")
+    shutil.rmtree(settings.location_dir / user_id / location_id, ignore_errors=True)
+    return {"ok": True}
+
+
+@app.get("/locations/{location_id}/image/{image_index}")
+async def location_image(
+    location_id: str,
+    image_index: int,
+    user_id: str = Depends(require_user),
+):
+    location = db.get_location(location_id, user_id)
+    if location is None:
+        raise HTTPException(404, "Локация не найдена.")
+    images = location.get("images") or []
+    if image_index < 0 or image_index >= len(images):
+        raise HTTPException(404, "Изображение не найдено.")
+    path = Path(images[image_index])
+    if not path.is_file():
+        raise HTTPException(404, "Файл изображения не найден.")
+    return FileResponse(path)
+
+
 @app.post("/api/generate")
 async def api_generate(
     request: Request,
@@ -591,6 +770,7 @@ async def api_generate(
     reference_task: Annotated[str, Form()] = "reference_generation",
     ref_image_size: Annotated[str, Form()] = "match",
     character_ids: Annotated[str, Form()] = "[]",
+    location_ids: Annotated[str, Form()] = "[]",
     muted_character_ids: Annotated[str, Form()] = "[]",
     reference_manifest: Annotated[str, Form()] = "{}",
     guide_manifest: Annotated[str, Form()] = "{}",
@@ -795,6 +975,10 @@ async def api_generate(
                             "character_description": character.get("description") or "",
                         }
                     )
+
+            reference_items.extend(
+                _v2_location_references(_v2_location_ids(location_ids), user_id)
+            )
 
             manifest = parse_reference_manifest(reference_manifest)
 
@@ -1017,6 +1201,24 @@ def _v2_character_ids(raw: str) -> list[str]:
     return result
 
 
+def _v2_location_ids(raw: str) -> list[str]:
+    try:
+        value = json.loads(raw or "[]")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, "Некорректный список локаций.") from exc
+    if not isinstance(value, list):
+        raise HTTPException(400, "Некорректный список локаций.")
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        location_id = str(item).strip()
+        if not location_id or location_id in seen:
+            continue
+        seen.add(location_id)
+        result.append(location_id)
+    return result
+
+
 @app.post("/api/v2/generate")
 async def api_v2_generate(
     request: Request,
@@ -1028,6 +1230,7 @@ async def api_v2_generate(
     seed: Annotated[str, Form()] = "",
     generate_audio: Annotated[bool, Form()] = True,
     character_ids: Annotated[str, Form()] = "[]",
+    location_ids: Annotated[str, Form()] = "[]",
     muted_character_ids: Annotated[str, Form()] = "[]",
     first_frame: UploadFile | None = File(None),
     last_frame: UploadFile | None = File(None),
@@ -1040,6 +1243,7 @@ async def api_v2_generate(
 
     width, height = _v2_resolution(quality, ratio)
     selected_characters = _v2_character_ids(character_ids)
+    selected_locations = _v2_location_ids(location_ids)
     has_first = first_frame is not None and bool(first_frame.filename)
     has_last = last_frame is not None and bool(last_frame.filename)
 
@@ -1056,9 +1260,10 @@ async def api_v2_generate(
         seed_value = -1
 
     has_exact_frames = has_first or has_last
-    if selected_characters and has_exact_frames:
+    has_semantic_references = bool(selected_characters or selected_locations)
+    if has_semantic_references and has_exact_frames:
         generation_mode = "multiframe"
-    elif selected_characters:
+    elif has_semantic_references:
         generation_mode = "reference"
     else:
         generation_mode = "frames"
@@ -1099,6 +1304,7 @@ async def api_v2_generate(
         ),
         ref_image_size="match",
         character_ids=json.dumps(selected_characters),
+        location_ids=json.dumps(selected_locations),
         muted_character_ids=json.dumps(_v2_character_ids(muted_character_ids)),
         reference_manifest="{}",
         guide_manifest=json.dumps(
@@ -1208,6 +1414,36 @@ def _v2_character_references(
                     "character_id": character_id,
                     "character_name": character["name"],
                     "character_description": character.get("description") or "",
+                }
+            )
+    return items
+
+
+def _v2_location_references(location_ids: list[str], user_id: str) -> list[dict]:
+    items: list[dict] = []
+    for location_id in location_ids:
+        location = db.get_location(location_id, user_id)
+        if location is None:
+            raise HTTPException(404, "Одна из выбранных локаций не найдена.")
+        for path_value in location.get("images") or []:
+            path = Path(path_value)
+            if not path.is_file():
+                raise HTTPException(409, f"У локации «{location['name']}» отсутствует файл изображения.")
+            items.append(
+                {
+                    "type": "image",
+                    "path": str(path),
+                    "temporary": False,
+                    "source_name": path.name,
+                    "role": "setting",
+                    "retention": "fully_preserved",
+                    "location_id": location_id,
+                    "location_name": location["name"],
+                    "location_prompt": location.get("prompt") or "",
+                    "note": (
+                        "Reusable location reference. Use it as the scene environment/background "
+                        "and keep spatial continuity stable."
+                    ),
                 }
             )
     return items
@@ -1610,12 +1846,14 @@ async def api_v2_continue(
     seed: Annotated[str, Form()] = "",
     generate_audio: Annotated[bool, Form()] = True,
     character_ids: Annotated[str, Form()] = "[]",
+    location_ids: Annotated[str, Form()] = "[]",
     muted_character_ids: Annotated[str, Form()] = "[]",
     source_video: UploadFile | None = File(None),
     user_id: str = Depends(require_user),
 ):
     _v2_validate_simple_settings(seconds, steps)
     selected = _v2_character_ids(character_ids)
+    selected_locations = _v2_location_ids(location_ids)
     temporary_paths: list[Path] = []
     try:
         source_item, source_width, source_height = await _v2_source_video(
@@ -1632,6 +1870,7 @@ async def api_v2_continue(
             include_voice=True,
             muted_character_ids=set(_v2_character_ids(muted_character_ids)),
         )
+        items.extend(_v2_location_references(selected_locations, user_id))
         items.append(source_item)
         job_id = _v2_enqueue_reference_job(
             user_id=user_id,
@@ -1679,6 +1918,7 @@ async def api_v2_audio(
     steps: Annotated[int, Form()] = 12,
     seed: Annotated[str, Form()] = "",
     character_ids: Annotated[str, Form()] = "[]",
+    location_ids: Annotated[str, Form()] = "[]",
     track_id: Annotated[str, Form()] = "",
     audio_start: Annotated[float, Form()] = 0.0,
     embed_track: Annotated[bool, Form()] = True,
@@ -1693,6 +1933,7 @@ async def api_v2_audio(
 
     width, height = _v2_resolution(quality, ratio)
     selected = _v2_character_ids(character_ids)
+    selected_locations = _v2_location_ids(location_ids)
     has_upload = audio is not None and bool(audio.filename)
     if bool(track_id.strip()) == bool(has_upload):
         raise HTTPException(
@@ -1708,6 +1949,7 @@ async def api_v2_audio(
             user_id,
             include_voice=False,
         )
+        items.extend(_v2_location_references(selected_locations, user_id))
 
         if visual_reference is not None and visual_reference.filename:
             suffix = Path(visual_reference.filename).suffix.lower()
@@ -1742,7 +1984,7 @@ async def api_v2_audio(
         if not any(item.get("type") in {"image", "video"} for item in items):
             raise HTTPException(
                 400,
-                "Для генерации по аудио выберите Character или добавьте визуальный референс.",
+                "Для генерации по аудио выберите персонажа, локацию или добавьте визуальный референс.",
             )
 
         if has_upload:
@@ -1871,6 +2113,7 @@ async def api_v2_clip(
     steps: Annotated[int, Form()] = 12,
     seed: Annotated[str, Form()] = "",
     character_ids: Annotated[str, Form()] = "[]",
+    location_ids: Annotated[str, Form()] = "[]",
     track_id: Annotated[str, Form()] = "",
     source_video: UploadFile | None = File(None),
     master_audio: UploadFile | None = File(None),
@@ -1888,6 +2131,7 @@ async def api_v2_clip(
         )
 
     selected = _v2_character_ids(character_ids)
+    selected_locations = _v2_location_ids(location_ids)
     temporary_paths: list[Path] = []
     created_track_id: str | None = None
     try:
@@ -1929,6 +2173,7 @@ async def api_v2_clip(
             user_id,
             include_voice=False,
         )
+        items.extend(_v2_location_references(selected_locations, user_id))
         items.extend(
             [
                 source_item,
@@ -2525,6 +2770,27 @@ def _character_public(character: dict | None) -> dict:
         "preview_url": image_urls[0] if image_urls else None,
         "created_at": character.get("created_at"),
         "updated_at": character.get("updated_at"),
+    }
+
+
+def _location_public(location: dict | None) -> dict:
+    if not location:
+        return {}
+    images = location.get("images") or []
+    version = str(location.get("updated_at") or "")
+    image_urls = [
+        f"/locations/{location['id']}/image/{index}?v={version}"
+        for index in range(len(images))
+    ]
+    return {
+        "id": location["id"],
+        "name": location["name"],
+        "prompt": location.get("prompt") or "",
+        "image_count": len(images),
+        "image_urls": image_urls,
+        "preview_url": image_urls[0] if image_urls else None,
+        "created_at": location.get("created_at"),
+        "updated_at": location.get("updated_at"),
     }
 
 
