@@ -5,8 +5,9 @@
   const { app, state, qs, qsa, saveDraft } = api;
 
   const titleMap = {
-    create: "Создать видео",
+    create: "Видео",
     audio: "Видео по аудио",
+    images: "Генерация изображений",
     library: "Библиотека",
     queue: "Очередь",
     editor: "Монтаж",
