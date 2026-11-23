@@ -437,6 +437,11 @@ class JobWorker(threading.Thread):
         except (JobCancelled, ComfyUICancelled):
             output_path.unlink(missing_ok=True)
             raise
+        except Exception:
+            # Preserve temporary inputs for failed-job Retry, but never leave a
+            # partial generated MP4 orphaned in the Library directory.
+            output_path.unlink(missing_ok=True)
+            raise
 
     def _editor_export(self, job: dict[str, Any]) -> str:
         payload = job["payload"]
