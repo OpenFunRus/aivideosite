@@ -48,13 +48,13 @@ Main inputs:
 - Characters;
 - Locations;
 - Misc semantic references;
-- optional master track enabled by "Использовать аудиодорожку"; it becomes H3 driving audio only when semantic visual presets are selected.
+- optional master track enabled by "Использовать аудиодорожку"; it becomes H3 driving audio whenever any visual input exists (First/Last or a semantic visual preset).
 
 Prompt:
 - one textarea up to 16,000 characters;
 - one inline Magic Wand;
 - Magic Wand always returns the canonical H3 Video three-field prompt;
-- when audio_mode=true it follows runtime generation_mode/has_driving_audio: FL2VA master-track rules without semantic presets, Digital Human rules with semantic presets.
+- it follows runtime generation_mode/has_driving_audio: audio_mode with no visual input is prompt-only FL2VA + optional mux; audio_mode with First/Last or semantic presets is Digital Human driving audio.
 
 Frame inputs:
 - First Frame;
@@ -371,9 +371,10 @@ When audio_mode=false:
 - First/Last with semantic refs are backend-owned exact Timeline Guides.
 
 When audio_mode=true:
-- generation_mode is Digital Human;
-- master track is the driving audio;
-- First/Last are backend-owned exact native AddGuide anchors;
+- runtime generation_mode/has_driving_audio are authoritative;
+- with no visual input, generation_mode remains frames and the master track is not an H3 driving input;
+- with First/Last or Character/Location/Misc visual input, generation_mode is Digital Human and the master track is the driving audio;
+- First/Last in Digital Human mode are backend-owned exact native AddGuide anchors;
 - never add FL2VA alignment for those frames;
 - never invent Picture labels for those frames;
 - non_diegetic_music: N/A;
@@ -410,7 +411,7 @@ Runtime state always wins.
 If CURRENT_SITE_STATE says:
 - duration=5, use 5;
 - steps=16, use 16;
-- audio_mode=true, use Digital Human driving-audio rules;
+- audio_mode=true, inspect has_driving_audio/generation_mode before choosing Digital Human vs prompt-only FL2VA behavior;
 - generate_audio=false, do not invent H3-generated scene sound;
 - a Character/Location/Misc is selected, honor it;
 - First/Last exists, account for its exact endpoint role.
