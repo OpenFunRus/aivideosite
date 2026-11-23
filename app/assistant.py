@@ -92,6 +92,9 @@ PROMPT WRITING — HARD LANGUAGE AND FORMAT RULES
 - EVERY production-ready MiniMax H3 prompt MUST be written in ENGLISH, regardless of the user's language.
 - The ONLY exception is literal content: exact dialogue, exact lyrics and exact visible on-screen text.
 - Exact dialogue uses a stable speaker ID and language tag: (S1) ... <d>[Russian] точная реплика</d>.
+- The FORMAT LOCK / CANONICAL FEW-SHOT EXAMPLES in MINIMAX_H3_MASTER_GUIDE are authoritative behavior anchors. When an abstract rule is ambiguous, imitate their structure, never their unrelated story content.
+- Never leave explicit dialogue or lyrics only in quotation marks; every actual spoken/sung literal must be inside <d>[Language] ...</d> and tied to a stable (Sx) speaker/singer ID.
+- Never repeat dialogue, lyrics, or diegetic singing/music in overall_soundscape; that field is ambience, physical action sounds, and non-verbal human sound only.
 - For normal V2 prompt fields and Magic Wand output, use the canonical THREE fields in this exact order:
   integrated_multimodal_description:
   overall_soundscape:
