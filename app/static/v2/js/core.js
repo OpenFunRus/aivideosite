@@ -11,6 +11,7 @@
     draft: "aivideosite-" + userId + "-v2-draft",
     view: "aivideosite-" + userId + "-v2-view",
     recentCharacters: "aivideosite-" + userId + "-v2-recent-characters",
+    assistantUserPrompt: "aivideosite-" + userId + "-v2-assistant-user-prompt",
   };
 
   const state = {
@@ -92,6 +93,26 @@
       } catch {}
     }
     if (!copyFallback(value)) throw new Error("copy failed");
+  };
+
+  const getAssistantUserPrompt = () => {
+    try {
+      return String(localStorage.getItem(keys.assistantUserPrompt) || "").slice(0, 12000);
+    } catch {
+      return "";
+    }
+  };
+
+  const setAssistantUserPrompt = (value) => {
+    const text = String(value || "").slice(0, 12000);
+    try {
+      if (text) localStorage.setItem(keys.assistantUserPrompt, text);
+      else localStorage.removeItem(keys.assistantUserPrompt);
+    } catch {}
+    window.dispatchEvent(new CustomEvent("v2:assistant-user-prompt-change", {
+      detail: { configured: Boolean(text) },
+    }));
+    return text;
   };
 
   const fetchJson = async (url, options = {}) => {
@@ -193,6 +214,8 @@
     showToast,
     escapeHtml,
     copyText,
+    getAssistantUserPrompt,
+    setAssistantUserPrompt,
     readStoredJson,
     saveDraft,
     loadDraft,
