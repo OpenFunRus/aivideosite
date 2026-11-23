@@ -23,7 +23,7 @@
 - полноэкранный гайд по MiniMax H3 прямо в интерфейсе: FL2VA/Ref2VA/Timeline/Digital Human, Characters, roles/retention, ControlNet, video editing/continuation, shots/timing, camera, dialogue/audio, ограничения и примеры;
 - отдельный machine-readable H3 Video guide: `/static/h3-prompting-guide-ai.txt`; copy-paste контекст для ChatGPT объединяет структуру V2 и этот актуальный guide;
 - опциональное нативное аудио MiniMax H3 через Audio VAE, выключено по умолчанию;
-- prompt и все параметры генерации автоматически сохраняются в localStorage и восстанавливаются после перезагрузки;
+- prompt и все восстанавливаемые параметры генерации автоматически сохраняются в per-user localStorage: quality/ratio/duration/steps/seed, H3 audio, master-track mode, saved track + waveform position, embed/scene-sound toggles, selected Character/Location/Misc, muted Character voices и активная preset-вкладка; browser security не позволяет восстановить локальные First/Last или загруженный с диска audio File после reload;
 - очередь GPU-задач с хранением состояния в SQLite;
 - генерация продолжает работать после закрытия браузера;
 - библиотека роликов с просмотром и скачиванием;
