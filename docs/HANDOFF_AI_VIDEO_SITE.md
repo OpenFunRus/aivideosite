@@ -26,25 +26,34 @@
 
 ### Реализованные V2 workspace
 
-- **Создать**: prompt + magic wand, Characters, first/last previews, 480/720/1080, 1:1/16:9/9:16, 5/10/15 sec, 8/12/16 steps, seed, sound. `POST /api/v2/generate` мапит упрощённую форму в существующий H3 pipeline и общую очередь. First/Last без Characters остаются FL2VA anchors; Characters + First/Last переключаются на Ref2VA + native Timeline Guides, поэтому identity/voice refs персонажей можно сочетать с точным стартом/финишем.
-- **Продолжить**: reference-style workspace — prompt сверху, источник отдельной карточкой, `Из библиотеки / Загрузить файл` на всю ширину, выбранный ролик с duration/resolution/size, кнопки 480/720/1080 + 1:1/16:9/9:16 + 5/10/15 sec + 8/12/16 steps. Source video автоматически задаёт ближайшие quality/ratio defaults, но пользователь может их изменить. Ref2VA `video_continuation`, Characters и magic wand сохранены.
-- **По аудио**: prompt сверху; saved/uploaded master track; waveform с одним draggable-блоком длиной 5/10/15 сек из нижней общей настройки; пользователь двигает только начало, конец = `start + duration + 1 sec reserve`; start/end показываются как компактная read-only информация. Digital Human всегда получает driving fragment для синхронизации. Отдельные toggles: **«Вклеить трек в видео»** (ON по умолчанию) и **«Фоновые звуки H3»** (OFF по умолчанию). Если включены оба, worker FFmpeg смешивает оригинальный fragment с H3 scene audio. Новый master track сохраняется per-user в `data/audio_tracks/<user_id>/`; сохранённые треки доступны через auth-protected stream endpoint. Visual reference поддерживает image или short video; Character справа также считается visual reference.
-- **Продолжить клип**: previous video + сохранённый master track + start time. Backend FFmpeg вырезает только нужный аудиосегмент; результат сохраняет `track_id/audio_start/audio_end`, поэтому Library → «След. клип» автоматически восстанавливает тот же track и следующую позицию.
-- **Библиотека**: видео, metadata/prompt/settings, download/delete, Continue, next clip, отправка в Editor. Первые 40 preview, затем «Показать ещё».
-- **Очередь**: личные jobs, progress/stage/timers, Cancel/Retry/Delete/Result; отдельно показана общая занятость RTX3090/RTX2080 и пользователь текущей H3-задачи.
-- **Монтаж**: persistent per-user browser project, Library → последовательный Video 1 timeline, drag reorder, zoom, Snap 0.5s, monitor timecode, trim, split, clip volume, video/audio fade in/out, отдельный Music track с offset/trim/length/volume, Space/Delete keyboard basics и background FFmpeg export в Library.
-- **Чат**: отдельный streaming Gemma4 26B A4B Heretic chat, Thinking, per-user browser history, 128k context meter; backend резервирует output и удаляет из model request самые старые полные user+assistant turns. Для token count используется llama.cpp `/tokenize`, при недоступности — conservative fallback.
-- **Система**: GPU/VRAM/load/temp, active user/job, Gemma target/state, оба ComfyUI, RAM, CPU load, disk.
-- **Инструкция**: обучение по V2/H3 и copy-paste контекст для ChatGPT. Кнопка объединяет `v2-chatgpt-site-guide.txt` с актуальным `h3-prompting-guide-ai.txt`.
+- **Видео**: единая форма для всех новых H3-роликов. Prompt + magic wand, Characters/Locations/«Прочее», First/Last previews, 480/720/1080, 1:1/16:9/9:16, 5/10/15 sec, 8/12/16 steps и Seed.
+  - без master track: обычный FL2VA / Ref2VA / exact Timeline Guides;
+  - галочка **«Использовать аудиодорожку»** раскрывает saved/uploaded master track + waveform;
+  - в audio-mode используется Digital Human с одним driving fragment;
+  - отдельного arbitrary visual-reference upload больше нет;
+  - Characters/Locations/«Прочее» остаются visual semantic refs;
+  - если presets не выбраны, First Frame (или Last, если First нет) одновременно служит обязательным visual reference Digital Human;
+  - First Frame дополнительно закрепляется native `MiniMaxH3AddGuide` на 0 сек;
+  - Last Frame — native `MiniMaxH3AddGuide` на выбранной длительности;
+  - **«Вклеить трек в видео»** управляет финальным FFmpeg mux;
+  - **«Фоновые звуки H3»** включает только дополнительный scene/foley audio;
+  - обычная галочка «Генерировать звук» скрывается, пока включён master track.
+- **Библиотека**: видео, metadata/prompt/settings, download/delete и извлечение Start/Final PNG для продолжения через Video → First Frame.
+- **Очередь**: rolling personal job log, Cancel/Retry/Result и общая занятость RTX3090/RTX2080.
+- **Монтаж**: persistent per-user browser project, последовательный Video 1 timeline, drag reorder, zoom, Snap 0.5s, monitor timecode, trim, split, clip volume, fades, отдельный Music track и FFmpeg export.
+- **Чат**: streaming Gemma4 26B A4B Heretic, Thinking, per-user browser history, 128k context meter; получает единый `create_state`, включая audio_mode/master-track state.
+- **Система**: GPU/VRAM/load/temp, active jobs, Gemma target/state, оба ComfyUI, RAM, CPU load, disk.
+- **Инструкция**: обучение по текущему V2/H3 и copy-paste контекст для ChatGPT из `v2-chatgpt-site-guide.txt` + `h3-prompting-guide-ai.txt`.
 
 ### Важные технические решения V2
 
-- quality mapping на backend: 480 → short side 480, 720 → 736, 1080 → 1088; размеры округляются **вверх** до сетки ×32. Например 1280×720 continuation → 1280×736.
-- Exact FL2VA first/last anchors и Ref2VA Characters — разные MiniMaxH3Easy modes. В Create V2 их смешивание явно блокируется, вместо молчаливого игнорирования одного conditioning path.
-- Queue/Library/dual-GPU worker/SQLite/ComfyUI архитектура не дублируются: V2 переиспользует рабочий backend V1.
-- Editor сейчас является последовательным Video 1 timeline + отдельный Music track. Multiple composited visual layers не имитируются.
-- V2 user config больше не фиксирован на трёх профилях: поддерживаются `SITE_USERS_JSON` и произвольные `SITE_USER<N>_...` entries.
-- Runtime H3, Digital Human, FFmpeg editor, Qwen context и полный визуальный responsive pass ещё должны быть проверены пользователем на реальной Ubuntu VM.
+- Отдельной страницы **«Видео по аудио» нет**: driving audio — режим единого генератора «Видео».
+- Standard MiniMaxH3Easy Digital Human сам не использует FL2VA First/Last. Поэтому endpoint frames в audio-mode прикладываются поверх Digital Human conditioning через native `MiniMaxH3AddGuide`.
+- quality mapping на backend: 480 → short side 480, 720 → 736, 1080 → 1088; размеры округляются вверх до сетки ×32.
+- Queue/Library/dual-GPU worker/SQLite/ComfyUI архитектура общая для всех Video jobs.
+- Editor — последовательный Video 1 timeline + отдельный Music track; multiple composited visual layers не имитируются.
+- V2 user config поддерживает `SITE_USERS_JSON` и произвольные `SITE_USER<N>_...` entries.
+- Runtime Digital Human + exact First/Last AddGuide, FFmpeg audio mix и полный responsive pass требуют пользовательского smoke test на реальной Ubuntu VM.
 
 Подробный план: `docs/v2/PLAN.md`.
 
