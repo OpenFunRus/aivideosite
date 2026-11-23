@@ -220,6 +220,14 @@
             generate_audio: audioMode ? Boolean(audioContext.generate_scene_audio) : Boolean(qs("#v2-audio")?.checked),
             has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
             has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
+            endpoint_mode:
+              qs("#v2-first-frame")?.files?.[0] && qs("#v2-last-frame")?.files?.[0]
+                ? "first_last"
+                : qs("#v2-first-frame")?.files?.[0]
+                  ? "first"
+                  : qs("#v2-last-frame")?.files?.[0]
+                    ? "last"
+                    : "none",
           },
           thinking: false,
         }),
