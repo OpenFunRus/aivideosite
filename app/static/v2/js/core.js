@@ -34,6 +34,10 @@
       seed: "",
       audio: true,
       useTrack: false,
+      embedTrack: true,
+      sceneSound: false,
+      trackId: "",
+      audioStart: 0,
     },
   };
 
@@ -131,6 +135,7 @@
           selectedCharacterIds: Array.from(state.selectedCharacterIds),
           selectedLocationIds: Array.from(state.selectedLocationIds),
           selectedMiscIds: Array.from(state.selectedMiscIds),
+          presetTab: state.presetTab,
         })
       );
       localStorage.setItem(keys.view, state.view);
@@ -144,11 +149,15 @@
   const loadDraft = () => {
     const saved = readStoredJson(keys.draft, {});
     if (saved && typeof saved === "object") {
-      ["prompt", "quality", "ratio", "seconds", "steps", "seed"].forEach((key) => {
+      ["prompt", "quality", "ratio", "seconds", "steps", "seed", "trackId"].forEach((key) => {
         if (saved[key] !== undefined && saved[key] !== null) state.draft[key] = String(saved[key]);
       });
       if (typeof saved.audio === "boolean") state.draft.audio = saved.audio;
       if (typeof saved.useTrack === "boolean") state.draft.useTrack = saved.useTrack;
+      if (typeof saved.embedTrack === "boolean") state.draft.embedTrack = saved.embedTrack;
+      if (typeof saved.sceneSound === "boolean") state.draft.sceneSound = saved.sceneSound;
+      if (Number.isFinite(Number(saved.audioStart))) state.draft.audioStart = Math.max(0, Number(saved.audioStart));
+      if (["characters", "locations", "misc"].includes(saved.presetTab)) state.presetTab = saved.presetTab;
       if (Array.isArray(saved.selectedCharacterIds)) {
         state.selectedCharacterIds = new Set(saved.selectedCharacterIds.map(String));
       }
