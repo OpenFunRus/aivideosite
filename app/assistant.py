@@ -57,11 +57,14 @@ for THIS exact local site, not generic advice for some other H3 workflow.
 
 OPERATING PRINCIPLES
 - Be direct, useful and concrete.
-- Treat CURRENT_SITE_STATE, AVAILABLE_CHARACTERS and AVAILABLE_LOCATIONS as ground truth.
+- Treat CURRENT_SITE_STATE, AVAILABLE_CHARACTERS, AVAILABLE_LOCATIONS and AVAILABLE_MISC as ground truth.
 - The three physical context files are authoritative background knowledge and are loaded into every effective assistant request because the llama.cpp chat-completions endpoint is stateless.
-- Never invent uploaded images, videos, audio, Characters, Locations, voices, guide frames or ControlNet inputs.
-- When the user asks which Characters or Locations are selected, use CURRENT_SITE_STATE.selected_characters and CURRENT_SITE_STATE.selected_locations as the human-readable source of truth.
-- Never show internal Character/Location IDs to the user unless the user explicitly asks for IDs. Use preset names instead.
+- Never invent uploaded images, videos, audio, Characters, Locations, Misc presets, voices, guide frames or ControlNet inputs.
+- When the user asks which presets are selected, use CURRENT_SITE_STATE.selected_characters, CURRENT_SITE_STATE.selected_locations and CURRENT_SITE_STATE.selected_misc as the human-readable source of truth.
+- Never show internal Character/Location/Misc IDs to the user unless the user explicitly asks for IDs. Use preset names instead.
+- Selected Misc presets are REAL H3 semantic visual references, not text-only notes. Respect their name, category/category_label, description and image_count.
+- Interpret Misc categories by role: prop=object; clothing_gear=wearable identity; weapon=object; vehicle=object; creature=living subject; environment_feature=environment/set piece; visual_trait=visible attribute; pose_action=pose/motion cue; style_look=visual style/look; other=follow its saved description.
+- Misc references are semantic constraints. Never confuse them with exact First Frame, Last Frame or Timeline Guide anchors.
 - For each selected Character, report its name, saved description when relevant, image_count, and voice_label/voice_preset_name. A built-in voice preset is a real saved voice reference even though the user did not upload a custom audio file.
 - Do not say a Character has no voice merely because no custom audio file was uploaded. Check voice_source, voice_preset_name, voice_label, and voice_muted first.
 - Never claim the UI can do something that is not present in the supplied state/guide.
@@ -160,7 +163,7 @@ CHAT_SYSTEM = (
     "Do not force every answer into H3 prompt fields. Only produce a copy-ready production prompt when the user "
     "explicitly asks for a prompt or asks you to rewrite one; otherwise discuss the idea normally first. "
     "When a production H3 prompt is explicitly requested, follow the reference guide below accurately. "
-    "When reporting current selections, always use human-readable Character/Location names and metadata, never internal IDs unless the user explicitly asks for IDs. "
+    "When reporting current selections, always use human-readable Character/Location/Misc names and metadata, never internal IDs unless the user explicitly asks for IDs. "
     "A built-in Character voice preset counts as a configured voice; do not describe it as missing just because no custom audio file was uploaded. "
     "Keep answers conversational and useful; avoid repetitive boilerplate. Never reveal hidden reasoning.\n\n"
     "================ THREE-FILE BOOTSTRAP KNOWLEDGE ================\n\n"
@@ -174,8 +177,8 @@ CONTROL_SYSTEM = (
     "Shape: "
     '{"message":"short explanation in the user language","changes":{...}}. '
     "Only include fields that truly need to change. "
-    "Never fabricate uploaded files, reference media or Character IDs. "
-    "You may select only Character IDs present in AVAILABLE_CHARACTERS. "
+    "Never fabricate uploaded files, reference media or Character/Location/Misc IDs. "
+    "You may select only IDs present in AVAILABLE_CHARACTERS, AVAILABLE_LOCATIONS or AVAILABLE_MISC for their matching fields. "
     "If the user asks for a production-ready prompt for a V2 prompt field, put it in changes.prompt using the canonical three fields integrated_multimodal_description / overall_soundscape / non_diegetic_music in that exact order. All THREE fields are mandatory, even when one or both sound fields are N/A. Write it in ENGLISH only, except exact dialogue/lyrics/on-screen text. Preserve every concrete user fact exactly: numeric age, count, direction, handedness, props, weather, requested actions and exact dialogue. Do not generalize 35 to early 30s. Do not invent thunder, footsteps, extra actions, music, people or environmental events that the user did not request. If the described camera changes to a new framing via a cut/switch, represent it as a new [Shot N] with an exact increasing timestamp. Do not invent low-level Ref2VA labels or ordinals; the backend maps real references. "
     "If no form change is required, return an empty changes object.\n\n"
     + H3_EXPERT_GUIDE
@@ -200,6 +203,8 @@ control_end_percent: number 0..1
 control_canny_low: number 0.01..0.99
 control_canny_high: number 0.01..0.99
 selected_character_ids: array of IDs from AVAILABLE_CHARACTERS
+selected_location_ids: array of IDs from AVAILABLE_LOCATIONS
+selected_misc_ids: array of IDs from AVAILABLE_MISC
 """.strip()
 )
 
@@ -402,6 +407,7 @@ def _settings_context(settings: Any) -> str:
             "control_canny_high",
             "selected_character_ids",
             "selected_location_ids",
+            "selected_misc_ids",
             "muted_character_ids",
             "workspace",
             "active_view",
@@ -497,6 +503,21 @@ def _settings_context(settings: Any) -> str:
             if isinstance(item, dict) and item.get("name")
         ]
 
+
+    selected_misc = settings.get("selected_misc")
+    if isinstance(selected_misc, list):
+        safe["selected_misc"] = [
+            {
+                "name": str(item.get("name") or ""),
+                "category": str(item.get("category") or "other"),
+                "category_label": str(item.get("category_label") or "Другое"),
+                "description": str(item.get("description") or "")[:4000],
+                "image_count": int(item.get("image_count") or 0),
+            }
+            for item in selected_misc[:100]
+            if isinstance(item, dict) and item.get("name")
+        ]
+
     available = settings.get("available_characters")
     if isinstance(available, list):
         safe["available_characters"] = [
@@ -526,6 +547,22 @@ def _settings_context(settings: Any) -> str:
                 "selected": bool(item.get("selected")),
             }
             for item in available_locations[:100]
+            if isinstance(item, dict) and item.get("id")
+        ]
+
+    available_misc = settings.get("available_misc")
+    if isinstance(available_misc, list):
+        safe["available_misc"] = [
+            {
+                "id": str(item.get("id") or ""),
+                "name": str(item.get("name") or ""),
+                "category": str(item.get("category") or "other"),
+                "category_label": str(item.get("category_label") or "Другое"),
+                "description": str(item.get("description") or "")[:4000],
+                "image_count": int(item.get("image_count") or 0),
+                "selected": bool(item.get("selected")),
+            }
+            for item in available_misc[:100]
             if isinstance(item, dict) and item.get("id")
         ]
     return json.dumps(safe, ensure_ascii=False, separators=(",", ":"))
@@ -1125,7 +1162,15 @@ def _source_literal_validation_issues(
 
     return issues
 
-def sanitize_changes(value: Any, *, valid_character_ids: set[str]) -> dict[str, Any]:
+def sanitize_changes(
+    value: Any,
+    *,
+    valid_character_ids: set[str],
+    valid_location_ids: set[str] | None = None,
+    valid_misc_ids: set[str] | None = None,
+) -> dict[str, Any]:
+    valid_location_ids = valid_location_ids or set()
+    valid_misc_ids = valid_misc_ids or set()
     if not isinstance(value, dict):
         return {}
     result: dict[str, Any] = {}
@@ -1199,6 +1244,22 @@ def sanitize_changes(value: Any, *, valid_character_ids: set[str]) -> dict[str, 
             if str(item) in valid_character_ids
         ]
 
+    location_ids = value.get("selected_location_ids")
+    if isinstance(location_ids, list):
+        result["selected_location_ids"] = [
+            str(item)
+            for item in location_ids
+            if str(item) in valid_location_ids
+        ]
+
+    misc_ids = value.get("selected_misc_ids")
+    if isinstance(misc_ids, list):
+        result["selected_misc_ids"] = [
+            str(item)
+            for item in misc_ids
+            if str(item) in valid_misc_ids
+        ]
+
     return result
 
 
@@ -1208,14 +1269,19 @@ def control(
     settings: Any = None,
     characters: list[dict[str, Any]] | None = None,
     locations: list[dict[str, Any]] | None = None,
+    misc: list[dict[str, Any]] | None = None,
     thinking: bool = False,
 ) -> dict[str, Any]:
     characters = characters or []
     locations = locations or []
-    valid_ids = {str(item.get("id")) for item in characters if item.get("id")}
+    misc = misc or []
+    valid_character_ids = {str(item.get("id")) for item in characters if item.get("id")}
+    valid_location_ids = {str(item.get("id")) for item in locations if item.get("id")}
+    valid_misc_ids = {str(item.get("id")) for item in misc if item.get("id")}
     settings_payload = dict(settings) if isinstance(settings, dict) else {}
     settings_payload["available_characters"] = characters
     settings_payload["available_locations"] = locations
+    settings_payload["available_misc"] = misc
 
     workspace = str(settings_payload.get("workspace") or "").strip().lower()
     if workspace in _V2_WAND_WORKSPACES:
@@ -1240,5 +1306,10 @@ def control(
     content = _request_control_content(payload)
     decoded = _decode_control_json(content)
     message = str(decoded.get("message") or "Настройки обновлены.").strip()[:4000]
-    changes = sanitize_changes(decoded.get("changes"), valid_character_ids=valid_ids)
+    changes = sanitize_changes(
+        decoded.get("changes"),
+        valid_character_ids=valid_character_ids,
+        valid_location_ids=valid_location_ids,
+        valid_misc_ids=valid_misc_ids,
+    )
     return {"message": message, "changes": changes}

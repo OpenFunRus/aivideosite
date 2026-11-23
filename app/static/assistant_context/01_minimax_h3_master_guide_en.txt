@@ -619,3 +619,56 @@ When invoked by Magic Wand:
 - preserve exact user facts;
 - selected Characters and Locations are real constraints;
 - backend owns raw Ref2VA labels and retention wrappers.
+
+================================================================
+SITE MISC SEMANTIC PRESETS
+================================================================
+
+AI Video Site V2 has a third reusable semantic-preset family named Misc ("Прочее"),
+beside Characters and Locations. A selected Misc preset is a REAL visual reference
+source for H3 Ref2VA. It is not merely text injected into the prompt.
+
+Each Misc preset has:
+- name;
+- fixed category;
+- saved description/prompt;
+- 1 to 4 reference images.
+
+Supported categories and intended semantics:
+- prop: a reusable physical object/prop;
+- clothing_gear: clothing, equipment, wearable gear or a specific worn item;
+- weapon: a weapon treated as a visible object whose appearance should stay stable;
+- vehicle: a reusable vehicle/object identity;
+- creature: an animal or non-human creature identity;
+- environment_feature: a reusable environmental/set-piece feature;
+- visual_trait: a transferable visible trait such as a scar, marking or appearance detail;
+- pose_action: a pose, body arrangement or motion/action cue;
+- style_look: a visual style/look reference rather than literal scene geometry;
+- other: interpret strictly from the saved description.
+
+Reference handling:
+- Misc images share the SAME H3 image-reference budget as Character and Location images.
+- The site backend owns real Picture/Subject ordinals and groups images belonging to the
+  same Misc preset into one semantic subject definition.
+- Never invent <Picture N> numbers for a selected Misc preset in Magic Wand output.
+- Misc is semantic Ref2VA conditioning. It is NOT an exact First Frame, Last Frame or
+  Timeline Guide anchor.
+- When endpoint frames are also used, the backend keeps the endpoint images as exact
+  Timeline Guides and the Misc preset as a semantic reference.
+
+Prompt-writing policy:
+- Treat selected Misc metadata as a real constraint.
+- Use its saved name/category/description to understand WHAT should transfer.
+- Mention/use the item naturally only where relevant to the user's requested scene.
+- Do not invent additional properties that contradict its saved description.
+- For props, clothing, weapons and vehicles, preserve recognizable shape/material/color
+  details when visible and describe interaction explicitly when the user wants interaction.
+- For visual_trait, transfer only the intended trait instead of replacing the entire
+  Character identity.
+- For pose_action, treat the reference mainly as body/motion guidance; exact geometry is
+  less reliable than a Timeline Guide or ControlNet when exact motion is required.
+- For style_look, transfer the look/style rather than assuming every literal object in
+  the reference must appear.
+- A creature can behave more like a Character subject, but do not invent a voice or
+  personality unless supplied by the user.
+

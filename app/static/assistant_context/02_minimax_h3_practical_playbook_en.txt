@@ -551,3 +551,40 @@ The best "hack" is not a secret keyword.
 It is:
 correct mode + correct structure + concrete chronology + clean reference roles +
 stable identity + explicit audio separation + realistic duration budget.
+
+================================================================
+MISC PRESET PRACTICAL PLAYBOOK
+================================================================
+
+Use Misc presets when a visual element must recur across clips without turning it into
+a Character or Location.
+
+Good examples:
+- "Soviet cassette player" as prop, with clean front/side images;
+- "red field jacket" as clothing_gear, focused on the garment rather than a whole scene;
+- "diagonal scar over left eyebrow" as visual_trait;
+- a specific old car as vehicle with multiple useful angles;
+- a characteristic stance as pose_action;
+- a lighting/graphic treatment as style_look.
+
+Reliability rules:
+1. Keep one preset semantically coherent. Do not mix unrelated objects in its 1–4 images.
+2. Multiple angles of the same object are usually more useful than near-duplicate shots.
+3. The description should state the invariant details worth preserving: form, materials,
+   dominant colors, markings, wear, attachment/holding point, or intended transferable trait.
+4. If the object must be held/used, say who interacts with it, in which hand/body position,
+   and what it does. A reference alone does not fully specify scene interaction.
+5. Clothing/gear refs should be applied to the intended Character without replacing that
+   Character's face/body identity.
+6. visual_trait should describe the local trait precisely; avoid asking H3 to transfer an
+   entire unrelated face just to obtain one scar/tattoo/marking.
+7. pose_action is a semantic cue, not guaranteed frame-perfect choreography. Use Timeline
+   Guides or ControlNet when exact geometry/timing matters.
+8. style_look is best treated as appearance/cinematography guidance; do not copy accidental
+   subjects or props from the style reference.
+9. Misc images consume the same image budget as Characters and Locations. Prefer the
+   smallest useful set of clean references instead of spending all slots automatically.
+10. When a selected Misc conflicts with an explicit current user request, do not silently
+    force the preset into an unrelated role. Preserve the preset's identity while following
+    the user's explicit scene intent.
+
