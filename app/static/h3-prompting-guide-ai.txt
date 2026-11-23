@@ -625,6 +625,7 @@ For V2 prompt improvement:
 - do not change settings;
 - output changes.prompt only;
 - use canonical three fields;
+- never append the normal-chat recommendation footer (Mode / Duration / FPS / Steps / H3 Audio);
 - use English instructions;
 - preserve exact literal dialogue/lyrics/on-screen text;
 - exact shot timing for selected duration;
