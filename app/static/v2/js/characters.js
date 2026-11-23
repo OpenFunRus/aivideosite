@@ -691,7 +691,7 @@
     const addCard =
       '<button class="v2-character-add-card" type="button" data-character-add-card>' +
         '<span class="v2-character-add-card-icon"><svg class="icon"><use href="/static/icons.svg#icon-plus"></use></svg></span>' +
-        '<strong>Добавить персонажа</strong>' +
+        '<strong><span>Добавить</span><span>персонажа</span></strong>' +
       '</button>';
 
     const characterCards = list.map((character) => {
