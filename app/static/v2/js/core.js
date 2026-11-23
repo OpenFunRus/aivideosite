@@ -172,6 +172,11 @@
     if (Array.isArray(recent)) state.recentCharacterIds = recent.map(String).slice(0, 30);
   };
 
+  // Hydrate persisted state before any later V2 module can render or save defaults.
+  // bootstrap.js calls loadDraft again harmlessly, but dependent modules must see the
+  // stored draft during their own initialization.
+  loadDraft();
+
   window.AIVideoV2 = {
     app,
     userId,
