@@ -110,6 +110,11 @@ class ComfyUIClient:
                         {
                             "name": stage_file(str(item.get("path") or ""), f"guide_{index:02d}"),
                             "time_seconds": float(item.get("time_seconds") or 0.0),
+                            "frame_idx": (
+                                int(item["frame_idx"])
+                                if item.get("frame_idx") is not None
+                                else None
+                            ),
                             "source_name": str(item.get("source_name") or f"Guide {index}"),
                         }
                     )
@@ -623,7 +628,11 @@ class ComfyUIClient:
                         "vae": ["13", 2],
                         "audio_vae": ["13", 3],
                         "image": [load_id, 0],
-                        "frame_idx": int(round(float(guide.get("time_seconds") or 0.0) * fps)),
+                        "frame_idx": (
+                            int(guide["frame_idx"])
+                            if guide.get("frame_idx") is not None
+                            else int(round(float(guide.get("time_seconds") or 0.0) * fps))
+                        ),
                     },
                 }
                 positive_ref = [guide_id, 0]
