@@ -8,6 +8,16 @@
   const promptCount = qs("#v2-prompt-count");
   const seed = qs("#v2-seed");
   const audio = qs("#v2-audio");
+  const promptClear = qs("#v2-prompt-clear");
+
+  const resolvedVideoSize = () => {
+    const shortSide = ({ "480": 480, "720": 736, "1080": 1088 })[String(state.draft.quality)] || 736;
+    const ratio = ({ "1:1": [1, 1], "16:9": [16, 9], "9:16": [9, 16] })[String(state.draft.ratio)] || [16, 9];
+    const gridUp = (value) => Math.ceil(value / 32) * 32;
+    if (ratio[0] === ratio[1]) return shortSide + "x" + shortSide;
+    if (ratio[0] > ratio[1]) return gridUp(shortSide * ratio[0] / ratio[1]) + "x" + shortSide;
+    return shortSide + "x" + gridUp(shortSide * ratio[1] / ratio[0]);
+  };
 
   const applySegment = (setting, value, save = true) => {
     const group = qs('[data-setting="' + setting + '"]');
@@ -32,12 +42,21 @@
     if (promptCount && prompt) {
       promptCount.textContent = prompt.value.length.toLocaleString("ru-RU") + " / 16 000";
     }
+    if (promptClear) promptClear.disabled = !prompt?.value;
   };
 
   prompt?.addEventListener("input", () => {
     state.draft.prompt = prompt.value;
     updatePromptCount();
     saveDraft();
+  });
+  promptClear?.addEventListener("click", () => {
+    if (!prompt) return;
+    prompt.value = "";
+    state.draft.prompt = "";
+    updatePromptCount();
+    saveDraft();
+    prompt.focus();
   });
   seed?.addEventListener("input", () => {
     state.draft.seed = seed.value;
@@ -183,6 +202,13 @@
             ...(api.currentAssistantSettings?.() || {}),
             ...audioContext,
             workspace: "create",
+            quality: String(state.draft.quality || "720"),
+            resolution_shape: String(state.draft.ratio || "16:9"),
+            resolution: resolvedVideoSize(),
+            seconds: Number(state.draft.seconds || 10),
+            fps: 24,
+            steps: Number(state.draft.steps || 12),
+            seed: String(state.draft.seed || "").trim() ? Number(state.draft.seed) : -1,
             audio_mode: audioMode,
             has_driving_audio: audioDrivesH3,
             generation_mode: audioDrivesH3
