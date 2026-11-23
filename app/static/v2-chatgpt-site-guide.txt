@@ -48,25 +48,25 @@ The waveform selects the start of the 5/10/15-second fragment.
 
 The runtime generation mode depends on visual inputs.
 
-WITHOUT Characters/Locations/Misc:
-- the master track is NOT sent to H3 as Digital Human driving audio;
+WITHOUT ANY VISUAL INPUT:
 - prompt only -> ordinary base FL2VA/text-to-video path;
-- First only, Last only, or First+Last -> ordinary FL2VA exact endpoint conditioning;
-- no visual reference is required;
-- "Вклеить трек в видео" muxes the selected original fragment into the final MP4;
-- "Фоновые звуки H3" optionally generates scene audio before the final mux.
+- the master track is NOT sent to H3 as Digital Human driving audio;
+- the selected original fragment may still be muxed into the final MP4.
 
-WITH Characters/Locations/Misc:
+WITH First/Last OR Characters/Locations/Misc:
 - the selected fragment becomes the single Digital Human driving audio;
-- the selected presets provide the required semantic visual references;
-- First Frame is an exact native MiniMaxH3AddGuide anchor at 0 seconds;
-- Last Frame is an exact native MiniMaxH3AddGuide anchor at the selected duration;
-- endpoint images are backend-owned guides, not Picture labels for the prompt.
+- Characters/Locations/Misc provide semantic visual references when selected;
+- otherwise the first available endpoint image (First preferred, otherwise Last) is reused as the required Digital Human visual reference;
+- First Frame is also an exact native MiniMaxH3AddGuide anchor at 0 seconds;
+- Last Frame is also an exact native MiniMaxH3AddGuide anchor at the selected duration;
+- endpoint images are backend-owned guides, not Picture labels for the prompt;
+- visible singing, articulation, gestures and body motion should follow the driving audio.
 
 Prompt rules:
 - runtime generation_mode and has_driving_audio are authoritative;
 - when has_driving_audio=true, synchronize visible mouth/body performance to the supplied audio;
-- when has_driving_audio=false, do NOT claim the master track is driving H3 and do NOT require a visual reference;
+- when First/Last or any semantic visual preset exists, has_driving_audio=true;
+- has_driving_audio=false only for prompt-only audio mode with no visual input;
 - with audio_mode=true, non_diegetic_music: N/A;
 - overall_soundscape: N/A when H3 scene sound is OFF;
 - when ON, request only physical/diegetic scene sound;
