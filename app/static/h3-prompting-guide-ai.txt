@@ -409,39 +409,62 @@ The backend supplies the real video-reference labels and Ref2VA wrapper.
 
 Purpose:
 The single V2 "Видео" workspace can optionally enable "Использовать аудиодорожку".
-When enabled, the selected MASTER TRACK fragment becomes the Digital Human driving audio.
+The selected MASTER TRACK fragment is always the clip's master audio source, but it is
+sent to H3 as Digital Human driving audio only when a semantic visual preset exists.
 
 There is NO separate "Видео по аудио" workspace and NO arbitrary visual-reference upload.
-Visual identity/environment comes from the same inputs as normal Video:
+Visual inputs come from the same Video controls:
 - Characters;
 - Locations;
 - Misc ("Прочее");
 - optional First Frame;
 - optional Last Frame.
 
-Digital Human still requires at least one visual semantic reference.
-If no Character/Location/Misc visual reference is selected, the backend reuses the first
-available endpoint image (First Frame preferred, otherwise Last Frame) as the required
-semantic visual reference.
+MODE A — MASTER TRACK + NO SEMANTIC VISUAL PRESETS
 
-EXACT FIRST / LAST IN AUDIO MODE:
-The Easy-node Digital Human branch itself is Ref2VA + locked driving audio and does not
-use the ordinary FL2VA First/Last branch. This site therefore applies endpoint images
-separately through native MiniMaxH3AddGuide:
-- First Frame -> exact guide at 0 seconds;
-- Last Frame -> exact guide at the selected video duration.
-These guide images are NOT Picture references in Magic Wand output. Never invent their
-Picture ordinals or add an FL2VA alignment line while audio_mode=true.
+If no Character/Location/Misc visual reference is selected:
+- DO NOT use Digital Human;
+- DO NOT require a visual reference;
+- prompt only -> ordinary FL2VA/text-to-video generation;
+- First only -> ordinary FL2VA First endpoint;
+- Last only -> ordinary FL2VA Last endpoint;
+- First + Last -> ordinary FL2VA First -> Last endpoint conditioning;
+- the selected master-track fragment is muxed into the final MP4 when embed_track is ON;
+- generate_scene_audio may add H3 physical/diegetic scene sound before the final mux.
+
+In this mode has_driving_audio=false even though audio_mode=true.
+Never tell the prompt that the master track is driving H3.
+Do not invent synchronization to unheard lyrics or rhythm.
+
+MODE B — MASTER TRACK + SEMANTIC VISUAL PRESETS
+
+If Character/Location/Misc visual references are selected:
+- the selected master-track fragment becomes the Digital Human driving audio;
+- the selected presets provide the required semantic visual references;
+- has_driving_audio=true;
+- First Frame is attached separately through native MiniMaxH3AddGuide at frame 0;
+- Last Frame is attached separately through native MiniMaxH3AddGuide at the final frame;
+- endpoint guide images are NOT Picture references in Magic Wand output.
 
 The user separately chooses:
 - "Вклеить трек в видео" / embed_track;
 - "Фоновые звуки H3" / generate_scene_audio.
 
-CRITICAL:
-The master track is already supplied to H3 as driving audio.
-It is NOT non-diegetic music H3 should invent or recreate.
-Therefore audio_mode prompts use:
+PROMPT RULES FOR BOTH AUDIO-MODE BRANCHES
 
+Runtime generation_mode and has_driving_audio are authoritative.
+
+When has_driving_audio=true:
+- synchronize visible articulation/body motion to the supplied driving audio;
+- do not invent or recreate the master song;
+- do not add FL2VA Picture alignment for endpoint guides.
+
+When has_driving_audio=false:
+- use normal FL2VA prompt rules;
+- First/Last are normal endpoint conditioning;
+- no visual reference is required.
+
+With audio_mode=true:
 non_diegetic_music: N/A
 
 If generate_scene_audio is OFF:
@@ -457,28 +480,6 @@ overall_soundscape contains only additional physical/diegetic scene sounds such 
 
 Do NOT describe the master song again in overall_soundscape.
 Do NOT invent lyrics.
-
-Describe the VISIBLE performance:
-- mouth articulation if singing/speech is intended;
-- gaze;
-- torso/arm motion;
-- feet planted vs stepping;
-- gesture accents;
-- camera;
-- interaction with microphone/instrument/props.
-
-When First/Last are attached:
-- compose motion so the scene can plausibly begin at the exact First Frame;
-- if Last Frame exists, make the final action converge toward that exact endpoint;
-- do not add reference labels for those endpoint images.
-
-Example:
-
-integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium close-up frames the performer facing the camera as the supplied driving audio plays. She performs with natural mouth articulation synchronized to the driving track, keeps both feet planted, gently shifts her shoulders to the rhythm, and raises her left hand once at chest height. The camera pushes in with small amplitude at slow speed. [Shot 2] At 00:06.000, the camera cuts to a close-up as she keeps performing, lowers her hand, and holds eye contact with the lens through the end of the segment.
-
-overall_soundscape: N/A
-
-non_diegetic_music: N/A
 
 ======================================================================
 13. CONTINUE CLIP WORKSPACE
