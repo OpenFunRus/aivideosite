@@ -433,9 +433,8 @@ def _chat_payload(
     if not normalized or normalized[-1]["role"] != "user":
         raise ValueError("Сообщение пользователя отсутствует.")
 
-    think_directive = "<|think|>\n" if thinking else ""
     prepared: list[dict[str, str]] = [
-        {"role": "system", "content": think_directive + system_prompt}
+        {"role": "system", "content": system_prompt}
     ]
     settings_json = _settings_context(settings)
     if settings_json:
@@ -466,7 +465,10 @@ def _chat_payload(
         "model": MODEL_NAME,
         "stream": stream,
         "temperature": temperature,
+        "top_p": 0.95,
+        "top_k": 64,
         "max_tokens": max_tokens,
+        "chat_template_kwargs": {"enable_thinking": bool(thinking)},
         "messages": prepared,
     }
 
@@ -480,9 +482,8 @@ def context_usage(
 ) -> dict[str, int]:
     normalized = normalize_messages(messages)
     max_tokens = 2400 if thinking else 1400
-    think_directive = "<|think|>\n" if thinking else ""
     system_messages: list[dict[str, str]] = [
-        {"role": "system", "content": think_directive + CHAT_SYSTEM}
+        {"role": "system", "content": CHAT_SYSTEM}
     ]
     settings_json = _settings_context(settings)
     if settings_json:
@@ -520,7 +521,7 @@ def stream_chat(
         settings=settings,
         stream=True,
         max_tokens=2400 if thinking else 1400,
-        temperature=0.58,
+        temperature=1.0,
         thinking=thinking,
     )
     try:
@@ -629,33 +630,32 @@ def _extract_json(text: str) -> dict[str, Any]:
 
 
 def _request_control_content(payload: dict[str, Any]) -> str:
-    primary = dict(payload)
-    primary["response_format"] = {"type": "json_object"}
-    for candidate in (primary, payload):
-        try:
-            response = requests.post(
-                f"{LLM_URL}/v1/chat/completions",
-                json=candidate,
-                timeout=(8, 180),
-            )
-        except requests.RequestException as exc:
-            raise AssistantUnavailable(f"Не удалось обратиться к локальной LLM: {exc}") from exc
-        if not response.ok:
-            if candidate is primary:
-                continue
-            data = _safe_json(response)
-            raise AssistantUnavailable(
-                str(data.get("error") or data.get("detail") or f"LLM HTTP {response.status_code}")
-            )
+    # Gemma 4 + llama.cpp can get stuck entirely in reasoning_content when
+    # response_format/json grammar is enabled, finishing with empty content.
+    # Ask for plain text JSON and validate/parse it ourselves instead.
+    candidate = dict(payload)
+    candidate.pop("response_format", None)
+    try:
+        response = requests.post(
+            f"{LLM_URL}/v1/chat/completions",
+            json=candidate,
+            timeout=(8, 180),
+        )
+    except requests.RequestException as exc:
+        raise AssistantUnavailable(f"Не удалось обратиться к локальной LLM: {exc}") from exc
+    if not response.ok:
         data = _safe_json(response)
-        choices = data.get("choices") or []
-        if not choices:
-            raise AssistantUnavailable("LLM вернула пустой ответ.")
-        content = (choices[0].get("message") or {}).get("content")
-        if not content:
-            raise AssistantUnavailable("LLM не вернула JSON управления.")
-        return str(content)
-    raise AssistantUnavailable("LLM не приняла запрос управления.")
+        raise AssistantUnavailable(
+            str(data.get("error") or data.get("detail") or f"LLM HTTP {response.status_code}")
+        )
+    data = _safe_json(response)
+    choices = data.get("choices") or []
+    if not choices:
+        raise AssistantUnavailable("LLM вернула пустой ответ.")
+    content = (choices[0].get("message") or {}).get("content")
+    if not content:
+        raise AssistantUnavailable("LLM не вернула JSON управления.")
+    return str(content)
 
 
 def _request_plain_content(payload: dict[str, Any]) -> str:
@@ -756,7 +756,7 @@ def _generate_v2_wand_prompt(
         system_prompt=_v2_wand_system(),
         stream=False,
         max_tokens=2800 if thinking else 1800,
-        temperature=0.08,
+        temperature=1.0,
         thinking=thinking,
     )
     return _extract_h3_prompt_text(_request_plain_content(payload))
@@ -914,7 +914,7 @@ def _repair_control_prompt(
         system_prompt=repair_system,
         stream=False,
         max_tokens=2800 if thinking else 1800,
-        temperature=0.0,
+        temperature=1.0,
         thinking=thinking,
     )
     prompt = _extract_h3_prompt_text(_request_plain_content(payload))
@@ -965,7 +965,7 @@ def _clean_v2_wand_prompt(
         system_prompt=cleanup_system,
         stream=False,
         max_tokens=2800 if thinking else 1800,
-        temperature=0.0,
+        temperature=1.0,
         thinking=thinking,
     )
     return _extract_h3_prompt_text(_request_plain_content(payload))
@@ -1119,7 +1119,7 @@ def control(
         system_prompt=CONTROL_SYSTEM,
         stream=False,
         max_tokens=2200 if thinking else 1200,
-        temperature=0.15,
+        temperature=1.0,
         thinking=thinking,
     )
     content = _request_control_content(payload)

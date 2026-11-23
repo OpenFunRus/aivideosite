@@ -118,6 +118,8 @@ class AssistantManager:
             "--parallel",
             "1",
             "--jinja",
+            "--reasoning-format",
+            "deepseek",
         ]
 
         if gpu is None:

@@ -296,3 +296,17 @@ watch -n 0.5 nvidia-smi
 - Если модель вообще не использовала канонический H3 label, её непустой текст всё равно показывается в textarea.
 - Причина: небольшую локальную модель лучше направлять хорошими инструкциями, а не превращать post-validation в точку отказа.
 - Окончательное решение о качестве prompt остаётся за пользователем.
+
+
+## Gemma4 inference compatibility
+
+For Gemma4 the assistant follows the model-card sampling defaults:
+- temperature=1.0;
+- top_p=0.95;
+- top_k=64.
+
+Thinking is controlled through llama.cpp chat-template kwargs (enable_thinking), not by manually appending Qwen-style /think tokens.
+
+The manager starts llama-server with reasoning-format=deepseek so reasoning is returned separately from final content.
+
+Control mode deliberately does not use OpenAI response_format/json_object. Current llama.cpp Gemma4 structured-output handling can consume the full generation in the thought channel and return empty content; the site instead asks for plain JSON text and validates it server-side.
