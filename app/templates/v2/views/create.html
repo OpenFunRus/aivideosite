@@ -55,6 +55,102 @@
           </label>
         </div>
 
+        <section class="v2-tool-card v2-audio-track-card v2-create-audio-card">
+          <div class="v2-audio-card-heading v2-create-audio-heading">
+            <span class="v2-audio-card-icon v2-heading-icon">
+              <svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg>
+            </span>
+            <span>
+              <strong>Аудиодорожка</strong>
+              <small>Включи режим, выбери трек и нужный фрагмент. Начальный/конечный кадры сверху остаются точными визуальными anchors.</small>
+            </span>
+            <label class="v2-check v2-create-audio-toggle">
+              <input id="v2-use-track" type="checkbox">
+              <span class="v2-check-mark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>
+              <span>Использовать аудиодорожку</span>
+            </label>
+          </div>
+
+          <div class="v2-create-audio-body" id="v2-audio-track-body" hidden>
+            <div class="v2-audio-source-tabs v2-source-actions">
+              <button class="active" id="v2-audio-library-tab" type="button" data-audio-source-mode="library">
+                <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>
+                <span>Из библиотеки</span>
+              </button>
+              <button id="v2-audio-upload-tab" type="button" data-audio-source-mode="upload">
+                <svg class="icon"><use href="/static/icons.svg#icon-download"></use></svg>
+                <span>Загрузить файл</span>
+              </button>
+              <input id="v2-audio-file" type="file" accept="audio/*" hidden>
+            </div>
+
+            <div class="v2-audio-source-picker" id="v2-audio-source-picker">
+              <label class="v2-field" id="v2-audio-library-picker">
+                <span>Сохранённый master track</span>
+                <select id="v2-audio-track">
+                  <option value="">Выберите сохранённый трек…</option>
+                </select>
+              </label>
+              <div class="v2-audio-upload-hint" id="v2-audio-upload-hint" hidden>
+                Нажми «Загрузить файл» выше и выбери аудиодорожку.
+              </div>
+            </div>
+
+            <div class="v2-audio-selected" id="v2-audio-selected" hidden>
+              <div class="v2-audio-selected-head">
+                <span class="v2-audio-file-icon">
+                  <svg class="icon"><use href="/static/icons.svg#icon-music"></use></svg>
+                </span>
+                <div class="v2-audio-file-info">
+                  <strong id="v2-audio-file-name">track.mp3</strong>
+                  <div class="v2-audio-file-meta">
+                    <span id="v2-audio-track-duration">—</span>
+                    <span id="v2-audio-track-bitrate">—</span>
+                    <span id="v2-audio-track-size">—</span>
+                    <b id="v2-audio-track-format">AUDIO</b>
+                  </div>
+                </div>
+                <button class="v2-secondary-button v2-audio-replace" id="v2-audio-replace" type="button">
+                  <svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg>
+                  <span>Заменить</span>
+                </button>
+              </div>
+
+              <div class="v2-audio-timeline-row">
+                <button class="v2-audio-play" id="v2-audio-play" type="button" title="Прослушать выбранный фрагмент">
+                  <svg class="icon"><use href="/static/icons.svg#icon-player-play"></use></svg>
+                </button>
+                <div class="v2-audio-wave-stage" id="v2-audio-wave-stage">
+                  <canvas id="v2-audio-waveform"></canvas>
+                  <div class="v2-audio-window" id="v2-audio-window">
+                    <span class="v2-audio-window-label" id="v2-audio-window-label">10 сек</span>
+                  </div>
+                </div>
+                <strong class="v2-audio-total-time" id="v2-audio-total-time">00:00.0</strong>
+              </div>
+
+              <div class="v2-audio-range-info">
+                <span><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Начало <strong id="v2-audio-start-label">00:00.0</strong></span>
+                <span><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Конец <strong id="v2-audio-end-label">00:11.0 (авто)</strong></span>
+                <span class="v2-audio-range-note">Конец рассчитывается по длительности видео с техническим запасом 1 сек.</span>
+              </div>
+            </div>
+
+            <div class="v2-create-audio-options">
+              <label class="v2-check v2-audio-output-option" title="Оригинальный выбранный фрагмент трека будет вклеен в итоговый MP4 после генерации.">
+                <input id="v2-audio-embed-track" type="checkbox" checked>
+                <span class="v2-check-mark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>
+                <span>Вклеить трек в видео</span>
+              </label>
+              <label class="v2-check v2-audio-output-option" title="H3 дополнительно сгенерирует физические и фоновые звуки сцены.">
+                <input id="v2-audio-scene-sound" type="checkbox">
+                <span class="v2-check-mark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>
+                <span>Фоновые звуки H3</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
         <section class="v2-settings-card v2-generator-settings">
           <div class="v2-setting-group">
             <span class="v2-setting-label"><svg class="icon"><use href="/static/icons.svg#icon-adjustments"></use></svg>Качество</span>
@@ -93,7 +189,7 @@
               <span># Seed</span>
               <input id="v2-seed" type="number" inputmode="numeric" placeholder="Авто (-1)">
             </label>
-            <label class="v2-check">
+            <label class="v2-check" id="v2-generate-sound-option">
               <input id="v2-audio" type="checkbox" checked>
               <span class="v2-check-mark"><svg class="icon"><use href="/static/icons.svg#icon-check"></use></svg></span>
               <span>Генерировать звук</span>
