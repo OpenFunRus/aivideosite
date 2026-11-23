@@ -774,6 +774,7 @@
     return {
       ...audioContext,
       workspace: "create",
+      user_prompt: String(api.getAssistantUserPrompt?.() || ""),
       prompt: String(qs("#v2-prompt")?.value ?? state.draft.prompt ?? ""),
       quality: String(qs('[data-setting="quality"] button.active')?.dataset.value || state.draft.quality || "720"),
       resolution_shape: String(qs('[data-setting="ratio"] button.active')?.dataset.value || state.draft.ratio || "16:9"),
