@@ -757,25 +757,47 @@
     }
   };
 
-  const currentCreateAssistantSettings = () => ({
-    workspace: "create",
-    prompt: String(qs("#v2-prompt")?.value ?? state.draft.prompt ?? ""),
-    quality: String(qs('[data-setting="quality"] button.active')?.dataset.value || state.draft.quality || "720"),
-    resolution_shape: String(qs('[data-setting="ratio"] button.active')?.dataset.value || state.draft.ratio || "16:9"),
-    seconds: Number(qs('[data-setting="seconds"] button.active')?.dataset.value || state.draft.seconds || 10),
-    fps: 24,
-    steps: Number(qs('[data-setting="steps"] button.active')?.dataset.value || state.draft.steps || 12),
-    seed: String(qs("#v2-seed")?.value || "").trim()
-      ? Number(qs("#v2-seed")?.value)
-      : -1,
-    generate_audio: Boolean(qs("#v2-audio")?.checked),
-    has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
-    has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
-    selected_character_ids: Array.from(state.selectedCharacterIds).map(String),
-    selected_location_ids: Array.from(state.selectedLocationIds || []).map(String),
-    selected_misc_ids: Array.from(state.selectedMiscIds || []).map(String),
-    muted_character_ids: mutedCharacterIds().map(String),
-  });
+  const currentCreateAssistantSettings = () => {
+    const audioContext = window.AIVideoV2Workspaces?.audioAssistantContext?.() || {};
+    const audioMode = Boolean(audioContext.audio_mode);
+    const hasFrames = Boolean(
+      qs("#v2-first-frame")?.files?.[0] ||
+      qs("#v2-last-frame")?.files?.[0]
+    );
+    const hasPresets = Boolean(
+      state.selectedCharacterIds.size ||
+      state.selectedLocationIds?.size ||
+      state.selectedMiscIds?.size
+    );
+
+    return {
+      workspace: "create",
+      prompt: String(qs("#v2-prompt")?.value ?? state.draft.prompt ?? ""),
+      quality: String(qs('[data-setting="quality"] button.active')?.dataset.value || state.draft.quality || "720"),
+      resolution_shape: String(qs('[data-setting="ratio"] button.active')?.dataset.value || state.draft.ratio || "16:9"),
+      seconds: Number(qs('[data-setting="seconds"] button.active')?.dataset.value || state.draft.seconds || 10),
+      fps: 24,
+      steps: Number(qs('[data-setting="steps"] button.active')?.dataset.value || state.draft.steps || 12),
+      seed: String(qs("#v2-seed")?.value || "").trim()
+        ? Number(qs("#v2-seed")?.value)
+        : -1,
+      audio_mode: audioMode,
+      generation_mode: audioMode
+        ? "digital_human"
+        : (hasFrames ? (hasPresets ? "multiframe" : "frames") : (hasPresets ? "reference" : "frames")),
+      reference_task: audioMode ? "audio_reference" : (hasFrames && hasPresets ? "timeline_guides" : "reference_generation"),
+      generate_audio: audioMode
+        ? Boolean(audioContext.generate_scene_audio)
+        : Boolean(qs("#v2-audio")?.checked),
+      has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
+      has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
+      selected_character_ids: Array.from(state.selectedCharacterIds).map(String),
+      selected_location_ids: Array.from(state.selectedLocationIds || []).map(String),
+      selected_misc_ids: Array.from(state.selectedMiscIds || []).map(String),
+      muted_character_ids: mutedCharacterIds().map(String),
+      ...audioContext,
+    };
+  };
 
   characterSearch?.addEventListener("input", renderCharacterGrid);
 
