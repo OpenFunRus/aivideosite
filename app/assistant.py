@@ -22,10 +22,12 @@ CONTEXT_SAFETY_TOKENS = 1200
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 ASSISTANT_CONTEXT_DIR = STATIC_DIR / "assistant_context"
 H3_IMAGE_GUIDE_PATH = STATIC_DIR / "h3-image-prompting-guide-ai.txt"
-ASSISTANT_CONTEXT_FILES = (
+VIDEO_ASSISTANT_CONTEXT_FILES = (
     ("MINIMAX_H3_MASTER_GUIDE", ASSISTANT_CONTEXT_DIR / "01_minimax_h3_master_guide_en.txt"),
     ("MINIMAX_H3_PRACTICAL_PLAYBOOK", ASSISTANT_CONTEXT_DIR / "02_minimax_h3_practical_playbook_en.txt"),
     ("AI_VIDEO_SITE_V2_OPERATOR_MAP", ASSISTANT_CONTEXT_DIR / "03_aivideosite_v2_operator_map_en.txt"),
+)
+ASSISTANT_CONTEXT_FILES = VIDEO_ASSISTANT_CONTEXT_FILES + (
     ("MINIMAX_H3_IMAGE_GUIDE", H3_IMAGE_GUIDE_PATH),
 )
 ASSISTANT_CONTEXT_FILE_MAX_CHARS = 100000
@@ -41,13 +43,14 @@ def _load_assistant_context_file(label: str, path: Path) -> str:
     return f"===== {label} =====\n{content[:ASSISTANT_CONTEXT_FILE_MAX_CHARS]}"
 
 
-def _load_assistant_knowledge_pack() -> str:
+def _load_assistant_knowledge_pack(files: tuple[tuple[str, Path], ...] = ASSISTANT_CONTEXT_FILES) -> str:
     return "\n\n".join(
         _load_assistant_context_file(label, path)
-        for label, path in ASSISTANT_CONTEXT_FILES
+        for label, path in files
     )
 
 
+VIDEO_ASSISTANT_KNOWLEDGE_PACK = _load_assistant_knowledge_pack(VIDEO_ASSISTANT_CONTEXT_FILES)
 ASSISTANT_KNOWLEDGE_PACK = _load_assistant_knowledge_pack()
 H3_IMAGE_GUIDE = _load_assistant_context_file("MINIMAX_H3_IMAGE_GUIDE", H3_IMAGE_GUIDE_PATH)
 
@@ -160,8 +163,8 @@ Never fabricate reference media or Character IDs.
 
 H3_EXPERT_GUIDE = (
     H3_AGENT_RULES
-    + "\n\n================ FULL LOCAL H3 WORKFLOW GUIDE ================\n\n"
-    + ASSISTANT_KNOWLEDGE_PACK
+    + "\n\n================ FULL LOCAL H3 VIDEO WORKFLOW GUIDE ================\n\n"
+    + VIDEO_ASSISTANT_KNOWLEDGE_PACK
 )
 
 CHAT_SYSTEM = (
