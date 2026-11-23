@@ -1,1776 +1,364 @@
-# AI Video Site — полный handoff / инфраструктура / текущий статус
+# AI Video Site — current handoff
 
-> Этот файл предназначен для быстрого продолжения работы в новом чате без повторного восстановления контекста.
->
-> Репозиторий: `OpenFunRus/aivideosite`
->
-> Основная ветка: `main`
->
-> Handoff обновлён после перехода на локальную Gemma4 26B A4B Heretic, dynamic GPU/CPU failover, 128k context, Thinking toggle и последних UI-фиксов.
->
-> После чтения этого файла новый исполнитель ОБЯЗАН сначала перечитать актуальный `main` на GitHub: SHA намеренно не фиксируется внутри handoff, чтобы не создавать самоссылочный устаревающий checkpoint.
-
----
-
-## V2 — новый интерфейс рядом с V1
-
-20 ноября 2026 утверждён и реализован отдельный task-first V2. V1 сохранён для сравнения и fallback.
-
-- V1 остаётся на `/`.
-- V2 открывается на `/v2`.
-- V2 frontend структурирован по папкам: `app/templates/v2/layout/`, `app/templates/v2/components/`, `app/templates/v2/views/`, `app/static/v2/css/` и `app/static/v2/js/`. `v2.html` теперь только собирает partials и подключает модули; старые монолитные `v2.js`, `v2-workspaces.js`, `v2.css`, `v2-workspaces.css` удалены.
-- Верхняя page header — единственный заголовок рабочего раздела; дублирующие kicker/h2 внутри Continue/Audio/Clip/Library/Queue/Editor/Chat/System удалены.
-- Desktop: постоянные компактные левая навигация и правая Characters-панель по 238 px. Справа один Character на строку.
-- Mobile: fixed top bar, hamburger для основного drawer и отдельная кнопка Characters; page title/GPU status центрированы.
-- Скроллы стилизованы под интерфейс; старый видимый статус черновика удалён.
-
-### Реализованные V2 workspace
-
-- **Видео**: единая форма для всех новых H3-роликов. Prompt + magic wand, Characters/Locations/«Прочее», First/Last previews, 480/720/1080, 1:1/16:9/9:16, 5/10/15 sec, 8/12/16 steps и Seed.
-  - без master track: обычный FL2VA / Ref2VA / exact Timeline Guides;
-  - галочка **«Использовать аудиодорожку»** раскрывает saved/uploaded master track + waveform;
-  - в audio-mode используется Digital Human с одним driving fragment;
-  - отдельного arbitrary visual-reference upload больше нет;
-  - Characters/Locations/«Прочее» остаются visual semantic refs;
-  - если presets не выбраны, First Frame (или Last, если First нет) одновременно служит обязательным visual reference Digital Human;
-  - First Frame дополнительно закрепляется native `MiniMaxH3AddGuide` на 0 сек;
-  - Last Frame — native `MiniMaxH3AddGuide` на выбранной длительности;
-  - **«Вклеить трек в видео»** управляет финальным FFmpeg mux;
-  - **«Фоновые звуки H3»** включает только дополнительный scene/foley audio;
-  - обычная галочка «Генерировать звук» скрывается, пока включён master track.
-- **Библиотека**: видео, metadata/prompt/settings, download/delete и извлечение Start/Final PNG для продолжения через Video → First Frame.
-- **Очередь**: rolling personal job log, Cancel/Retry/Result и общая занятость RTX3090/RTX2080.
-- **Монтаж**: persistent per-user browser project, последовательный Video 1 timeline, drag reorder, zoom, Snap 0.5s, monitor timecode, trim, split, clip volume, fades, отдельный Music track и FFmpeg export.
-- **Чат**: streaming Gemma4 26B A4B Heretic, Thinking, per-user browser history, 128k context meter; получает единый `create_state`, включая audio_mode/master-track state.
-- **Система**: GPU/VRAM/load/temp, active jobs, Gemma target/state, оба ComfyUI, RAM, CPU load, disk.
-- **Инструкция**: обучение по текущему V2/H3 и copy-paste контекст для ChatGPT из `v2-chatgpt-site-guide.txt` + `h3-prompting-guide-ai.txt`.
-
-### Важные технические решения V2
-
-- Отдельной страницы **«Видео по аудио» нет**: driving audio — режим единого генератора «Видео».
-- Standard MiniMaxH3Easy Digital Human сам не использует FL2VA First/Last. Поэтому endpoint frames в audio-mode прикладываются поверх Digital Human conditioning через native `MiniMaxH3AddGuide`.
-- quality mapping на backend: 480 → short side 480, 720 → 736, 1080 → 1088; размеры округляются вверх до сетки ×32.
-- Queue/Library/dual-GPU worker/SQLite/ComfyUI архитектура общая для всех Video jobs.
-- Editor — последовательный Video 1 timeline + отдельный Music track; multiple composited visual layers не имитируются.
-- V2 user config поддерживает `SITE_USERS_JSON` и произвольные `SITE_USER<N>_...` entries.
-- Runtime Digital Human + exact First/Last AddGuide, FFmpeg audio mix и полный responsive pass требуют пользовательского smoke test на реальной Ubuntu VM.
-
-Подробный план: `docs/v2/PLAN.md`.
-
----
-
-## 1. Цель проекта
-
-`aivideosite` — локальная веб-панель для AI-видео на одной Ubuntu VM с двумя GPU: RTX3090 24 GB и RTX2080 mod 22 GB.
-
-Основные задачи:
-
-1. Генерировать видео через MiniMax H3 в ComfyUI.
-2. Поддерживать FL2VA T2V/First/Last/First+Last, Ref2VA, exact Timeline Guides, Digital Human и H3 Fun ControlNet Union.
-3. Хранить очередь и библиотеку независимо от браузера.
-4. Позволять закрыть сайт, вернуться позже и увидеть результат.
-5. Делать простые операции со звуком через FFmpeg.
-7. Использовать обе GPU для MiniMax H3 с автоматическим распределением:
-   - RTX3090 — primary;
-   - RTX2080 mod 22 GB — secondary;
-   - если primary занят генерацией сайта, следующая H3-задача запускается на secondary.
-8. Сохранять монтажный и аудио workflow через FFmpeg.
-
-### Важное архитектурное решение: legacy lip-sync удалён
-
-19 ноября 2026 пользователь решил полностью отказаться от LatentSync. Причина: целевой музыкальный workflow должен генерировать видео сразу по аудио через removed legacy video engine, поэтому отдельная постобработка губ больше не нужна.
-
-Из проекта удалены:
-
-- API отдельного lip-sync;
-- worker pipeline и face-preflight;
-- кнопка lip-sync в библиотеке;
-- Steps/Guidance UI;
-- конфигурация и environment variables LatentSync;
-- helper `app/latentsync_face_check.py`.
-
-Не возвращать LatentSync без нового прямого запроса пользователя. Обычное наложение/удаление аудио через FFmpeg и монтажная аудиодорожка остаются.
-
-Сайт рассчитан на локальное использование по HTTP:
+Актуальный проект:
 
 ```text
-http://IP_ВМ:8000
+Repository: OpenFunRus/aivideosite
+Branch: main
+Primary UI: /
+Compatibility aliases: /v2, /v2/
 ```
 
-HTTPS специально не используется на текущем этапе.
+Legacy V1 frontend удалён. Не восстанавливать `index.html`, `app.js`, `app.css`, `assistant.js` или старый generic `/api/generate` без прямого запроса пользователя.
 
----
+## 1. Правила работы
 
-## 2. GitHub и правила работы
+Перед любыми изменениями:
+1. прочитать актуальный `main`;
+2. изучить реальные связанные файлы и call sites;
+3. не придумывать архитектуру;
+4. исправлять root cause;
+5. работать в `main`;
+6. не создавать GitHub Actions / CI;
+7. утверждать только реально выполненные проверки;
+8. runtime/GPU/visual тест выполняет пользователь.
 
-Репозиторий:
+После законченного этапа сообщать:
+- changed files;
+- что сделано;
+- реально выполненные checks;
+- что не проверено;
+- manual checklist;
+- known limitations;
+- полный SHA.
 
-```text
-OpenFunRus/aivideosite
-```
+## 2. Runtime
 
-Ветка:
-
-```text
-main
-```
-
-Правила для продолжения:
-
-- всегда читать актуальный код из GitHub перед изменениями;
-- не придумывать существующие файлы, классы, API или архитектуру;
-- изучать связанные файлы до правок;
-- исправлять первопричину, а не поверхностный симптом;
-- работать в `main`;
-- не создавать GitHub Actions / CI без прямой просьбы;
-- runtime GPU и визуальный результат проверяет пользователь на Ubuntu VM;
-- после законченного этапа коммитить изменения в `main`;
-- в конце сообщать:
-  - изменённые файлы;
-  - что сделано;
-  - какие проверки действительно выполнены;
-  - что не проверено;
-  - что проверить пользователю;
-  - известные ограничения;
-  - полный SHA последнего commit.
-
----
-
-## 3. VM / железо / гипервизор
-
-Из текущей рабочей конфигурации известно:
-
-### Хост
-
-- гипервизор: Proxmox VE 8.4;
-- CPU хоста: Intel Core i9-10980XE;
-- GPU 0: NVIDIA GeForce RTX3090, 24576 MiB VRAM, PCI bus `00000000:01:00.0`;
-- GPU 1: NVIDIA GeForce RTX2080 mod, 22528 MiB VRAM, PCI bus `00000000:02:00.0`;
-- обе GPU проброшены в Ubuntu VM через PCI passthrough и видны `nvidia-smi`.
-
-### Ubuntu VM
-
-- Ubuntu Server 24.04;
-- vCPU: 12;
-- RAM: 56 GiB;
-- виртуальный диск после расширения: примерно 328 GB;
-- NVIDIA driver работает;
-- `nvidia-smi` работает;
-- CUDA runtime для PyTorch работает;
-- Docker установлен, но для текущего сайта не требуется;
-- FFmpeg / ffprobe используются напрямую.
-
-Не зафиксированы в этом документе и не должны выдумываться:
-
-- Proxmox VM ID;
-- точный LAN IP;
-- bridge/interface;
-- MAC;
-- gateway;
-- hostname VM.
-
-Если они понадобятся:
-
-```bash
-hostname
-hostname -I
-ip -br a
-ip route
-```
-
-### Проверка GPU
-
-Подтверждённый вывод после подключения второй карты:
-
-```text
-GPU 0: NVIDIA GeForce RTX3090
-GPU 1: NVIDIA GeForce RTX2080
-```
-
-VRAM:
-
-```text
-GPU 0: 24576 MiB
-GPU 1: 22528 MiB
-```
-
-Проверка:
-
-```bash
-nvidia-smi -L
-nvidia-smi --query-gpu=index,name,memory.total,pci.bus_id --format=csv
-```
-
-Для мониторинга:
-
-```bash
-watch -n 1 nvidia-smi
-```
-
----
-
-## 4. Основные пути Ubuntu
-
-Корневая папка AI:
-
-```text
-/opt/ai
-```
-
-ComfyUI:
-
-```text
-/opt/ai/ComfyUI
-```
-
-ComfyUI venv:
-
-```text
-/opt/ai/ComfyUI/.venv
-```
-
-AI Video Site:
+Основной host ожидается:
 
 ```text
 /opt/ai/aivideosite
 ```
 
-Site venv:
+Services:
+- `aivideosite.service`;
+- `llm-assistant.service`;
+- `comfyui.service` — primary H3, RTX3090;
+- `comfyui-secondary.service` — secondary H3, RTX2080.
+
+ComfyUI URLs:
+- primary: `127.0.0.1:8188`;
+- secondary: `127.0.0.1:8189`.
+
+LLM:
+- llama.cpp: `127.0.0.1:8090`;
+- placement manager: `127.0.0.1:8091`;
+- Gemma4 26B A4B Heretic Q4_K_M;
+- 128k context.
+
+## 3. Primary frontend
+
+Assembler:
 
 ```text
-/opt/ai/aivideosite/.venv
+app/templates/v2.html
 ```
 
----
-
-## 5. ComfyUI
-
-Обычный ручной запуск:
-
-```bash
-cd /opt/ai/ComfyUI
-source .venv/bin/activate
-python main.py --listen 0.0.0.0 --port 8188
-```
-
-ComfyUI services слушают `0.0.0.0`, чтобы UI был доступен из локальной сети. Штатный backend сайта при этом использует localhost URL:
+Layout/components/views:
 
 ```text
-http://127.0.0.1:8188
+app/templates/v2/layout/
+app/templates/v2/components/
+app/templates/v2/views/
 ```
 
-Проверка:
-
-```bash
-curl -s http://127.0.0.1:8188/system_stats | head
-ss -ltnp | grep 8188
-```
-
-### H3 custom node
-
-Используется:
+JS:
 
 ```text
-ComfyUI-MiniMaxH3-Easy
+app/static/v2/js/core.js
+app/static/v2/js/navigation.js
+app/static/v2/js/characters.js
+app/static/v2/js/locations.js
+app/static/v2/js/misc.js
+app/static/v2/js/status.js
+app/static/v2/js/create.js
+app/static/v2/js/instruction.js
+app/static/v2/js/workspaces/
+app/static/v2/js/bootstrap.js
 ```
 
-Исторически проверенная вручную H3-конфигурация на RTX3090 (после перехода на dual-GPU тот же H3 профиль нужно подтвердить на RTX2080 mod 22 GB):
-
-- 1344x768;
-- 24 FPS;
-- 5 сек;
-- Fast / Turbo 8 steps;
-- I2V и First/Last Frame работают;
-- 10 секунд тоже ранее проверялись;
-- примерное ранее наблюдавшееся время 5-секундного H3 на 1344x768 — около 3 мин 18 сек, но это не SLA и может меняться после обновлений.
-
-### H3 модели
-
-Diffusion:
+CSS:
 
 ```text
-/opt/ai/ComfyUI/models/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors
+app/static/v2/css/
+app/static/v2/css/workspaces/
 ```
 
-Text encoder:
+Login uses the small standalone `app/static/login.css`.
 
-```text
-/opt/ai/ComfyUI/models/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
-```
+Do not merge V2 back into a giant JS/CSS monolith.
 
-Video VAE:
+## 4. Main workspaces
 
-```text
-/opt/ai/ComfyUI/models/vae/minimax_h3_video_vae_fp16.safetensors
-```
+### Видео
 
-Audio VAE:
+One generator page for all current H3 generation.
 
-```text
-/opt/ai/ComfyUI/models/vae/minimax_h3_audio_vae_fp32.safetensors
-```
+Visible controls:
+- prompt;
+- First Frame;
+- Last Frame;
+- Character / Location / Misc presets;
+- quality 480/720/1080;
+- ratio 1:1/16:9/9:16;
+- 5/10/15 sec;
+- 8/12/16 steps;
+- 24 FPS fixed;
+- Seed;
+- H3 Audio;
+- optional master track.
 
-Turbo LoRA:
+Routing without master track:
+- no refs -> Frames;
+- First/Last only -> FL2VA endpoints;
+- semantic presets -> Ref2VA;
+- presets + First/Last -> Ref2VA + native Timeline Guides.
 
-```text
-/opt/ai/ComfyUI/models/loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
-```
+Routing with master track:
+- no visual input -> ordinary Frames/video + optional final track mux;
+- any First/Last or semantic visual preset -> Digital Human driving audio;
+- First/Last are exact native Timeline Guides in Digital Human mode.
 
-### H3 steps / FPS в сайте
+### Библиотека
 
-Текущий UI/API больше не использует дискретные профили:
+- Open;
+- Download;
+- Start Frame PNG;
+- Final Frame PNG;
+- Copy prompt;
+- Delete;
+- search/pagination UI state persisted in localStorage.
 
-- `steps`: 6–24 с шагом 2, по умолчанию 8;
-- `fps`: 6–32 с шагом 1, по умолчанию 24;
-- новый FL2VA на 8 шагах использует `H3_TURBO_LORA`;
-- остальные новые FL2VA значения используют Base;
-- Ref2VA / Timeline / Digital Human в новом диапазоне 6–24 используют Base, потому что `H3_REF_TURBO_LORA` рассчитана на 4 шага.
+### Очередь
 
-Старые payload с `profile=steps4/steps8/steps12/steps16/steps20` и legacy `fast/quality/max` остаются совместимыми внутри `app/comfy.py`.
-
----
-
-## 7. AI Video Site — backend
-
-Stack:
-
-- Python;
-- FastAPI;
-- Jinja2;
-- SQLite;
-- vanilla JS;
-- vanilla CSS;
-- локальный SVG sprite в стиле Tabler;
-- requests;
-- websocket-client;
-- FFmpeg.
-
-Dependencies закреплены в:
-
-```text
-requirements.txt
-```
-
-Ключевые backend-файлы:
-
-```text
-app/main.py
-app/config.py
-app/db.py
-app/comfy.py
-app/worker.py
-```
-
-Frontend:
-
-```text
-app/templates/base.html
-app/templates/login.html
-app/templates/index.html
-app/static/app.js
-app/static/app.css
-app/static/icons.svg
-```
-
----
-
-## 8. Авторизация / пользователи
-
-Авторизация password-only: поле логина не требуется, каждый уникальный пароль однозначно соответствует одному `user_id`.
-
-Количество пользователей больше не зафиксировано в source code.
-
-Поддерживаются три способа конфигурации:
-
-1. `SITE_USERS_JSON` — произвольный JSON list/dict с полями `id`, `label`/ `name`, `password`, optional `enabled`.
-2. Нумерованные env-переменные `SITE_USER<N>_PASSWORD`, optional `SITE_USER<N>_ID`, `SITE_USER<N>_NAME`. Код сканирует N=1..100, поэтому добавление user4/user5 не требует frontend/backend правок.
-3. Локальный `data/.site_users.json`; старый словарь `user1/user2/user3` остаётся совместимым.
-
-Если ни один пользователь явно не задан и файла нет, first run по-прежнему создаёт три уникальных шестизначных password-only профиля и сохраняет их в:
-
-```text
-/opt/ai/aivideosite/data/.site_users.json
-```
-
-Файл получает права `0600`.
-
-Пример numbered env:
-
-```dotenv
-SITE_USER1_ID=user1
-SITE_USER1_NAME=OpenFun
-SITE_USER1_PASSWORD=123456
-SITE_USER2_ID=user2
-SITE_USER2_NAME=User 2
-SITE_USER2_PASSWORD=654321
-SITE_USER4_ID=editor
-SITE_USER4_NAME=Editor
-SITE_USER4_PASSWORD=451923
-```
-
-Изоляция данных:
-
-- `jobs.owner_id` — личная очередь/история;
-- `media.owner_id` — личная библиотека;
-- Characters фильтруются по owner;
-- browser drafts/chat/editor localStorage имеют user-specific prefix;
-- media/job API проверяют владельца;
-- GPU worker и физическая очередь общие;
-- V2 Queue показывает глобальную занятость GPU и label активного пользователя, но не отдаёт чужую полную job payload.
-
-Legacy `SITE_PASSWORD` больше не используется.
-
-Session secret:
-
-```text
-SESSION_SECRET=auto
-```
-
-При `auto` приложение создаёт постоянный случайный secret в `data/.session_secret`. Сайт рассчитан на LAN / HTTP.
-
----
-
-## 9. SQLite / фоновые jobs
-
-DB:
-
-```text
-/opt/ai/aivideosite/data/aivideosite.db
-```
-
-WAL включён.
-
-Runtime dirs:
-
-```text
-data/uploads/
-data/library/
-data/characters/
-data/tmp/
-```
-
-Они не коммитятся.
-
-Сайт должен запускаться только:
-
-```text
---workers 1
-```
-
-Причина:
-
-- внутри процесса один `JobWorker`;
-- GPU heavy jobs должны выполняться последовательно;
-- несколько Uvicorn workers создали бы несколько GPU workers и риск OOM.
-
-При restart:
-
-- `running` jobs восстанавливаются в `queued`.
-
----
-
-## 10. Очередь — текущий UX
-
-Реализовано:
-
-- после постановки генерации сразу открывается Queue;
-- статусы:
-  - queued;
-  - running;
-  - done;
-  - failed;
-  - canceled;
-- время создания;
-- время фактического старта;
-- ожидание в очереди;
-- живой таймер генерации;
-- итоговое время;
-- приблизительный процент;
+- latest personal jobs;
 - Cancel;
-- Retry для failed;
-- кнопка открыть Library после success;
-- удалить завершённую/ошибочную/отменённую запись;
-- работающую задачу удалить нельзя — сначала Cancel;
-- `Очистить всё` удаляет всё неработающее;
-- работающие остаются;
-- пагинация 20 jobs/page.
-
-### Таймер
-
-Был исправлен важный баг.
-
-Сервер отдаёт:
-
-```text
-server_now
-```
-
-Фронтенд синхронизирует локальный live-counter с серверным временем.
-
-Фактические timestamps:
-
-- `created_at` — enqueue;
-- `started_at` — worker реально забрал job;
-- `finished_at` — complete/fail/cancel.
-
-Нельзя снова рассчитывать generation time от параметра длительности видео или от приблизительного config.
-
----
-
-## Built-in MiniMax H3 prompting guide
-
-UI:
-
-- кнопка `Гайд` находится слева в desktop topbar;
-- открывается native `<dialog>` на весь viewport;
-- внутри есть FL2VA / Ref2VA / exact Timeline Guides / Digital Human, Characters, roles/retention, H3 Fun ControlNet Union, video editing/continuation, FL first/last endpoints, shots/timing, camera, dialogue/audio, exclusions и готовые examples;
-- секция `Для нейронки и ChatGPT` содержит:
-  - публичный LAN static text `/static/h3-prompting-guide-ai.txt`;
-  - кнопку открытия machine guide;
-  - кнопку копирования абсолютной ссылки;
-  - полноценный copy-paste prompt для ChatGPT.
-
-Machine guide адаптирован к реальному сайту и покрывает четыре режима: `frames`, `reference`, `multiframe`, `digital_human`. Он знает лимиты 9 Pictures / 3 Videos / 3 standalone Audio / 15 semantic media, Characters, deterministic reference mapping, visual/audio retention, editing/continuation, exact native `MiniMaxH3AddGuide` timeline anchors и H3 Fun ControlNet Union. Важное различие зафиксировано явно: обычный Ref2VA storyboard Picture — semantic reference, а Timeline Guide — точный `frame_idx` anchor.
-
-Источники, на которых основана структура:
-
-- Mage MiniMax-H3 prompting guide;
-- официальный MiniMax H3 base prompt-writing guide;
-- prompt guide из ComfyUI-MiniMaxH3-Easy.
-
-Текст в нашей модалке не является копией Mage: он переработан и сокращён под возможности текущего local workflow.
-
----
-
-## 11. Библиотека
-
-Реализовано:
-
-- inline video preview;
-- download;
-- audio replace;
-- remove audio;
-- delete;
-- clear all;
-- pagination 20/page;
-- metadata modal.
-
-### Важный fix playback
-
-Раньше polling каждые 3 секунды полностью перерисовывал Library, из-за чего `<video>` начинал воспроизведение заново.
-
-Теперь Library не перерисовывается, пока ролик играет, если media signature не требует безопасного refresh.
-
-Не возвращать старую механику unconditional `innerHTML` refresh каждые 3 секунды.
-
-### Metadata modal
-
-Показывает:
-
-- prompt;
-- seed;
-- resolution;
-- generation seconds;
-- FPS;
-- profile;
-- native H3 audio;
-- reference count;
-- actual file duration;
-- size;
-- created timestamp;
-- operation type.
-
-Prompt и seed имеют copy buttons.
-
-Для HTTP/IP используется clipboard fallback, если Secure Context API недоступен.
-
----
-
-## 12. First / Last Frame UI
-
-После выбора:
-
-- картинка показывается preview внутри upload card;
-- на desktop при hover появляется крестик;
-- на touch/mobile крестик виден постоянно;
-- крестик очищает конкретный input;
-- repeat selection заменяет preview;
-- Object URL освобождается.
-
-ВАЖНЫЙ уже исправленный regression:
-
-В JS были перепутаны одиночный selector и selector-all helper, из-за чего file input handlers не регистрировались.
-
-Теперь helper-ы названы явно:
-
-```js
-qs()
-qsa()
-```
-
-Не возвращать неоднозначные `$ / $$`, потому что именно это уже вызвало регрессию.
-
-Файлы всё равно отправляются через:
-
-```js
-new FormData(generationForm)
-```
-
-Browser security не позволяет восстановить выбранный local file после reload. Поэтому localStorage хранит настройки, но не binary first/last frame.
-
----
-
-## 13. localStorage
-
-Хранятся:
-
-- prompt;
-- resolution;
-- seconds;
-- FPS;
-- profile;
-- seed;
-- H3 native audio checkbox;
-- generation mode;
-- reference task;
-- ref image size;
-- ControlNet mode/strength/start/end/Canny thresholds;
-- текущий view.
-
-Key generator settings:
-
-```text
-aivideosite-<user>-settings-v2
-```
-
-Кнопка:
-
-```text
-По умолчанию
-```
-
-Удаляет app keys из localStorage и возвращает:
-
-- prompt = empty;
-- default resolution;
-- 5 sec;
-- 24 FPS;
-- steps8;
-- seed = -1;
-- native H3 audio = off;
-- generation mode = frames;
-- first/last и direct reference file inputs очищаются браузером при reset/reload.
-
----
-
-## 14. H3 generation options
-
-Duration:
-
-```text
-1–30 sec
-```
-
-Default:
-
-```text
-5 sec
-```
-
-FPS:
-
-- 12;
-- 16;
-- 20;
-- 24 default/recommended;
-- 25;
-- 30.
-
-Resolution UI поддерживает все ratio текущего H3 Easy node:
-
-- 1:1;
-- 2:3;
-- 3:2;
-- 3:4;
-- 4:3;
-- 9:16;
-- 16:9;
-- 21:9.
-
-Классы 360/480/720/1080 строятся динамически: короткая сторона округляется вверх до H3-сетки ×32 (384/480/736/1088), длинная сторона также округляется вверх до ×32 по выбранному ratio. Для 1:1 дополнительно есть 256×256 test. Backend допускает сторону до 3072, чтобы 21:9 1080-class не обрезался старым лимитом 2048. Этот ultrawide режим требует VRAM runtime test.
-
-### H3 native audio
-
-Checkbox:
-
-```text
-Генерировать со звуком
-```
-
-Default: off.
-
-При on workflow добавляет:
-
-```text
-VAEDecodeAudio
-```
-
-и подключает audio к:
-
-```text
-CreateVideo
-```
-
-Это H3-generated audio.
-
-В обычном FL2VA/Ref2VA это не означает input song -> lip movement. Для audio-driven лица/персонажа теперь есть отдельный режим Digital Human: минимум один visual reference + ровно один standalone driving audio.
-
----
-
-## 15. FFmpeg audio operations
-
-### Remove audio
-
-Создаётся отдельный производный ролик.
-
-Video stream копируется:
-
-```text
--c:v copy -an
-```
-
-### Replace / overlay track
-
-Текущая операция фактически заменяет audio track загруженной дорожкой, используя:
-
-- video copy;
-- AAC;
-- 192k;
-- `-shortest`;
-- `audio_start`.
-
-Исходный library video не перезаписывается.
-
----
-
-## 16. Установка сайта на чистой/восстановленной Ubuntu VM
-
-Предполагается, что ComfyUI уже настроен.
-
-```bash
-cd /opt/ai
-git clone https://github.com/OpenFunRus/aivideosite.git
-cd /opt/ai/aivideosite
-
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip
-pip install -r requirements.txt
-
-cp .env.example .env
-```
-
-Проверить:
-
-```bash
-cat .env
-```
-
-Пути должны соответствовать текущей VM.
-
-Проверка import:
-
-```bash
-cd /opt/ai/aivideosite
-source .venv/bin/activate
-python -c "from app.main import app; print('AI Video Site: OK')"
-```
-
-Ручной запуск:
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
-```
-
-Открыть:
-
-```text
-http://IP_ВМ:8000
-```
-
-Login:
-
-```text
-11332244
-```
-
-Если UFW active:
-
-```bash
-sudo ufw allow 8000/tcp
-```
-
----
-
-## 17. .env — актуальный baseline
-
-```dotenv
-SITE_USER1_NAME=Пользователь 1
-SITE_USER1_PASSWORD=
-SITE_USER2_NAME=Пользователь 2
-SITE_USER2_PASSWORD=
-SITE_USER3_NAME=Пользователь 3
-SITE_USER3_PASSWORD=
-SESSION_SECRET=auto
-HOST=0.0.0.0
-PORT=8000
-
-DATA_DIR=/opt/ai/aivideosite/data
-COMFYUI_URL=http://127.0.0.1:8188
-COMFYUI_SECONDARY_URL=http://127.0.0.1:8189
-COMFYUI_OUTPUT_DIR=/opt/ai/ComfyUI/output
-COMFYUI_INPUT_DIR=/opt/ai/ComfyUI/input
-FFMPEG_BIN=/usr/bin/ffmpeg
-FFPROBE_BIN=/usr/bin/ffprobe
-
-H3_FL2VA_MODEL=minimax_h3_fl2va_pruned_int8_convrot.safetensors
-H3_REF2VA_MODEL=minimax_h3_ref2va_pruned_int8_convrot.safetensors
-H3_TEXT_ENCODER=qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
-H3_VIDEO_VAE=minimax_h3_video_vae_fp16.safetensors
-H3_AUDIO_VAE=minimax_h3_audio_vae_fp32.safetensors
-H3_TURBO_LORA=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
-H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors
-H3_CONTROLNET_MODEL_PATCH=minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors
-H3_ATTENTION_BACKEND=comfy kitchen attention
-
-MAX_IMAGE_UPLOAD_MB=40
-MAX_VIDEO_UPLOAD_MB=500
-MAX_AUDIO_UPLOAD_MB=300
-```
-
----
-
-### LAN-доступ к ComfyUI
-
-Оба ComfyUI backend слушают на всех интерфейсах:
-
-- H3 primary / RTX3090: `0.0.0.0:8188`;
-- H3 secondary / RTX2080: `0.0.0.0:8189`.
-
-При текущем IP VM `192.168.1.244` UI доступны из локальной сети по:
-
-```text
-http://192.168.1.244:8188
-http://192.168.1.244:8189
-```
-
-UFW на момент настройки был inactive, поэтому отдельное firewall-правило не требовалось. ComfyUI UI не имеет встроенной авторизации в этой схеме, поэтому не пробрасывать 8188/8189 в интернет.
-
-## 18. systemd
-
-### ComfyUI
-
-Repo file:
-
-```text
-systemd/comfyui.service
-```
-
-Current assumptions:
-
-```ini
-User=openfun
-Group=openfun
-WorkingDirectory=/opt/ai/ComfyUI
-ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8188
-```
-
-### Secondary H3 / GPU 1
-
-Repo file:
-
-```text
-systemd/comfyui-secondary.service
-```
-
-Схема GPU isolation:
-
-- `comfyui.service` -> `CUDA_VISIBLE_DEVICES=0` -> физическая RTX3090 24 GB -> H3 primary -> port 8188;
-- `comfyui-secondary.service` -> `CUDA_VISIBLE_DEVICES=1` -> физическая RTX2080 mod 22 GB -> H3 secondary -> port 8189.
-
-Оба процесса используют один и тот же installation tree:
-
-```text
-/opt/ai/ComfyUI
-```
-
-и общие модели на диске, но CUDA context и VRAM полностью раздельные.
-
-### Current H3 performance experiment: DynamicVRAM headroom
-
-Both H3 services currently use `--vram-headroom 2`. On the RTX3090 the first uncached saved benchmark improved from `03:36` to `03:18` (~8.3% less wall-clock time, ~9.1% higher throughput). Keep the flag enabled for now and confirm with additional fresh-seed uncached runs. It does not alter H3 model/sampler/steps/seed/quality settings.
-
-Important benchmark rule: an identical workflow with the same seed can be served from ComfyUI execution cache in a few seconds. Use a restarted ComfyUI process for an identical-seed A/B comparison, or use a fresh recorded seed for uncached warm tests.
-
-### H3 performance experiment: Comfy compiler
-
-`--disable-comfy-compiler` was A/B tested on RTX3090 with the saved H3 benchmark. Result: `03:33` versus stock `03:36` (~1.4%), which is not a meaningful gain. The flag was reverted and should not be kept for performance on the current stack.
-
-Secondary H3 service:
-
-```ini
-User=openfun
-Group=openfun
-WorkingDirectory=/opt/ai/ComfyUI
-Environment=PYTHONUNBUFFERED=1
-Environment=CUDA_VISIBLE_DEVICES=1
-ExecStart=/opt/ai/ComfyUI/.venv/bin/python /opt/ai/ComfyUI/main.py --listen 0.0.0.0 --port 8189
-Restart=always
-```
-
-ВАЖНО:
-
-- внутри каждого процесса выбранная через `CUDA_VISIBLE_DEVICES` физическая GPU отображается приложению как локальная CUDA device 0 — это нормально;
-- сайт реально использует оба H3 backend: primary `127.0.0.1:8188` и secondary `127.0.0.1:8189`;
-- WAN/removed legacy video engine больше не является частью проекта;
-- новые Ref2VA/Timeline/ControlNet workflow должны быть доступны в обоих ComfyUI process, потому что оба используют один installation tree/custom nodes/models.
-
-### Site
-
-Repo file:
-
-```text
-systemd/aivideosite.service
-```
-
-Current assumptions:
-
-```ini
-User=openfun
-Group=openfun
-WorkingDirectory=/opt/ai/aivideosite
-EnvironmentFile=-/opt/ai/aivideosite/.env
-ExecStart=/opt/ai/aivideosite/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
-```
-
-Install:
-
-```bash
-cd /opt/ai/aivideosite
-
-sudo cp systemd/comfyui.service /etc/systemd/system/comfyui.service
-sudo cp systemd/comfyui-secondary.service /etc/systemd/system/comfyui-secondary.service
-sudo cp systemd/aivideosite.service /etc/systemd/system/aivideosite.service
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now comfyui.service
-sudo systemctl enable --now comfyui-secondary.service
-sudo systemctl enable --now aivideosite.service
-```
-
-Status:
-
-```bash
-systemctl status comfyui --no-pager
-systemctl status comfyui-secondary --no-pager
-systemctl status aivideosite --no-pager
-```
-
-Logs:
-
-```bash
-journalctl -u comfyui -n 150 --no-pager
-journalctl -u aivideosite -n 150 --no-pager
-```
-
-Live:
-
-```bash
-journalctl -u comfyui -f
-journalctl -u aivideosite -f
-```
-
-Если сейчас процессы запущены вручную, сначала остановить manual instance, иначе будет port conflict на 8188/8000.
-
----
-
-## 19. Dual H3 dispatcher — актуальная архитектура
-
-19 ноября 2026 пользователь отказался от removed legacy video engine после ручного теста качества. Wan больше не является частью проекта и не должен возвращаться без нового прямого запроса.
-
-Текущая схема:
-
-```text
-RTX3090 24 GB
-  -> comfyui.service
-  -> CUDA_VISIBLE_DEVICES=0
-  -> 0.0.0.0:8188
-  -> H3 primary
-
-RTX2080 mod 22 GB
-  -> comfyui-secondary.service
-  -> CUDA_VISIBLE_DEVICES=1
-  -> 0.0.0.0:8189
-  -> H3 secondary
-```
-
-Оба процесса используют один installation tree и один набор файлов моделей:
-
-```text
-/opt/ai/ComfyUI
-```
-
-Внутри сайта:
-
-```dotenv
-COMFYUI_URL=http://127.0.0.1:8188
-COMFYUI_SECONDARY_URL=http://127.0.0.1:8189
-```
-
-Правило диспетчеризации генераций:
-
-1. первая свободная H3-задача всегда назначается RTX3090;
-2. если RTX3090 уже занята H3-задачей сайта, следующая H3-задача запускается на RTX2080;
-3. обе генерации могут идти параллельно;
-4. если обе GPU заняты, следующие H3-задачи остаются queued;
-5. FFmpeg audio/editor jobs имеют отдельную CPU-линию и не блокируют выдачу новой H3-задачи на свободную GPU;
-6. Cancel направляется именно в тот ComfyUI backend, где реально работает job.
-
-В metadata готового ролика сохраняется:
-
-```text
-gpu_backend = RTX3090
-```
-
-или:
-
-```text
-gpu_backend = RTX2080
-```
-
-Это позволяет сравнивать фактические результаты и скорость двух GPU.
-
-### Подтверждённый runtime
-
-До перехода на эту финальную схему пользователь уже подтвердил, что MiniMax H3 успешно работает на RTX2080 mod 22 GB.
-
-Воспроизводимый baseline записан в:
-
-```text
-docs/H3_BENCHMARKS.md
-```
-
-Параметры baseline:
-
-- seed `184735920`;
-- 1344x768;
-- 5 sec;
-- 24 FPS;
-- Fast / Turbo 8;
-- H3 Audio OFF;
-- без first/last frame.
-
-Результаты:
-
-- RTX3090 24 GB: `00:03:36`;
-- RTX2080 mod 22 GB: `00:06:15`;
-- RTX2080 примерно в 1.74 раза медленнее на этом тесте.
-
-Использовать этот exact benchmark для сравнения будущих оптимизаций H3.
-
-Следующий обязательный runtime test после установки новой версии:
-
-- поставить две H3-задачи подряд;
-- убедиться, что первая идёт на RTX3090;
-- убедиться, что вторая одновременно стартует на RTX2080;
-- проверить Cancel отдельно для каждой задачи;
-- проверить, что в Library metadata указан правильный GPU.
-
----
-
-## 20. Wan удалён
-
-removed legacy video engine признан неподходящим по качеству для этого проекта.
-
-Удалить с Ubuntu:
-
-- старый `comfyui-wan.service`;
-- Wan diffusion model;
-- Wan text encoder;
-- Wan VAE;
-- Wan audio encoder;
-- Wan Lightning LoRA.
-
-Не удалять H3 модели, H3 custom node или общий ComfyUI.
-
----
-
-## 21. Известные ограничения
-
-1. Runtime/визуальные GPU-тесты выполняет пользователь на Ubuntu VM.
-2. RTX2080 примерно в 2 раза медленнее RTX3090 в уже проверенном FL2VA baseline.
-3. Приоритет диспетчера учитывает занятость задачами сайта; ручные задания напрямую через ComfyUI UI не являются штатным способом работы сайта.
-4. FL2VA 8-step Turbo остаётся наиболее проверенным режимом. Ref2VA, Ref Turbo, video/audio references, Timeline Guides, Digital Human и ControlNet требуют нового runtime/visual smoke test.
-5. Timeline Guides требуют native `MiniMaxH3AddGuide` (ComfyUI 0.34+); Fun ControlNet Union v1 требует native H3 ControlNet support (ComfyUI 0.35+).
-6. Текущий сайт использует Union v1 patch. Union 2.0 намеренно не включён автоматически до отдельного обновления/проверки более нового ComfyUI.
-7. Для Pose/Depth/HED/MLSD сайт ожидает уже подготовленный control video; автоматически из raw RGB строится только Canny.
-8. 1080p и особенно 21:9 2560×1088 требуют проверки VRAM/performance на обеих GPU.
-9. Browser не восстанавливает binary file inputs после F5; Characters постоянные, direct refs/guides/control media надо выбрать заново для новой задачи.
-10. Ref2VA storyboard/keyframe role — semantic reference guidance. Exact internal-time anchors даёт отдельный Timeline mode; exact endpoints также даёт FL2VA First/Last.
-11. В новом UI Ref2VA/Timeline/Digital Human используют 6–24 steps через Base; старые 4-step payload по-прежнему могут использовать отдельную Ref Turbo LoRA.
-12. Сайт без HTTPS и рассчитан на LAN.
-13. ComfyUI 8188/8189 доступны в LAN без собственной авторизации — не пробрасывать их в интернет.
-
----
-
-## 22. Быстрая диагностика
-
-Site:
-
-```bash
-curl -I http://127.0.0.1:8000/
-```
-
-Primary H3 / RTX3090:
-
-```bash
-curl -s http://127.0.0.1:8188/system_stats | head
-```
-
-Secondary H3 / RTX2080:
-
-```bash
-curl -s http://127.0.0.1:8189/system_stats | head
-```
-
-Порты:
-
-```bash
-ss -ltnp | grep -E '8000|8188|8189'
-```
-
-GPU:
-
-```bash
-nvidia-smi
-```
-
-Сервисы:
-
-```bash
-systemctl status comfyui.service --no-pager
-systemctl status comfyui-secondary.service --no-pager
-systemctl status aivideosite.service --no-pager
-```
-
-Логи:
-
-```bash
-journalctl -u comfyui.service -n 150 --no-pager
-journalctl -u comfyui-secondary.service -n 150 --no-pager
-journalctl -u aivideosite.service -n 150 --no-pager
-```
-
----
-
-## 23. Вкладка «Монтаж» / timeline editor
-
-Добавлен отдельный монтажный workflow без генерации референсов персонажей.
-
-Реализовано:
-
-- отдельная вкладка `Монтаж` в desktop и mobile navigation;
-- список до 500 роликов из Library в качестве source clips;
-- ролики можно добавлять кнопкой или drag-and-drop на видеодорожку;
-- клипы на таймлайне можно менять местами drag-and-drop;
-- у каждого клипа есть громкость 0–200%; 0% полностью убирает его исходный звук;
-- отдельная пользовательская аудиодорожка загружается из браузера;
-- аудиоблок на таймлайне можно перетаскивать мышью/пальцем; правый край меняет длину используемого фрагмента;
-- для аудиодорожки настраиваются:
-  - позиция на общем таймлайне;
-  - trim начала;
-  - длина используемого фрагмента;
-  - громкость 0–200%;
-- экспорт выполняется фоновой job `editor_export`;
-- FFmpeg нормализует все клипы к разрешению первого ролика и 24 FPS, затем склеивает их в один MP4;
-- если исходный ролик не имеет audio stream или его громкость равна нулю, в его участок подставляется silence, поэтому concat остаётся стабильным;
-- отдельный трек микшируется поверх исходного звука клипов;
-- результат сохраняется в Library с kind `edited`;
-- кнопка `Склеить и скачать` запоминает job id в localStorage и после статуса done запускает скачивание результата;
-- source clips защищены от удаления, пока editor export queued/running;
-- uploaded audio сохраняется для Retry при failed и удаляется после успешного экспорта.
-
-Ограничения текущей версии:
-
-- это последовательная видеодорожка без наложения двух видео друг на друга;
-- переходы между клипами пока hard cut;
-- видео-трим отдельных клипов пока не реализован;
-- speed/time-stretch отдельных клипов и аудио пока не реализован;
-- output FPS фиксирован 24;
-- output frame size берётся из первого клипа; ролики другого aspect ratio вписываются с black padding;
-- browser binary audio не переживает reload страницы, поэтому после reload файл нужно выбрать снова.
-
-
----
-
-## 24. H3 Ref2VA / Characters / Digital Human
-
-Добавлено 19 ноября 2026.
-
-### Режимы генератора
-
-`generation_mode`:
-
-- `frames` -> Easy `mode=image`;
-- `reference` -> Easy `mode=reference`;
-- `multiframe` -> Easy `mode=reference` + native `MiniMaxH3AddGuide` chain;
-- `digital_human` -> Easy `mode=digital_human`.
-
-Модели в EasyLoader изолируются по режиму:
-
-- FL2VA job передаёт `fl2va_model=<H3_FL2VA_MODEL>`, `ref2va_model=none`;
-- Ref2VA/Timeline/Digital Human job передаёт `fl2va_model=none`, `ref2va_model=<H3_REF2VA_MODEL>`.
-
-Это специально сделано так, чтобы отсутствие нового Ref2VA checkpoint не ломало существующие FL2VA jobs.
-
-### Ref2VA media
-
-Direct uploads:
-
-- images: PNG/JPG/WebP;
-- videos: MP4/MOV/MKV/WebM/M4V;
-- audio: WAV/MP3/FLAC/M4A/AAC/OGG/OPUS.
-
-Лимиты H3 Easy:
-
-- 9 images;
-- 3 videos;
-- 3 standalone audio;
-- 15 resources total;
-- нужен минимум один visual image/video;
-- Digital Human требует ровно один standalone driving audio.
-
-Перед запуском reference media копируются в:
-
-```text
-COMFYUI_INPUT_DIR/aivideosite/<job_id>/
-```
-
-и подключаются стандартными Comfy nodes:
-
-- `LoadImage`;
-- `LoadVideo`;
-- `LoadAudio`.
-
-Staging удаляется через `finally` после success/error/cancel.
-
-### Characters
-
-SQLite table:
-
-```text
-characters
-```
-
-Поля:
-
-- id;
-- owner_id;
-- name;
+- Retry when valid;
+- Result;
+- two GPU lanes.
+
+Retry must verify every required temporary source before cloning a failed job.
+
+### Монтаж
+
+Sequential editor:
+- one Video lane;
+- optional one Music track;
+- reorder / trim / split / delete;
+- clip volume;
+- fades;
+- snap / zoom / playhead;
+- undo/redo;
+- JSON project;
+- FFmpeg export.
+
+### Чат с ИИ
+
+- streaming Gemma;
+- Thinking;
+- 128k context meter;
+- user prompt modal;
+- copyable fenced artifact blocks;
+- selected-only Preset visibility.
+
+### Система
+
+- both GPUs;
+- Gemma;
+- both ComfyUI;
+- RAM/CPU/disk;
+- queue counts;
+- history charts.
+
+## 5. Presets
+
+Right rail tabs:
+- Characters;
+- Locations;
+- Misc.
+
+Characters:
+- 1–4 images;
 - description;
-- images_json;
-- voice_file;
-- created_at;
-- updated_at.
+- optional custom or built-in voice;
+- selected voice can be muted per generation.
 
-Файлы:
+Locations:
+- 1–4 environment images;
+- prompt/description.
 
-```text
-data/characters/<owner_id>/<character_id>/
-```
+Misc categories:
+- prop;
+- clothing_gear;
+- weapon;
+- vehicle;
+- creature;
+- environment_feature;
+- visual_trait;
+- pose_action;
+- style_look;
+- other.
 
-Каждый Character:
+Assistant visibility rule:
+- only checked presets are loaded into LLM context;
+- unchecked presets are completely invisible to Gemma;
+- selected preset pixels go to H3, not to Gemma.
 
-- 1–4 appearance image;
-- immutable visual description;
-- optional voice reference.
+## 6. Magic Wand / assistant preload
 
-Owner isolation обязательна. Preview route также проверяет owner. Удаление блокируется, если Character используется queued/running generation.
-
-### Reference mapping
-
-Сайт строит deterministic map:
-
-1. Character Pictures;
-2. direct Pictures;
-3. Videos;
-4. soundtrack каждого reference Video получает Audio ordinal;
-5. Character voice и direct standalone Audio получают следующие Audio ordinals.
-
-Simple prompt автоматически оборачивается в six-field Ref2VA format:
-
-- subject_definitions;
-- summary;
-- retention_analysis;
-- detailed_description;
-- overall_soundscape;
-- non_diegetic_music.
-
-Если prompt уже содержит все шесть полей, он сохраняется как есть.
-
-### Roles / retention
-
-Visual roles:
-
-- character;
-- object;
-- setting;
-- style;
-- composition;
-- storyboard;
-- motion;
-- camera_motion.
-
-Audio roles:
-
-- voice;
-- audio.
-
-Visual retention:
-
-- fully_preserved;
-- partially_preserved;
-- attribute_transfer;
-- weak_reference.
-
-Audio retention:
-
-- fully_copy;
-- partially_copy;
-- reference;
-- weak_reference.
-
-### Task presets
-
-- reference_generation;
-- keyframe_completion — semantic storyboard;
-- timeline_guides — exact native timed guides;
-- video_editing;
-- video_continuation;
-- audio_reuse;
-- audio_reference.
-
-### Turbo
-
-FL2VA:
-
-- новый UI: ровно 8 steps FL2VA -> `H3_TURBO_LORA`; остальные 6–24 -> Base;
-- legacy payload сохраняют старую маршрутизацию профилей.
-
-Ref2VA/Timeline/Digital Human:
-
-- новый UI Ref2VA/Timeline/Digital Human: 6–24 -> Base;
-- legacy 4-step payload -> `H3_REF_TURBO_LORA=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`.
-
-Не применять FL Turbo к Ref2VA.
-
-### Guides
-
-Обновлены:
+Assistant backend:
 
 ```text
-app/templates/index.html
-app/static/h3-prompting-guide-ai.txt
-```
-
-Оба гайда описывают FL2VA, Ref2VA, Characters, exact Timeline Guides, Digital Human и ControlNet. Они отдельно предупреждают, что обычный Ref2VA storyboard reference не является exact keyframe, а Timeline Guide через `MiniMaxH3AddGuide` является точным `frame_idx` anchor.
-
-План этапа:
-
-```text
-docs/H3_REFERENCES_CHARACTERS_PLAN.md
-```
-
----
-
-## 25. Exact Timeline Guides / H3 Fun ControlNet Union
-
-Добавлено 19 ноября 2026.
-
-### Timeline / multiframe
-
-`generation_mode=multiframe` использует Ref2VA semantic context плюс native ComfyUI guide conditioning.
-
-API/UI:
-- 1–16 `guide_images`;
-- `guide_manifest` хранит время и note;
-- сервер проверяет 0 <= time <= clip duration;
-- `frame_idx = round(time_seconds * fps)`;
-- если semantic visual reference не выбран, первый guide дополнительно используется как Picture visual anchor для Easy Ref2VA context.
-
-Workflow:
-- каждый guide -> `LoadImage`;
-- guides цепочкой -> `MiniMaxH3AddGuide`;
-- positive conditioning идёт в `BasicGuider`;
-- sampling: `RandomNoise` + `SamplerCustomAdvanced`;
-- sampler для native guide/control веток = `res_multistep`;
-- обычный Easy path без guides/control остаётся на `euler`.
-
-Требование: ComfyUI 0.34+.
-
-### H3 Fun ControlNet Union
-
-Config:
-```dotenv
-H3_CONTROLNET_MODEL_PATCH=minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors
-```
-
-Model patch должен быть доступен ComfyUI в `models/model_patches`.
-
-Native workflow:
-- `ModelPatchLoader`;
-- `MiniMaxH3FunControlNetApply`;
-- patched model затем проходит через текущий `ModelAttentionBackend` и sampler.
-
-UI modes:
-- `canny_auto` — raw control video -> built-in `Canny`;
-- `canny` — prepared edge video;
-- `pose` — prepared pose video;
-- `depth` — prepared depth video;
-- `hed` — prepared HED video;
-- `mlsd` — prepared MLSD video;
-- `inpaint` — source video + black/white mask, optional extra control video.
-
-Inpaint mask:
-- mask video -> `GetVideoComponents` -> `ImageToMask(channel=red)`;
-- white = regenerate.
-
-Control parameters:
-- strength;
-- start_percent;
-- end_percent;
-- Canny low/high thresholds.
-
-Важно: сайт автоматически строит только Canny. Pose/Depth/HED/MLSD надо предварительно получить внешним/preprocessor workflow и загрузить как готовое control video. Не добавлять скрытый auto-preprocessor без отдельного решения.
-
-Требование: ComfyUI 0.35+ для Union v1. Union 2.0 не является default этого сайта и требует отдельной проверки более нового ComfyUI.
-
-### Temporary media lifecycle
-
-Ref media, Timeline guides и ControlNet videos сначала живут в `data/uploads/`, чтобы failed job можно было Retry. Перед выполнением они копируются в:
-
-```text
-COMFYUI_INPUT_DIR/aivideosite/<job_id>/
-```
-
-Каталог создаётся лениво только при необходимости и удаляется в `finally` после success/error/cancel. После успешной job исходные temporary uploads также удаляются worker-ом. Character assets остаются persistent.
-
-
----
-
-## 26. Локальный Gemma4 26B A4B Heretic / чат / управление
-
-Добавлено 20 ноября 2026.
-
-### Модель
-
-Используется:
-
-\`\`\`text
-llmfan46/gemma-4-26B-A4B-it-uncensored-heretic-GGUF
-Q4_K_M GGUF
-\`\`\`
-
-Файл модели:
-
-\`\`\`text
-/opt/ai/models/llm/gemma-4-26B-A4B-it-uncensored-heretic-Q4_K_M.gguf
-\`\`\`
-
-Runtime:
-
-\`\`\`text
-/opt/ai/llama.cpp/build/bin/llama-server
-\`\`\`
-
-Порты:
-
-- OpenAI-compatible chat API: \`127.0.0.1:8090\`;
-- локальный control API менеджера: \`127.0.0.1:8091\`.
-
-### CUDA / llama.cpp
-
-\`llama.cpp\` должен быть собран с CUDA:
-
-\`\`\`bash
-cd /opt/ai/llama.cpp
-
-cmake -B build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DGGML_CUDA=ON \
-  -DGGML_BLAS=ON \
-  -DGGML_BLAS_VENDOR=OpenBLAS \
-  -DCMAKE_CUDA_ARCHITECTURES="75;86"
-
-cmake --build build --config Release -j 18 -t llama-server
-\`\`\`
-
-Архитектуры:
-
-- \`75\` — RTX2080 / Turing;
-- \`86\` — RTX3090 / Ampere.
-
-### Dynamic GPU / CPU failover
-
-\`systemd/llm-assistant.service\` запускает:
-
-\`\`\`text
-app/llm_assistant_manager.py
-\`\`\`
-
-Менеджер держит LLM на свободном устройстве с приоритетом:
-
-1. RTX2080;
-2. RTX3090;
-3. CPU, если обе GPU заняты H3.
-
-H3 worker перед стартом GPU-job вызывает локальный manager:
-
-\`\`\`text
-POST 127.0.0.1:8091/reserve
-\`\`\`
-
-После завершения/error/cancel:
-
-\`\`\`text
-POST 127.0.0.1:8091/release
-\`\`\`
-
-Если LLM сидит на GPU, которую хочет H3, менеджер сначала переносит LLM на другую свободную GPU либо CPU. После освобождения карты LLM автоматически возвращается на GPU.
-
-Менеджер также проверяет \`/queue\` обоих ComfyUI backend, поэтому ручная задача в ComfyUI делает соответствующую GPU недоступной для LLM.
-
-Старый ручной \`llama-server --port 8090\` очищается через \`ExecStartPre\`, чтобы не было \`couldn't bind HTTP server socket\`.
-
-### Context
-
-Реальный context запуска:
-
-\`\`\`text
-LLM_CTX_SIZE=131072
-\`\`\`
-
-То есть Gemma работает с контекстом 128k tokens.
-
-System prompt использует:
-
-- operator layer в \`app/assistant.py\`;
-- полный machine-readable H3 guide:
-  \`app/static/h3-prompting-guide-ai.txt\`.
-
-Текущий полный guide примерно 31k символов (~8k tokens грубой оценки), а весь system context остаётся заметно ниже пользовательского лимита ~16k tokens для system prompt, оставляя место под history/current generator state/ответ.
-
-### Thinking toggle
-
-Thinking по умолчанию OFF.
-
-В заголовке локального чата есть кнопка-мозг:
-
-- выключена -> backend добавляет \`/no_think\`;
-- включена -> backend добавляет \`/think\`;
-- состояние сохраняется в browser localStorage отдельно на пользователя;
-- работает и для режима \`Разговор\`, и для \`Управление\`.
-
-Внутренний reasoning пользователю не показывается:
-
-- \`reasoning_content\` не форвардится;
-- inline \`<think>...</think>\` блоки удаляются/фильтруются.
-
-### UI чата
-
-На главной справа снизу:
-
-- кнопка \`ИИ\`;
-- плавающее окно;
-- режимы:
-  - \`Разговор\`;
-  - \`Управление\`;
-- per-user история в localStorage;
-- streaming ответа;
-- статус текущего target: RTX2080 / RTX3090 / CPU;
-- кнопка Thinking;
-- очистка истории;
-- копирование ответа.
-
-Browser НЕ ходит напрямую на llama port 8090. Всё проксируется через авторизованные site API:
-
-\`\`\`text
-GET  /api/assistant/status
-POST /api/assistant/chat
-POST /api/assistant/control
-\`\`\`
-
-### Разговор
-
-Обычный streaming chat + помощь по H3.
-
-Для H3 модель получает:
-
-- текущие настройки формы;
-- operator rules;
-- полный локальный H3 guide;
-- историю;
-- \`/think\` или \`/no_think\`.
-
-Жёсткое правило языка:
-
-- объяснение пользователю может быть на русском;
-- production-ready H3 prompt ОБЯЗАН быть на английском;
-- исключение: exact dialogue, lyrics и exact on-screen text остаются на исходном языке.
-
-Например русская реплика внутри английского H3 prompt:
-
-\`\`\`text
-<d>[Russian] Я люблю Котика.</d>
-\`\`\`
-
-### Управление
-
-\`Управление\` возвращает server-validated JSON и реально меняет форму генератора.
-
-Разрешённые поля:
-
-- prompt;
-- generation_mode;
-- seconds;
-- fps;
-- steps;
-- seed;
-- generate_audio;
-- resolution_shape / resolution;
-- reference_task;
-- ref_image_size;
-- ControlNet mode/strength/start/end/Canny thresholds;
-- selected saved Character IDs.
-
-Модель не получает произвольный shell/tool access. Она не может загрузить отсутствующие файлы и не должна выдумывать references/Character IDs.
-
-Backend валидирует значения перед применением.
-
-### H3 system prompt / guide
-
-Основные правила, которые должен соблюдать локальный агент:
-
-- правильно выбирать FL2VA / Ref2VA / Timeline / Digital Human;
-- не путать exact First/Last anchors, semantic Ref2VA storyboard refs и exact Timeline Guides;
-- писать observable actions строго по хронологии;
-- сохранять Character identity/outfit/props/handedness;
-- использовать корректные Ref2VA retention/roles;
-- учитывать H3 native audio;
-- различать structural ControlNet и identity refs;
-- помнить, что raw auto-preprocess на сайте есть только для Canny;
-- Pose/Depth/HED/MLSD ожидают заранее подготовленный control video;
-- не придумывать лишние people/dialogue/music/cuts/camera moves;
-- проверять, что действия и dialogue реально помещаются в duration;
-- готовый H3 prompt писать на английском.
-
-### Последние UI fixes
-
-Сделано:
-
-- duration range:
-  - 1–10 sec green;
-  - 11–20 yellow;
-  - 21–30 red;
-- steps:
-  - 6–10 green;
-  - 12–16 yellow;
-  - 18–24 red;
-- FPS:
-  - 24 green;
-  - 12–23 и 25 yellow;
-  - 6–11 и 26–32 red;
-- sliders приведены к единому тонкому Tabler-like стилю;
-- общий горизонтальный overflow главной страницы исправлен;
-- help-tip больше не просвечивает поверх sticky header;
-- sticky header находится ниже assistant overlay;
-- SSE от llama.cpp принудительно декодируется UTF-8;
-- уже сохранённый mojibake assistant history автоматически пытается восстановиться;
-- clipboard copy имеет fallback:
-  - сначала \`navigator.clipboard.writeText\`;
-  - при reject/error -> hidden textarea + \`document.execCommand("copy")\`;
-- fallback используется и в assistant chat, и в guide/copy-paste/link/media-info copy.
-
-### Основные файлы LLM
-
-\`\`\`text
 app/assistant.py
 app/llm_assistant_manager.py
-app/static/assistant.js
-app/static/h3-prompting-guide-ai.txt
-app/templates/index.html
-app/static/app.js
-app/static/app.css
-app/main.py
-app/worker.py
-systemd/llm-assistant.service
-systemd/aivideosite.service
-docs/LOCAL_LLM_ASSISTANT.md
-\`\`\`
+```
 
-### Установка / обновление services
+Local preload:
 
-После \`git pull\` при изменении systemd:
+```text
+app/static/assistant_context/01_minimax_h3_master_guide_en.txt
+app/static/assistant_context/02_minimax_h3_practical_playbook_en.txt
+app/static/assistant_context/03_aivideosite_v2_operator_map_en.txt
+```
 
-\`\`\`bash
-cd /opt/ai/aivideosite
+Public external guides:
+- `app/static/h3-prompting-guide-ai.txt`;
+- `app/static/v2-chatgpt-site-guide.txt`.
 
-sudo cp systemd/llm-assistant.service /etc/systemd/system/llm-assistant.service
-sudo cp systemd/aivideosite.service /etc/systemd/system/aivideosite.service
+Magic Wand canonical prompt:
+1. integrated_multimodal_description
+2. overall_soundscape
+3. non_diegetic_music
 
-sudo systemctl daemon-reload
-sudo systemctl enable llm-assistant.service
-sudo systemctl enable aivideosite.service
+Explicit dialogue/lyrics:
+- stable `(S1)/(S2)`;
+- exact `<d>[Language] ...</d>`;
+- no duplicate literal outside the tag.
 
-sudo systemctl restart llm-assistant.service
-sudo systemctl restart aivideosite.service
-\`\`\`
+Wand pipeline:
+- draft;
+- cleanup;
+- deterministic validation;
+- repair;
+- one-speaker deterministic normalization for common quote formatting.
 
-Для обычных site-only JS/Python/CSS изменений обычно достаточно:
+## 7. Persistent browser state
 
-\`\`\`bash
-cd /opt/ai/aivideosite
-git pull origin main
-sudo systemctl restart aivideosite.service
-\`\`\`
+Per-user localStorage includes:
+- Video settings;
+- selected presets/muted voices;
+- saved master track + waveform start;
+- track output toggles;
+- active preset tab;
+- chat history;
+- «Промт пользователя»;
+- editor project;
+- library UI;
+- system auto-refresh.
 
-и затем browser \`Ctrl+F5\`.
+Local browser `File` objects cannot be restored after reload.
 
-### Диагностика LLM
+## 8. Backend generation
 
-\`\`\`bash
-systemctl --no-pager --full status llm-assistant.service
-journalctl -u llm-assistant.service -n 150 --no-pager
+Current public generation endpoints:
 
-curl -sS http://127.0.0.1:8091/status
-curl -sS http://127.0.0.1:8090/health
+```text
+POST /api/v2/generate
+POST /api/v2/audio
+```
 
-watch -n 0.5 nvidia-smi
-\`\`\`
+Do not reintroduce the retired generic V1 generator endpoint.
 
-Ожидаемый manager status при свободной RTX2080:
+Useful helpers in `app/main.py`:
+- `_v2_resolution`;
+- `_v2_seed`;
+- selected ID parsers;
+- Character/Location/Misc reference builders;
+- `_v2_enqueue_reference_job`;
+- master-track storage/segment helpers.
 
-\`\`\`json
-{"ok":true,"target":"RTX2080","reserved_gpus":[],"llama_alive":true,"llama_port":8090}
-\`\`\`
+`app/h3_references.py`:
+- validates H3 reference budgets;
+- builds real Ref2VA reference mapping;
+- promotes canonical prompt to backend schema.
 
-### Что ещё требует runtime проверки пользователем
+`app/comfy.py`:
+- builds real ComfyUI workflows.
 
-- фактический 128k context после установки нового systemd service;
-- Thinking ON/OFF в browser;
-- отсутствие reasoning в visible output;
-- prompt generation всегда English при русском запросе;
-- copy buttons на текущем browser/origin;
-- dynamic LLM move RTX2080 -> RTX3090 -> CPU при реальных одновременных H3 jobs;
-- возврат LLM обратно на GPU после завершения H3;
-- визуальный UI на desktop/mobile.
+`app/worker.py`:
+- dual GPU dispatch;
+- H3 generation;
+- final master-track mux/mix;
+- temporary media cleanup;
+- editor export.
+
+## 9. Temporary file / Retry contract
+
+Important invariants:
+- persistent Character/Location/Misc files are never worker temporary files;
+- direct First/Last/guide/master-track segment files are temporary;
+- failed jobs keep sources required for Retry;
+- Retry validates those sources before clone;
+- success removes temporary inputs;
+- job delete/prune removes remaining temporary uploads;
+- temporary `final_audio.path` participates in both Retry validation and cleanup;
+- partial failed generated MP4 must be deleted from Library directory.
+
+## 10. Database
+
+SQLite stores:
+- jobs;
+- generated media;
+- Characters;
+- Locations;
+- Misc presets.
+
+Startup:
+- interrupted running jobs are recovered;
+- retired V1 job kinds are purged;
+- old still-image table/storage migration remains only as cleanup compatibility.
+
+## 11. Current removed legacy pieces
+
+Intentionally removed:
+- V1 dashboard/template;
+- V1 app JS/CSS;
+- V1 assistant panel JS;
+- old `/api/state`;
+- old generic `/api/generate`;
+- V1 audio replace/remove endpoints and worker jobs;
+- retired direct reference-manifest parser;
+- retired jobs pagination helper;
+- stale recent-character browser state.
+
+Do not recreate these as “compatibility” unless the product requirement changes.
+
+## 12. Manual smoke test after deployment
+
+After `git pull` + service restart + Ctrl+F5:
+
+1. `/` opens the main UI; `/v2` still opens the same UI.
+2. Login/logout.
+3. Text-only Video generation.
+4. First-only, Last-only, First+Last.
+5. Character/Location/Misc reference generation.
+6. preset + First/Last.
+7. master track without visual input.
+8. master track + First/Last singing/lip-sync.
+9. Cancel + failed Retry.
+10. Library open/download/frame extraction/delete.
+11. Editor export.
+12. Chat streaming/Thinking/user prompt/copy blocks.
+13. selected-only preset visibility in a new chat.
+14. System metrics for both GPUs/Gemma/ComfyUI.
+15. reload persistence of all recoverable settings.
