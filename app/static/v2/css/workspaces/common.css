@@ -21,5 +21,5 @@
 .v2-prompt-counter{color:#7f879d;font-size:10px;font-variant-numeric:tabular-nums}
 .v2-prompt-panel-box textarea{min-height:145px;resize:none;padding-right:66px}
 .v2-prompt-panel-box textarea::placeholder{color:#737b91}
-.v2-prompt-panel-box .v2-inline-wand{top:8px;right:8px;width:42px;height:42px}
+.v2-prompt-panel-box .v2-inline-wand{top:12px;right:12px;width:38px;height:38px}
 .v2-inline-wand:disabled{cursor:not-allowed;opacity:.58;filter:none}
