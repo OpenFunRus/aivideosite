@@ -91,8 +91,14 @@
   W.openMediaDialog = openMediaDialog;
 
   const PAGE_SIZE = 20;
-  let page = 1;
-  let search = "";
+  const LIBRARY_UI_KEY = "aivideosite-" + api.userId + "-v2-library-ui";
+  const savedLibraryUi = W.loadJson(LIBRARY_UI_KEY, {});
+  let page = Math.max(1, Number(savedLibraryUi?.page) || 1);
+  let searchText = String(savedLibraryUi?.search || "");
+  let search = searchText.trim().toLocaleLowerCase("ru-RU");
+  const saveLibraryUi = () => W.saveJson(LIBRARY_UI_KEY, { page, search: searchText });
+  const searchInput = qs("#v2-library-search");
+  if (searchInput) searchInput.value = searchText;
   const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-' + name + '"></use></svg>';
   const pageNumbers = (current, total) => {
     const numbers = new Set([1, total, current - 1, current, current + 1]);
@@ -166,9 +172,11 @@
     W.refreshState();
   });
 
-  qs("#v2-library-search")?.addEventListener("input", (event) => {
-    search = event.target.value.trim().toLocaleLowerCase("ru-RU");
+  searchInput?.addEventListener("input", (event) => {
+    searchText = event.target.value;
+    search = searchText.trim().toLocaleLowerCase("ru-RU");
     page = 1;
+    saveLibraryUi();
     renderLibrary();
   });
 
@@ -176,6 +184,7 @@
     const button = event.target.closest("[data-library-page]");
     if (!button || button.disabled) return;
     page = Number(button.dataset.libraryPage) || 1;
+    saveLibraryUi();
     renderLibrary();
     qs("#v2-library-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
