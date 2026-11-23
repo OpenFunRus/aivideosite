@@ -143,7 +143,7 @@ Local Gemma4 26B A4B Heretic streaming assistant.
 - Thinking toggle.
 - per-user browser history.
 - knows current V2 structure and H3 Video guide.
-- the retired Qwen3-8B assistant is not the current model.
+- Gemma4 26B A4B Heretic is the current local assistant.
 
 9. СИСТЕМА
 -----------
