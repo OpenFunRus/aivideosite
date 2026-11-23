@@ -121,15 +121,33 @@
     const button = qs("#v2-wand");
     const audioMode = Boolean(window.AIVideoV2Workspaces?.audioModeEnabled?.());
     const audioContext = window.AIVideoV2Workspaces?.audioAssistantContext?.() || {};
+    const hasPresets =
+      state.selectedCharacterIds.size > 0 ||
+      state.selectedLocationIds.size > 0 ||
+      state.selectedMiscIds.size > 0;
+    const hasFrames = Boolean(
+      qs("#v2-first-frame")?.files?.[0] ||
+      qs("#v2-last-frame")?.files?.[0]
+    );
+    const audioDrivesH3 = audioMode && hasPresets;
     button.disabled = true;
     showToast(audioMode ? "Локальный ИИ улучшает промт под аудиодорожку…" : "Локальный ИИ улучшает промт…");
     try {
       const modeInstruction = audioMode
         ? (
-          "Это режим Digital Human с driving audio внутри единой страницы «Видео». " +
-          "Master track уже передаётся модели как управляющее аудио: синхронизируй артикуляцию, жесты и body motion с ним, но не проси H3 сочинять или повторять этот трек. " +
-          "non_diegetic_music: N/A. Если generate_scene_audio выключен — overall_soundscape: N/A; если включен — только физические/фоновые звуки сцены. " +
-          "First/Last при наличии backend закрепляет отдельно как exact native MiniMaxH3AddGuide anchors, поэтому не придумывай для них Picture labels и не добавляй FL2VA alignment line. "
+          audioDrivesH3
+            ? (
+              "Это режим Digital Human с driving audio внутри единой страницы «Видео»: выбранные Characters/Locations/Misc дают semantic visual references. " +
+              "Master track передаётся модели как управляющее аудио: синхронизируй видимую артикуляцию, жесты и body motion с ним, но не проси H3 сочинять или повторять этот трек. " +
+              "non_diegetic_music: N/A. Если generate_scene_audio выключен — overall_soundscape: N/A; если включен — только физические/фоновые звуки сцены. " +
+              "First/Last при наличии backend закрепляет отдельно как exact native MiniMaxH3AddGuide anchors, поэтому не придумывай для них Picture labels и не добавляй FL2VA alignment line. "
+            )
+            : (
+              "Это обычный Video/FL2VA режим с выбранным master track для итогового MP4, НЕ Digital Human. " +
+              "Master track не передаётся H3 как driving audio, поэтому не требуй visual reference и не описывай синхронизацию артикуляции с треком. " +
+              "Разрешены prompt-only, First, Last и First→Last; First/Last здесь являются обычными FL2VA endpoint-кадрами. " +
+              "non_diegetic_music: N/A. Если generate_scene_audio выключен — overall_soundscape: N/A; если включен — только физические/фоновые звуки сцены. "
+            )
         )
         : (
           "Это обычный режим Video без driving master track. " +
@@ -165,14 +183,13 @@
             ...audioContext,
             workspace: "create",
             audio_mode: audioMode,
-            generation_mode: audioMode
+            has_driving_audio: audioDrivesH3,
+            generation_mode: audioDrivesH3
               ? "digital_human"
-              : (
-                (qs("#v2-first-frame")?.files?.[0] || qs("#v2-last-frame")?.files?.[0])
-                  ? ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length || api.selectedMisc?.()?.length) ? "multiframe" : "frames")
-                  : ((api.selectedCharacters?.()?.length || api.selectedLocations?.()?.length || api.selectedMisc?.()?.length) ? "reference" : "frames")
-              ),
-            reference_task: audioMode ? "audio_reference" : undefined,
+              : (hasFrames ? (hasPresets ? "multiframe" : "frames") : (hasPresets ? "reference" : "frames")),
+            reference_task: audioDrivesH3
+              ? "audio_reference"
+              : (hasFrames && hasPresets ? "timeline_guides" : "reference_generation"),
             generate_audio: audioMode ? Boolean(audioContext.generate_scene_audio) : Boolean(qs("#v2-audio")?.checked),
             has_first_frame: Boolean(qs("#v2-first-frame")?.files?.[0]),
             has_last_frame: Boolean(qs("#v2-last-frame")?.files?.[0]),
