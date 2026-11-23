@@ -424,7 +424,11 @@ def _settings_context(settings: Any) -> str:
             "source_workspace",
             "master_track_title",
             "audio_mode",
+            "has_master_track",
             "has_driving_audio",
+            "track_id",
+            "track_title",
+            "endpoint_mode",
         )
         if key in settings
     }
@@ -464,7 +468,9 @@ def _settings_context(settings: Any) -> str:
                 "track_id",
                 "track_title",
                 "audio_mode",
+                "has_master_track",
                 "has_driving_audio",
+                "endpoint_mode",
             )
             if key in block
         }
@@ -864,6 +870,14 @@ def _extract_h3_prompt_text(content: str) -> str:
     prompt = re.sub(r"\s*```+\s*$", "", prompt).strip()
     if prompt.endswith('\"}') or prompt.endswith("'}"):
         prompt = prompt[:-2].rstrip()
+    # Magic Wand output is the H3 prompt itself. Gemma may occasionally inherit the
+    # normal-chat recommendation footer from the shared guide; strip that UI-only line.
+    prompt = re.sub(
+        r"\n+\s*(?:Mode|Режим)\s*:\s*[^\n]*\Z",
+        "",
+        prompt,
+        flags=re.IGNORECASE,
+    ).rstrip()
     return prompt[:16000]
 
 
@@ -873,6 +887,8 @@ def _v2_wand_system() -> str:
     return (
         "You are the dedicated MiniMax H3 Video Magic Wand for AI Video Site V2. "
         "Return ONLY the final H3 prompt text. No JSON, no Markdown fences, no explanation. "
+        "Never append a recommendation/status footer such as Mode / Duration / FPS / Steps / H3 Audio; "
+        "that footer belongs to normal Chat only, never to Magic Wand output. "
         "The output MUST contain exactly these three fields in this exact order: "
         "integrated_multimodal_description, overall_soundscape, non_diegetic_music. "
         "Write H3 production instructions in English, but keep exact dialogue, lyrics and exact visible text "
