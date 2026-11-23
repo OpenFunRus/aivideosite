@@ -4,69 +4,109 @@
 
 ## Что уже реализовано
 
-- произвольное количество password-only профилей из config: у каждого своя библиотека, очередь/история, Characters, V2 chat/editor drafts и browser-настройки;
-- тёмный адаптивный интерфейс без внешних CDN;
-- локальные SVG-иконки Tabler;
-- четыре H3-режима: FL2VA «Кадры», Ref2VA «Референсы», native «Таймлайн» с exact guide frames и Digital Human;
-- FL2VA: T2V / First Frame / Last Frame / First+Last Frame с точными endpoint anchors;
-- Ref2VA: до 9 reference images, 3 reference videos, 3 standalone audio и 15 media всего; роли и retention на каждый direct reference;
-- per-user библиотека «Персонажи»: 1–4 appearance images, описание постоянных признаков и optional voice reference;
-- Ref2VA task presets: reference generation, semantic storyboard/keyframe completion, video editing, video continuation, audio reuse и audio reference;
-- Timeline: до 16 exact guide images с точным временем; сайт строит native `MiniMaxH3AddGuide` chain и переводит секунды в `frame_idx`;
-- H3 Fun ControlNet Union поверх любого режима: Canny Auto, prepared Canny/Pose/Depth/HED/MLSD и video inpainting через source+mask;
-- Digital Human: visual references + ровно один driving audio;
-- длительность 1–30 секунд, по умолчанию 5 секунд;
-- все ratio локального H3 Easy: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9; классы 360p / 480p / 720p / 1080p округляются вверх до сетки ×32, плюс 256×256 для 1:1 тестов;
-- FPS регулируется ползунком 6–32 с шагом 1; 24 FPS — рекомендуемое значение;
-- шаги регулируются ползунком 6–24 с шагом 2. Для новых FL2VA-задач ровно 8 шагов используют установленную FL Turbo LoRA; остальные значения идут через Base. Ref2VA/Timeline/Digital Human в новом диапазоне 6–24 работают через Base, потому что установленная Ref Turbo LoRA рассчитана на 4 шага;
-- native Timeline Guides и ControlNet переключают sampler на `res_multistep`, как в официальных ComfyUI H3 workflows; обычный Easy path остаётся на `euler`;
-- полноэкранный гайд по MiniMax H3 прямо в интерфейсе: FL2VA/Ref2VA/Timeline/Digital Human, Characters, roles/retention, ControlNet, video editing/continuation, shots/timing, camera, dialogue/audio, ограничения и примеры;
-- отдельный machine-readable H3 Video guide: `/static/h3-prompting-guide-ai.txt`; copy-paste контекст для ChatGPT объединяет структуру V2 и этот актуальный guide;
-- опциональное нативное аудио MiniMax H3 через Audio VAE, выключено по умолчанию;
-- prompt и все восстанавливаемые параметры генерации автоматически сохраняются в per-user localStorage: quality/ratio/duration/steps/seed, H3 audio, master-track mode, saved track + waveform position, embed/scene-sound toggles, selected Character/Location/Misc, muted Character voices и активная preset-вкладка; browser security не позволяет восстановить локальные First/Last или загруженный с диска audio File после reload;
-- очередь GPU-задач с хранением состояния в SQLite;
-- генерация продолжает работать после закрытия браузера;
-- библиотека роликов с просмотром и скачиванием;
-- удалить звук или заменить аудиодорожку через FFmpeg;
-- отдельная вкладка «Монтаж»: drag-and-drop клипов из библиотеки на таймлайн, перестановка порядка, громкость/полное отключение звука каждого клипа;
-- отдельная пользовательская аудиодорожка с позицией на таймлайне, обрезкой начала/длины и громкостью;
-- экспорт таймлайна через FFmpeg в единый MP4 с автоматическим скачиванием и сохранением результата в библиотеке;
-- два независимых H3 ComfyUI backend: primary RTX3090 и secondary RTX2080, плюс сайт;
-- мобильная навигация и responsive layout.
-
-
-## V2 — упрощённый task-first интерфейс
-
-Старый интерфейс сохранён на `/`. Новый V2 доступен на:
+Основной интерфейс доступен на корне сайта:
 
 ```text
-http://IP_ВМ:8000/v2
+http://IP_ВМ:8000/
 ```
 
-V2 уже содержит отдельные рабочие пространства:
+Маршруты `/v2` и `/v2/` оставлены только как совместимые alias. Legacy V1 frontend удалён.
 
-- **Видео** — единый генератор: 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 сек, 8/12/16 steps, seed, first/last frames, Characters/Locations/«Прочее», magic wand и опциональная аудиодорожка. Master track + любой visual input (First/Last или визуальный пресет) использует Digital Human driving audio; First/Last остаются exact native Timeline Guides. Без visual input остаётся prompt-only FL2VA с последующим mux трека;
-- **Библиотека** — просмотр результатов, скачивание и извлечение стартового/финального PNG-кадра для продолжения через First Frame;
-- **Очередь** — rolling log последних 20 задач без пагинации и ручного удаления строк, плюс занятость обеих GPU;
-- **Монтаж** — последовательный Video 1 timeline, reorder, zoom/snap/timecode, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
-- **Чат с ИИ** — streaming Gemma с Thinking и 128k context meter; общий «Промт пользователя» для чата и Magic Wand; copy-ready fenced-блоки с кнопкой копирования; LLM видит подробные metadata только отмеченных справа Character/Location/Misc, неотмеченные пресеты полностью исключаются из контекста;
-- **Система** — GPU/VRAM/load/temp, Gemma, ComfyUI, RAM/CPU/disk;
-- **Инструкция** — обучение по сайту/H3 и полный copy-paste context для ChatGPT.
+### Видео
 
-Подробный статус и ограничения: [docs/v2/PLAN.md](docs/v2/PLAN.md).
+- единая форма генерации MiniMax H3;
+- качество: 480p / 720p / 1080p;
+- формат: 1:1 / 16:9 / 9:16;
+- длительность: 5 / 10 / 15 секунд;
+- 8 / 12 / 16 steps;
+- фиксированные 24 FPS;
+- Seed: Auto (`-1`) или `0..4294967295`;
+- prompt до 16 000 символов;
+- First Frame / Last Frame;
+- reusable Character / Location / «Прочее» presets;
+- Character: 1–4 appearance refs, описание и optional voice reference;
+- Location: 1–4 environment refs + сохранённый prompt;
+- Misc: reusable semantic refs по категориям object / gear / vehicle / creature / environment / visual trait / pose-action / style;
+- ordinary H3 Audio toggle;
+- master-track workflow прямо в той же форме.
 
-## Опциональный локальный ИИ-помощник
+Режим выбирается backend автоматически:
 
-В сайт встроен плавающий локальный чат с 128k context на `llmfan46/gemma-4-26B-A4B-it-uncensored-heretic-GGUF` Q4_K_M через `llama.cpp`:
+- без visual refs -> Frames / FL2VA;
+- Character / Location / Misc -> Ref2VA;
+- semantic preset + First/Last -> Ref2VA + native exact Timeline Guides;
+- master track без visual input -> обычная генерация + optional final mux;
+- master track + First/Last или semantic preset -> Digital Human с driving audio;
+- First/Last в Digital Human режиме применяются отдельно как native exact Timeline Guides.
 
-- **Разговор** — обычный стриминговый чат, помощь по H3 и готовые промты;
-- **Управление** — модель получает текущую форму генератора, возвращает серверно валидируемый JSON и может менять промт, режим, длительность, FPS, steps, seed, H3 Audio, формат/размер, Ref2VA/ControlNet и выбранных сохранённых персонажей;
-- история чата хранится отдельно в браузере каждого пользователя;
-- браузер не ходит напрямую на порт 8090: запросы проксируются через авторизованные API сайта.
+### Prompt / локальный ИИ
 
-Менеджер держит LLM на свободной GPU (приоритет RTX2080, затем RTX3090), а когда обе карты заняты H3 — автоматически переносит модель на CPU. H3 worker резервирует GPU до запуска задачи и освобождает после завершения.
+- Magic Wand переписывает обычный запрос в canonical MiniMax H3 prompt;
+- FORMAT LOCK + few-shot примеры для shots, dialogue, singing, First/Last и driving audio;
+- exact dialogue/lyrics сохраняются через stable `(Sx)` + `<d>[Language] ...</d>`;
+- «Промт пользователя» — persistent per-user инструкция, общая для Chat и Magic Wand;
+- локальная Gemma4 26B A4B Heretic Q4_K_M;
+- 128k context;
+- Thinking toggle;
+- copy-ready prompt/code/JSON/shell/config блоки в чате получают отдельную кнопку копирования;
+- LLM получает глубокие metadata только отмеченных справа Character/Location/Misc; неотмеченные presets вообще не сериализуются в её context.
 
-Установка и проверка: [docs/LOCAL_LLM_ASSISTANT.md](docs/LOCAL_LLM_ASSISTANT.md).
+### Состояние формы
+
+В per-user localStorage сохраняются все восстанавливаемые настройки:
+
+- prompt;
+- quality / ratio / duration / steps / seed;
+- H3 Audio;
+- master-track mode;
+- выбранный сохранённый track и позиция waveform;
+- embed-track / scene-sound;
+- selected Character / Location / Misc;
+- muted Character voices;
+- активная preset-вкладка;
+- chat history, user prompt, editor project и другие workspace-specific настройки.
+
+Browser security не позволяет после reload восстановить локальный `File`, выбранный напрямую с диска: First/Last и незагруженный audio-файл нужно выбрать заново. Сохранённый master track восстанавливается.
+
+### Библиотека / очередь / монтаж / система
+
+- per-user библиотека готовых MP4;
+- просмотр, download, delete, извлечение Start/Final PNG;
+- rolling queue последних задач: Cancel / Retry / Result;
+- две H3 GPU lanes: RTX3090 primary + RTX2080 secondary;
+- failed-job Retry сохраняет нужные temporary inputs; удаление/prune очищают их;
+- FFmpeg editor: sequential video timeline, reorder, trim, split, per-clip volume, fade in/out, one Music track, JSON project save/open, export to Library;
+- системный экран: GPU/VRAM/load/temp, Gemma target/status, оба ComfyUI, RAM/CPU/disk, queue counts и графики;
+- мобильные drawers для навигации и Presets.
+
+### Архитектура frontend
+
+Текущий frontend структурирован, а не собран в legacy-монолит:
+
+```text
+app/templates/v2.html
+app/templates/v2/layout/
+app/templates/v2/components/
+app/templates/v2/views/
+
+app/static/v2/css/
+app/static/v2/css/workspaces/
+app/static/v2/js/
+app/static/v2/js/workspaces/
+```
+
+Legacy `app/templates/index.html`, `app/static/app.js`, `app/static/app.css` и `app/static/assistant.js` удалены.
+
+Подробная структура: [docs/v2/FRONTEND_STRUCTURE.md](docs/v2/FRONTEND_STRUCTURE.md).
+
+### Machine-readable guides
+
+- внешний/копируемый H3 guide: `/static/h3-prompting-guide-ai.txt`;
+- site context для внешнего ChatGPT: `/static/v2-chatgpt-site-guide.txt`;
+- preload локальной Gemma:
+  - `app/static/assistant_context/01_minimax_h3_master_guide_en.txt`;
+  - `02_minimax_h3_practical_playbook_en.txt`;
+  - `03_aivideosite_v2_operator_map_en.txt`.
 
 ## Ожидаемая структура на Ubuntu
 
