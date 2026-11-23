@@ -46,10 +46,9 @@ http://IP_ВМ:8000/v2
 V2 уже содержит отдельные рабочие пространства:
 
 - **Создать** — 480p/720p/1080p, 1:1/16:9/9:16, 5/10/15 сек, 8/12/16 steps, seed, sound, first/last frames, Characters и magic wand;
-- **Продолжить** — Library/upload source, автоматическое наследование размера и Ref2VA video continuation;
 - **По аудио** — Digital Human с driving audio и Character/visual reference;
-- **Продолжить клип** — previous video + сохранённый per-user master track, автоматическая нарезка следующего аудиосегмента и перенос позиции в следующий клип;
-- **Библиотека** и **Очередь** — V2-native просмотр результатов, jobs и занятость обеих GPU;
+- **Библиотека** — просмотр результатов, скачивание и извлечение стартового/финального PNG-кадра для продолжения через First Frame;
+- **Очередь** — rolling log последних 20 задач без пагинации и ручного удаления строк, плюс занятость обеих GPU;
 - **Монтаж** — последовательный Video 1 timeline, reorder, zoom/snap/timecode, trim, split, volume, fade in/out и отдельная Music-дорожка с FFmpeg export;
 - **Чат** — streaming Gemma4 26B A4B Heretic с Thinking и управлением реальным 128k context budget;
 - **Система** — GPU/VRAM/load/temp, Gemma, ComfyUI, RAM/CPU/disk;

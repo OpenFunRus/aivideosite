@@ -38,7 +38,7 @@
         <div><h3>Быстрый старт</h3><p>Нормальный рабочий цикл без знания внутренних нод H3.</p></div>
       </div>
       <div class="v2-steps-grid">
-        <article><b>1</b><strong>Выберите задачу</strong><p>Новый ролик — «Создать», продолжение — «Продолжить», клип под песню — «По аудио», следующий кусок клипа — «Продолжить клип».</p></article>
+        <article><b>1</b><strong>Выберите задачу</strong><p>Новый ролик и продолжение через финальный PNG-кадр — «Создать», клип под песню — «По аудио».</p></article>
         <article><b>2</b><strong>Опишите сцену обычными словами</strong><p>Кто в кадре, что делает по порядку, как движется камера, нужен ли звук. Не обязательно вручную писать H3-разметку.</p></article>
         <article><b>3</b><strong>Нажмите волшебную палочку</strong><p>Локальная Gemma4 26B A4B соберёт правильные три H3-поля, тайминг Shot-блоков и сохранит точные реплики на исходном языке.</p></article>
         <article><b>4</b><strong>Проверьте настройки</strong><p>Качество, формат, 5/10/15 секунд, 8/12/16 шагов, Seed и звук. Палочка сама их не меняет.</p></article>
@@ -52,16 +52,16 @@
         <div><h3>Что делает каждый раздел V2</h3><p>Описание соответствует текущему сайту, а не старой версии.</p></div>
       </div>
       <div class="v2-site-guide-grid">
-        <article><span>01</span><h4>Создать</h4><p>Новый ролик из текста. Точные начальный/конечный кадры можно использовать вместе с Characters: персонажи задают identity/voice, а кадры становятся exact Timeline Guides.</p><small>480 / 720 / 1080 · 1:1 / 16:9 / 9:16 · 5 / 10 / 15 сек</small></article>
-        <article><span>02</span><h4>Продолжить</h4><p>Берёт предыдущий ролик из библиотеки или файла. Prompt описывает только продолжение; H3 должен сохранить конечную позу, направление, momentum, камеру и сцену.</p><small>Ref2VA video continuation</small></article>
-        <article><span>03</span><h4>По аудио</h4><p>Master track — главный вход. Вы выбираете фрагмент waveform и описываете видимое исполнение: артикуляцию, жесты, танец, тело и камеру.</p><small>Отдельно: вклеить трек / фоновые звуки H3</small></article>
-        <article><span>04</span><h4>Продолжить клип</h4><p>Следующий фрагмент того же музыкального клипа: предыдущий ролик + тот же master track + следующая позиция по времени.</p><small>Сохраняет визуальную и музыкальную continuity</small></article>
-        <article><span>05</span><h4>Библиотека</h4><p>Результаты по 20 роликов на страницу. Открыть, скачать, продолжить, сделать следующий клип или удалить.</p><small>Поиск + сетка 3 в ряд на desktop</small></article>
-        <article><span>06</span><h4>Очередь</h4><p>Показывает RTX 3090 / RTX 2080 Ti, занятого пользователя и время генерации. Задачи — по 20 на страницу.</p><small>Stop · Result · Retry · Delete по состоянию</small></article>
-        <article><span>07</span><h4>Монтаж</h4><p>Библиотека, viewer, inspector, ruler/playhead и timeline. Реальный export сейчас: последовательная V1 + одна Music-дорожка.</p><small>Trim · split · drag · delete · fades · undo/redo · FFmpeg</small></article>
-        <article><span>08</span><h4>Чат</h4><p>Локальная Gemma4 26B A4B Heretic для общения, идей, вопросов и советов. Он не меняет формы сам; за переписывание prompt в каждом генераторе отвечает его собственная волшебная палочка.</p><small>Streaming · Thinking · 128k · история в браузере пользователя</small></article>
-        <article><span>09</span><h4>Система</h4><p>GPU, VRAM, температура, Gemma, два ComfyUI, RAM/CPU, диск и графики последних 10 минут.</p><small>Автообновление 5 / 10 / 15 / 30 сек</small></article>
-        <article><span>10</span><h4>Персонажи</h4><p>Reusable Character хранит 1–4 изображения внешности, описание и опциональный голос. Для голоса доступны 16 встроенных Qwen3-TTS тембров — 8 мужских и 8 женских — с русским предпрослушиванием или собственный аудиофайл.</p><small>Лицо одним текстом надёжно не фиксируется · голос идёт как H3 reference</small></article>
+        <article><span>01</span><h4>Создать</h4><p>Новый ролик из текста. Первый/последний кадры работают вместе с Characters и Locations: пресеты задают identity/окружение, кадры — точные Timeline Guides.</p><small>480 / 720 / 1080 · 1:1 / 16:9 / 9:16 · 5 / 10 / 15 сек</small></article>
+        <article><span>02</span><h4>По аудио</h4><p>Master track — главный вход. Вы выбираете фрагмент waveform и описываете видимое исполнение: артикуляцию, жесты, танец, тело и камеру.</p><small>Вклеить трек · фоновые звуки H3</small></article>
+        <article><span>03</span><h4>Библиотека</h4><p>Готовые ролики: открыть, скачать, извлечь стартовый или финальный кадр в PNG, удалить. Для продолжения экспортируйте финальный кадр и используйте его как First Frame в «Создать».</p><small>Стартовый кадр · Финальный кадр · поиск</small></article>
+        <article><span>04</span><h4>Очередь</h4><p>RTX 3090 / RTX 2080 Ti и rolling log последних 20 задач. Пагинации и ручного удаления строк нет.</p><small>Stop · Result · Retry · автоочистка старых записей</small></article>
+        <article><span>05</span><h4>Монтаж</h4><p>Библиотека, viewer, inspector, ruler/playhead и timeline. Реальный export: последовательная V1 + одна Music-дорожка.</p><small>Trim · split · drag · delete · fades · undo/redo · FFmpeg</small></article>
+        <article><span>06</span><h4>Чат</h4><p>Локальная Gemma4 26B A4B Heretic для общения, идей, вопросов и советов. Он не меняет формы сам.</p><small>Streaming · Thinking · 128k</small></article>
+        <article><span>07</span><h4>Система</h4><p>GPU, VRAM, температура, Gemma, два ComfyUI, RAM/CPU, диск и графики.</p><small>Автообновление 5 / 10 / 15 / 30 сек</small></article>
+        <article><span>08</span><h4>Персонажи</h4><p>1–4 изображения внешности, описание и опциональный голос. Синий badge показывает число выбранных персонажей.</p><small>Identity refs · voice refs · mute voice</small></article>
+        <article><span>09</span><h4>Локации</h4><p>1–4 изображения окружения и собственный prompt. Красный badge показывает число выбранных локаций.</p><small>Setting refs · архитектура · свет · continuity</small></article>
+        <article><span>10</span><h4>Инструкция</h4><p>Актуальное описание сайта и H3 guide с копированием контекста для другого ChatGPT.</p><small>Текущий рабочий контекст</small></article>
       </div>
     </section>
 
@@ -73,7 +73,7 @@
 
       <div class="v2-guide-callout important">
         <strong>ВАЖНО ИМЕННО ДЛЯ НАШЕГО САЙТА</strong>
-        <p>Во всех четырёх генераторах палочка возвращает три поля. В режимах Characters / Continue / Audio backend сам превращает их в шесть Ref2VA-полей и подставляет настоящие <code>&lt;Picture N&gt;</code>, <code>&lt;Video N&gt;</code> и <code>&lt;Audio N&gt;</code>. Номера references вручную придумывать не надо.</p>
+        <p>В генераторах «Создать» и «По аудио» палочка возвращает три поля. Для Characters / Locations / Audio backend сам превращает их в шесть Ref2VA-полей и подставляет настоящие <code>&lt;Picture N&gt;</code>, <code>&lt;Video N&gt;</code> и <code>&lt;Audio N&gt;</code>. Номера references вручную придумывать не надо.</p>
       </div>
 
       <div class="v2-format-grid">
@@ -87,7 +87,7 @@
         </article>
         <article>
           <div class="v2-format-title"><span>3</span><strong>non_diegetic_music</strong></div>
-          <p>Музыка, которую слышит зритель, но не герои. Если H3 не должен сочинять музыку — <code>N/A</code>. Для наших Audio/Continue Clip с master track почти всегда именно <code>N/A</code>.</p>
+          <p>Музыка, которую слышит зритель, но не герои. Если H3 не должен сочинять музыку — <code>N/A</code>. Для нашего Audio с master track почти всегда именно <code>N/A</code>.</p>
         </article>
       </div>
 
@@ -195,41 +195,6 @@ non_diegetic_music: [Instruments, tempo, rhythm and dynamics, or N/A].</pre>
       </div>
 
       <div class="v2-example-list">
-        <article class="v2-code-card">
-          <div class="v2-code-head"><div><strong>Создать · 10 секунд</strong><small>Один непрерывный эпизод, без музыки</small></div><button type="button" data-guide-copy="prompt-create">Копировать</button></div>
-          <pre id="prompt-create">integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-wide shot frames a tired man standing beside a small campfire in a rain-soaked forest at night, his wet jacket reflecting the orange firelight. The camera pushes in with small amplitude at slow speed in one continuous shot with no cuts. He warms both hands over the fire, hears a branch snap behind him, slowly lowers his hands, turns his head toward screen-left, and freezes while staring into the darkness. The branch breaks with a dry crack.
-
-overall_soundscape: Steady rain falls through the trees, the campfire crackles close to the camera, and distant wind moves through wet branches.
-
-non_diegetic_music: N/A</pre>
-        </article>
-
-        <article class="v2-code-card">
-          <div class="v2-code-head"><div><strong>Продолжить · 10 секунд</strong><small>Продолжаем движение без restart</small></div><button type="button" data-guide-copy="prompt-continue">Копировать</button></div>
-          <pre id="prompt-continue">integrated_multimodal_description: [Shot 1] Live-action, cinematic, continuing directly from the source video's final frame, the man keeps moving toward the metal door without breaking stride or changing screen direction. The camera continues the same slow forward tracking motion. He takes two more steps, reaches the handle with his right hand, pushes the door inward, and pauses in the doorway while still facing screen-right. [Shot 2] At 00:06.000, the camera cuts to a medium shot from inside the same room as he crosses the threshold and looks toward the dim corridor ahead.
-
-overall_soundscape: His footsteps maintain the same pace, the handle clicks, the door hinges creak, and the enclosed room tone remains quiet.
-
-non_diegetic_music: N/A</pre>
-        </article>
-
-        <article class="v2-code-card">
-          <div class="v2-code-head"><div><strong>По аудио · 10 секунд</strong><small>Master track уже загружен</small></div><button type="button" data-guide-copy="prompt-audio">Копировать</button></div>
-          <pre id="prompt-audio">integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium close-up frames the performer facing the camera as the supplied driving audio plays. She sings with natural mouth articulation synchronized to the provided track, keeps both feet planted, gently shifts her shoulders to the rhythm, and raises her left hand once to chest height. The camera pushes in with small amplitude at slow speed. [Shot 2] At 00:06.000, the camera cuts to a close-up as she keeps singing, lowers her hand, and holds eye contact with the lens through the end of the segment.
-
-overall_soundscape: N/A
-
-non_diegetic_music: N/A</pre>
-        </article>
-
-        <article class="v2-code-card">
-          <div class="v2-code-head"><div><strong>Продолжить клип · 10 секунд</strong><small>Следующий кусок того же master track</small></div><button type="button" data-guide-copy="prompt-clip">Копировать</button></div>
-          <pre id="prompt-clip">integrated_multimodal_description: [Shot 1] Live-action, cinematic, continuing directly from the previous segment's final frame, the performer keeps both feet planted and continues the same torso rhythm. The camera maintains the existing slow tracking direction. He turns his shoulders slightly toward screen-right, raises his left hand in one smooth gesture, then lowers it while staying synchronized to the supplied driving audio. [Shot 2] At 00:07.000, the camera cuts to a tighter medium shot as he leans back a few centimeters, returns upright, and finishes the segment looking directly into the lens.
-
-overall_soundscape: N/A
-
-non_diegetic_music: N/A</pre>
-        </article>
       </div>
     </section>
 

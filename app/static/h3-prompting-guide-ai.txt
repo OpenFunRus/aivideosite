@@ -33,7 +33,7 @@ WHY THIS SITE USES THREE FIELDS EVERYWHERE
 
 FRAMES / FL2VA can consume this format directly.
 
-REFERENCES / Characters / Continue / Audio / Continue Clip use Ref2VA internally.
+REFERENCES / Characters / Locations / Audio use Ref2VA internally.
 The server owns the real attached-reference mapping. When it receives the canonical three-field prompt,
 it safely promotes it to the six-field Ref2VA format:
 
