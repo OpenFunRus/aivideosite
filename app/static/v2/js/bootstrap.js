@@ -22,7 +22,7 @@
 
   window.addEventListener("v2:viewchange", (event) => {
     const view = event.detail?.view || "create";
-    if (["library", "queue", "continue", "audio", "clip", "editor", "system"].includes(view)) {
+    if (["library", "queue", "audio", "editor", "system"].includes(view)) {
       W.refreshState({ silent: true });
     }
   });
