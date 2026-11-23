@@ -107,7 +107,6 @@ html {
 }
 .v2-brand > span:last-child,
 .v2-nav-item > span,
-.v2-v1-link,
 .v2-user > span:last-child {
   width: 0;
   max-width: 0;
@@ -160,13 +159,6 @@ html {
   max-width: 150px;
   opacity: 1;
 }
-.v2-app.left-open .v2-v1-link {
-  width: auto;
-  max-width: 190px;
-  opacity: 1;
-  pointer-events: auto;
-}
-
 .v2-main {
   width: 100%;
   min-width: 0;
@@ -639,12 +631,6 @@ html {
   .v2-sidebar-footer {
     display: block;
   }
-  .v2-sidebar-footer .v2-v1-link {
-    width: auto;
-    max-width: 220px;
-    opacity: 1;
-    pointer-events: auto;
-  }
   .v2-sidebar-footer .v2-user {
     justify-content: flex-start;
   }
@@ -866,14 +852,6 @@ html {
 
   .v2-sidebar-footer {
     padding: 14px 4px 0;
-  }
-
-  .v2-v1-link,
-  .v2-app.left-open .v2-v1-link {
-    width: auto;
-    max-width: none;
-    opacity: 1;
-    pointer-events: auto;
   }
 
   .v2-user,
