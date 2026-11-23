@@ -854,10 +854,10 @@ def _extract_h3_prompt_text(content: str) -> str:
         if isinstance(changes, dict):
             prompt = changes.get("prompt")
             if isinstance(prompt, str) and prompt.strip():
-                return prompt.strip()
+                text = prompt.strip()
         prompt = decoded.get("prompt")
         if isinstance(prompt, str) and prompt.strip():
-            return prompt.strip()
+            text = prompt.strip()
 
     if "\\n" in text and "\n" not in text:
         text = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\\"", "\"")
@@ -896,9 +896,10 @@ def _v2_wand_system() -> str:
         "handedness, props, weather, requested actions, camera request and exact dialogue. Do not invent extra "
         "sounds, actions, people, objects, weather events, emotions, music or a specific source for an unspecified noise. "
         "[Shot 1] has no timestamp. Every later camera cut/switch starts a new [Shot N] with an exact increasing "
-        "timestamp that fits CURRENT_SITE_STATE.seconds. If CURRENT_SITE_STATE.audio_mode is true, the selected "
-        "master track is already the driving audio: never recreate it in the prompt, keep non_diegetic_music: N/A, "
-        "and use overall_soundscape only for optional generated scene/foley sound. "
+        "timestamp that fits CURRENT_SITE_STATE.seconds. If CURRENT_SITE_STATE.has_driving_audio is true, the selected "
+        "master track is authoritative driving audio: synchronize visible performance to it and never recreate it in the prompt. "
+        "If audio_mode is true but has_driving_audio is false, the track is mux-only and must not be described as H3 conditioning. "
+        "Whenever audio_mode is true, keep non_diegetic_music: N/A and use overall_soundscape only for optional generated scene/foley sound. "
         "If music was not requested, non_diegetic_music: N/A. "
         "If CURRENT_SITE_STATE.generate_audio is false, both generated-sound fields are exactly N/A. "
         "Never output subject_definitions, summary, retention_analysis or detailed_description; the backend owns Ref2VA mapping. "
