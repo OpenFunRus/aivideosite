@@ -3078,10 +3078,15 @@ def _assistant_runtime_context(
     selected_misc_ids = _assistant_selected_ids(context.get("selected_misc_ids"))
     muted_character_ids = _assistant_selected_ids(context.get("muted_character_ids"))
 
+    # Privacy/visibility gate for the local assistant: only presets explicitly
+    # checked in the right rail are loaded into LLM context. Unchecked presets must
+    # remain completely invisible to Chat and Magic Wand.
     characters: list[dict] = []
     for raw in db.list_characters(user_id):
         public = _character_public(raw)
         character_id = str(public.get("id") or "")
+        if character_id not in selected_character_ids:
+            continue
         preset_id = str(public.get("voice_preset_id") or "")
         preset = VOICE_PRESETS.get(preset_id) if preset_id else None
         has_voice = bool(public.get("voice"))
@@ -3104,6 +3109,8 @@ def _assistant_runtime_context(
     for raw in db.list_locations(user_id):
         public = _location_public(raw)
         location_id = str(public.get("id") or "")
+        if location_id not in selected_location_ids:
+            continue
         locations.append(
             {
                 "id": location_id,
@@ -3118,6 +3125,8 @@ def _assistant_runtime_context(
     for raw in db.list_misc_presets(user_id):
         public = _misc_public(raw)
         misc_id = str(public.get("id") or "")
+        if misc_id not in selected_misc_ids:
+            continue
         misc.append(
             {
                 "id": misc_id,
@@ -3182,12 +3191,14 @@ def _assistant_runtime_context(
     context["selected_locations"] = selected_locations
     context["selected_misc"] = selected_misc
 
-    # Internal IDs remain available for backend control/validation, but the assistant
-    # should normally describe selected presets by human-readable metadata above.
-    context["selected_character_ids"] = sorted(selected_character_ids)
-    context["selected_location_ids"] = sorted(selected_location_ids)
-    context["selected_misc_ids"] = sorted(selected_misc_ids)
-    context["muted_character_ids"] = sorted(muted_character_ids)
+    # Only IDs that resolved to checked presets survive into assistant context.
+    visible_character_ids = {str(item["id"]) for item in characters}
+    visible_location_ids = {str(item["id"]) for item in locations}
+    visible_misc_ids = {str(item["id"]) for item in misc}
+    context["selected_character_ids"] = sorted(visible_character_ids)
+    context["selected_location_ids"] = sorted(visible_location_ids)
+    context["selected_misc_ids"] = sorted(visible_misc_ids)
+    context["muted_character_ids"] = sorted(muted_character_ids & visible_character_ids)
     return context, characters, locations, misc
 
 
