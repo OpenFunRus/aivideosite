@@ -6,6 +6,7 @@
 
   api.loadDraft?.();
   api.restoreDraftToUi?.();
+  W.restoreAudioMode?.();
 
   const hashView = location.hash.replace(/^#/, "");
   const storedView = localStorage.getItem(api.keys.view) || "";
