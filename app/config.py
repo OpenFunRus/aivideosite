@@ -33,7 +33,6 @@ class Settings:
     character_dir: Path
     location_dir: Path
     misc_dir: Path
-    image_dir: Path
     temp_dir: Path
     db_path: Path
 
@@ -59,8 +58,6 @@ class Settings:
     h3_ref_turbo_lora: str
     h3_controlnet_model_patch: str
     h3_attention_backend: str
-    h3_image_model: str
-    h3_image_vae: str
 
     max_image_upload_bytes: int
     max_video_upload_bytes: int
@@ -225,7 +222,6 @@ settings = Settings(
     character_dir=_data_dir / "characters",
     location_dir=_data_dir / "locations",
     misc_dir=_data_dir / "misc",
-    image_dir=_data_dir / "images",
     temp_dir=_data_dir / "tmp",
     db_path=_data_dir / "aivideosite.db",
     site_users=_site_users(),
@@ -274,14 +270,6 @@ settings = Settings(
         "H3_ATTENTION_BACKEND",
         "comfy kitchen attention",
     ),
-    h3_image_model=os.getenv(
-        "H3_IMAGE_MODEL",
-        "MiniMax-H3-Image-AD-Q4_K.gguf",
-    ),
-    h3_image_vae=os.getenv(
-        "H3_IMAGE_VAE",
-        "minimax_h3_image_vae_fp16.safetensors",
-    ),
     max_image_upload_bytes=int(os.getenv("MAX_IMAGE_UPLOAD_MB", "40")) * 1024 * 1024,
     max_video_upload_bytes=int(os.getenv("MAX_VIDEO_UPLOAD_MB", "500")) * 1024 * 1024,
     max_audio_upload_bytes=int(os.getenv("MAX_AUDIO_UPLOAD_MB", "300")) * 1024 * 1024,
@@ -294,7 +282,6 @@ for directory in (
     settings.character_dir,
     settings.location_dir,
     settings.misc_dir,
-    settings.image_dir,
     settings.temp_dir,
 ):
     directory.mkdir(parents=True, exist_ok=True)
