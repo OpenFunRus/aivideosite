@@ -10,7 +10,6 @@
   const keys = {
     draft: "aivideosite-" + userId + "-v2-draft",
     view: "aivideosite-" + userId + "-v2-view",
-    recentCharacters: "aivideosite-" + userId + "-v2-recent-characters",
     assistantUserPrompt: "aivideosite-" + userId + "-v2-assistant-user-prompt",
   };
 
@@ -19,8 +18,6 @@
     characters: [],
     selectedCharacterIds: new Set(),
     mutedCharacterIds: new Set(),
-    recentCharacterIds: [],
-    characterTab: "all",
     locations: [],
     selectedLocationIds: new Set(),
     misc: [],
@@ -162,10 +159,6 @@
         })
       );
       localStorage.setItem(keys.view, state.view);
-      localStorage.setItem(
-        keys.recentCharacters,
-        JSON.stringify(state.recentCharacterIds.slice(0, 30))
-      );
     } catch {}
   };
 
@@ -194,8 +187,6 @@
         state.selectedMiscIds = new Set(saved.selectedMiscIds.map(String));
       }
     }
-    const recent = readStoredJson(keys.recentCharacters, []);
-    if (Array.isArray(recent)) state.recentCharacterIds = recent.map(String).slice(0, 30);
   };
 
   // Hydrate persisted state before any later V2 module can render or save defaults.
