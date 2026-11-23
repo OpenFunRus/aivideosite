@@ -21,8 +21,7 @@
 - шаги регулируются ползунком 6–24 с шагом 2. Для новых FL2VA-задач ровно 8 шагов используют установленную FL Turbo LoRA; остальные значения идут через Base. Ref2VA/Timeline/Digital Human в новом диапазоне 6–24 работают через Base, потому что установленная Ref Turbo LoRA рассчитана на 4 шага;
 - native Timeline Guides и ControlNet переключают sampler на `res_multistep`, как в официальных ComfyUI H3 workflows; обычный Easy path остаётся на `euler`;
 - полноэкранный гайд по MiniMax H3 прямо в интерфейсе: FL2VA/Ref2VA/Timeline/Digital Human, Characters, roles/retention, ControlNet, video editing/continuation, shots/timing, camera, dialogue/audio, ограничения и примеры;
-- отдельные machine-readable guides: `/static/h3-prompting-guide-ai.txt
-/static/h3-image-prompting-guide-ai.txt` для H3 Video и `/static/h3-image-prompting-guide-ai.txt` для H3 Image; copy-paste контекст для ChatGPT объединяет структуру V2 и оба гайда;
+- отдельные machine-readable guides: `/static/h3-prompting-guide-ai.txt` для H3 Video и `/static/h3-image-prompting-guide-ai.txt` для H3 Image; copy-paste контекст для ChatGPT объединяет структуру V2 и оба гайда;
 - опциональное нативное аудио MiniMax H3 через Audio VAE, выключено по умолчанию;
 - prompt и все параметры генерации автоматически сохраняются в localStorage и восстанавливаются после перезагрузки;
 - очередь GPU-задач с хранением состояния в SQLite;
@@ -255,10 +254,11 @@ UI позволяет выбрать все aspect ratio, которые под�
 - shots, тайминги, camera, dialogue `<d>`, H3 native audio и concrete exclusions;
 - чёткое различие: обычный Ref2VA storyboard Picture — semantic reference, а Timeline Guide — точный `frame_idx` anchor.
 
-Для агентов/локальных нейронок есть чистый текст без UI:
+Для агентов/локальных нейронок есть чистые тексты без UI:
 
 ```text
 /static/h3-prompting-guide-ai.txt
+/static/h3-image-prompting-guide-ai.txt
 ```
 
 В модалке есть кнопка `Ссылка для нейронки`, копирование абсолютного URL и отдельный copy-paste блок для ChatGPT. Machine guide теперь описывает все реально подключённые режимы: FL2VA, Ref2VA, exact Timeline Guides, Characters, video/audio references, Digital Human и ControlNet Union.
