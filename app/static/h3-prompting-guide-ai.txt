@@ -404,20 +404,43 @@ non_diegetic_music: N/A
 The backend supplies the real video-reference labels and Ref2VA wrapper.
 
 ======================================================================
-12. AUDIO WORKSPACE
+12. AUDIO MODE INSIDE VIDEO
 ======================================================================
 
 Purpose:
-audio-driven performance / singing / dancing using a selected MASTER TRACK fragment.
+The single V2 "Видео" workspace can optionally enable "Использовать аудиодорожку".
+When enabled, the selected MASTER TRACK fragment becomes the Digital Human driving audio.
 
-The selected track fragment is the driving audio input.
+There is NO separate "Видео по аудио" workspace and NO arbitrary visual-reference upload.
+Visual identity/environment comes from the same inputs as normal Video:
+- Characters;
+- Locations;
+- Misc ("Прочее");
+- optional First Frame;
+- optional Last Frame.
+
+Digital Human still requires at least one visual semantic reference.
+If no Character/Location/Misc visual reference is selected, the backend reuses the first
+available endpoint image (First Frame preferred, otherwise Last Frame) as the required
+semantic visual reference.
+
+EXACT FIRST / LAST IN AUDIO MODE:
+The Easy-node Digital Human branch itself is Ref2VA + locked driving audio and does not
+use the ordinary FL2VA First/Last branch. This site therefore applies endpoint images
+separately through native MiniMaxH3AddGuide:
+- First Frame -> exact guide at 0 seconds;
+- Last Frame -> exact guide at the selected video duration.
+These guide images are NOT Picture references in Magic Wand output. Never invent their
+Picture ordinals or add an FL2VA alignment line while audio_mode=true.
+
 The user separately chooses:
-- "Вклеить трек в видео" / embed_track
-- "Фоновые звуки H3" / generate_scene_audio
+- "Вклеить трек в видео" / embed_track;
+- "Фоновые звуки H3" / generate_scene_audio.
 
 CRITICAL:
-The master track is NOT music H3 should invent.
-Therefore normal Audio prompts use:
+The master track is already supplied to H3 as driving audio.
+It is NOT non-diegetic music H3 should invent or recreate.
+Therefore audio_mode prompts use:
 
 non_diegetic_music: N/A
 
@@ -425,7 +448,7 @@ If generate_scene_audio is OFF:
 overall_soundscape: N/A
 
 If generate_scene_audio is ON:
-overall_soundscape contains only additional scene sounds:
+overall_soundscape contains only additional physical/diegetic scene sounds such as:
 - stage footsteps;
 - cloth movement;
 - crowd ambience;
@@ -433,21 +456,25 @@ overall_soundscape contains only additional scene sounds:
 - physical impacts.
 
 Do NOT describe the master song again in overall_soundscape.
+Do NOT invent lyrics.
 
-Describe visible performance:
-- mouth articulation if singing is requested;
+Describe the VISIBLE performance:
+- mouth articulation if singing/speech is intended;
 - gaze;
 - torso/arm motion;
 - feet planted vs stepping;
 - gesture accents;
 - camera;
-- physical interaction with microphone/instrument.
+- interaction with microphone/instrument/props.
 
-Do not invent lyrics.
+When First/Last are attached:
+- compose motion so the scene can plausibly begin at the exact First Frame;
+- if Last Frame exists, make the final action converge toward that exact endpoint;
+- do not add reference labels for those endpoint images.
 
 Example:
 
-integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium close-up frames the performer facing the camera as the supplied driving audio plays. She sings with natural mouth articulation synchronized to the provided track, keeps both feet planted, gently shifts her shoulders to the rhythm, and raises her left hand once at chest height. The camera pushes in with small amplitude at slow speed. [Shot 2] At 00:06.000, the camera cuts to a close-up as she keeps singing, lowers her hand, and holds eye contact with the lens through the end of the segment.
+integrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium close-up frames the performer facing the camera as the supplied driving audio plays. She performs with natural mouth articulation synchronized to the driving track, keeps both feet planted, gently shifts her shoulders to the rhythm, and raises her left hand once at chest height. The camera pushes in with small amplitude at slow speed. [Shot 2] At 00:06.000, the camera cuts to a close-up as she keeps performing, lowers her hand, and holds eye contact with the lens through the end of the segment.
 
 overall_soundscape: N/A
 
