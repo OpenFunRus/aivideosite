@@ -262,6 +262,8 @@
       renderSelectedLocations();
       renderLocationGrid();
       api.renderCharacterGrid?.();
+      api.updateCreateCompatibility?.();
+      saveDraft();
     } catch (error) {
       showToast("Не удалось загрузить локации: " + error.message, "error");
     }
