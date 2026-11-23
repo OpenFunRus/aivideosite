@@ -28,6 +28,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.background import BackgroundTask
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import db
@@ -2315,6 +2316,117 @@ async def media_file(
         content_disposition_type="attachment" if download else "inline",
     )
 
+
+
+def _last_video_frame_timestamp(path: Path) -> float:
+    command = [
+        str(settings.ffprobe_bin),
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "frame=best_effort_timestamp_time",
+        "-of",
+        "csv=p=0",
+        str(path),
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(500, f"Не удалось прочитать кадры видео: {exc}") from exc
+    if result.returncode != 0:
+        detail = (result.stderr or "").strip()[-800:]
+        raise HTTPException(500, "FFprobe не смог прочитать видео." + (f" {detail}" if detail else ""))
+
+    timestamps: list[float] = []
+    for raw_line in result.stdout.splitlines():
+        value = raw_line.strip().split(",", 1)[0]
+        try:
+            timestamp = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(timestamp) and timestamp >= 0:
+            timestamps.append(timestamp)
+    if not timestamps:
+        raise HTTPException(422, "В видео не найдено ни одного кадра.")
+    return max(timestamps)
+
+
+@app.get("/api/media/{media_id}/frame/{position}")
+async def api_extract_media_frame(
+    media_id: str,
+    position: str,
+    user_id: str = Depends(require_user),
+):
+    position = position.strip().lower()
+    if position not in {"start", "final"}:
+        raise HTTPException(400, "Позиция кадра должна быть start или final.")
+
+    media = _ensure_media(media_id, user_id)
+    source = settings.library_dir / media["filename"]
+    if not source.is_file():
+        raise HTTPException(404, "Файл видео не найден.")
+
+    output = settings.temp_dir / f"frame_{media_id}_{uuid.uuid4().hex[:10]}.png"
+    command = [
+        str(settings.ffmpeg_bin),
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(source),
+    ]
+    if position == "final":
+        # Seek just before the last real frame PTS so the next decoded frame is
+        # the actual final frame, not an approximate duration-based sample.
+        last_timestamp = _last_video_frame_timestamp(source)
+        command.extend(["-ss", f"{max(0.0, last_timestamp - 0.001):.6f}"])
+
+    command.extend([
+        "-map",
+        "0:v:0",
+        "-frames:v",
+        "1",
+        "-an",
+        "-sn",
+        "-dn",
+        str(output),
+    ])
+
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        output.unlink(missing_ok=True)
+        raise HTTPException(500, f"Не удалось извлечь кадр: {exc}") from exc
+
+    if result.returncode != 0 or not output.is_file() or output.stat().st_size <= 0:
+        output.unlink(missing_ok=True)
+        detail = (result.stderr or "").strip()[-800:]
+        raise HTTPException(500, "FFmpeg не смог извлечь кадр." + (f" {detail}" if detail else ""))
+
+    suffix = "start" if position == "start" else "final"
+    download_name = f"{media_id}_{suffix}.png"
+    return FileResponse(
+        output,
+        media_type="image/png",
+        filename=download_name,
+        content_disposition_type="attachment",
+        background=BackgroundTask(output.unlink, missing_ok=True),
+    )
 
 
 async def save_upload(

@@ -3,10 +3,47 @@
   const api = window.AIVideoV2;
   const W = window.AIVideoV2Workspaces;
   if (!api || !W) return;
-  const { qs, fetchJson, showToast, escapeHtml, copyText } = api;
+  const { qs, qsa, fetchJson, showToast, escapeHtml, copyText } = api;
 
   const detailCell = (label, value) =>
     "<div><span>" + escapeHtml(label) + "</span><strong>" + escapeHtml(value) + "</strong></div>";
+
+
+  const downloadFrame = async (item, position, button = null) => {
+    const suffix = position === "final" ? "final" : "start";
+    if (button) button.disabled = true;
+    try {
+      const response = await fetch(
+        "/api/media/" + encodeURIComponent(item.id) + "/frame/" + suffix,
+        { headers: { "X-Requested-With": "AI-Video-Site-V2" } }
+      );
+      if (!response.ok) {
+        let detail = "HTTP " + response.status;
+        try {
+          const body = await response.json();
+          detail = body.detail || detail;
+        } catch {}
+        throw new Error(detail);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const base = String(item.title || item.id || "video")
+        .replace(/[^a-zA-Z0-9а-яА-ЯёЁ._-]+/g, "_")
+        .replace(/^_+|_+$/g, "") || "video";
+      link.href = url;
+      link.download = base + (suffix === "final" ? "_final.png" : "_start.png");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast(suffix === "final" ? "Финальный кадр сохранён в PNG." : "Стартовый кадр сохранён в PNG.");
+    } catch (error) {
+      showToast("Не удалось извлечь кадр: " + error.message, "error");
+    } finally {
+      if (button) button.disabled = false;
+    }
+  };
 
   const openMediaDialog = (item) => {
     const dialog = qs("#v2-media-dialog");
@@ -30,15 +67,15 @@
       "</div>" +
       '<div class="v2-media-detail-prompt"><span>Prompt</span><p>' + escapeHtml(prompt) + "</p></div>" +
       '<div class="v2-media-actions">' +
-      '<button type="button" data-dialog-continue>Продолжить</button>' +
+      '<button type="button" data-dialog-frame="start"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Стартовый кадр</button>' +
+      '<button type="button" data-dialog-frame="final"><svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg>Финальный кадр</button>' +
       '<button type="button" data-dialog-copy><svg class="icon"><use href="/static/icons.svg#icon-copy"></use></svg>Копировать prompt</button>' +
       '<a href="/media/' + encodeURIComponent(item.id) + '?download=1">Скачать</a>' +
       "</div></div>";
 
     qs("[data-media-dialog-close]", dialog)?.addEventListener("click", () => dialog.close());
-    qs("[data-dialog-continue]", dialog)?.addEventListener("click", () => {
-      dialog.close();
-      window.dispatchEvent(new CustomEvent("v2:use-continue", { detail: { mediaId: item.id } }));
+    qsa("[data-dialog-frame]", dialog).forEach((button) => {
+      button.addEventListener("click", () => downloadFrame(item, button.dataset.dialogFrame, button));
     });
     qs("[data-dialog-copy]", dialog)?.addEventListener("click", async () => {
       try {
@@ -117,8 +154,8 @@
         '<div class="v2-media-actions">' +
         '<button class="v2-media-action-open" type="button" data-library-action="open">' + icon("player-play") + '<span>Открыть</span></button>' +
         '<a href="/media/' + encodeURIComponent(item.id) + '?download=1">' + icon("download") + '<span>Скачать</span></a>' +
-        '<button type="button" data-library-action="continue">' + icon("player-play") + '<span>Продолжить</span></button>' +
-        '<button type="button" data-library-action="clip">' + icon("video") + '<span>След. клип</span></button>' +
+        '<button type="button" data-library-action="frame-start">' + icon("photo") + '<span>Стартовый кадр</span></button>' +
+        '<button type="button" data-library-action="frame-final">' + icon("photo") + '<span>Финальный кадр</span></button>' +
         '<button class="v2-media-action-delete" type="button" data-library-action="delete" aria-label="Удалить ролик" title="Удалить ролик">' + icon("trash") + '<span>Удалить</span></button>' +
         "</div></div></article>"
       );
@@ -153,10 +190,10 @@
 
     if (action === "open") {
       openMediaDialog(item);
-    } else if (action === "continue") {
-      window.dispatchEvent(new CustomEvent("v2:use-continue", { detail: { mediaId: item.id } }));
-    } else if (action === "clip") {
-      window.dispatchEvent(new CustomEvent("v2:use-clip", { detail: { mediaId: item.id } }));
+    } else if (action === "frame-start") {
+      await downloadFrame(item, "start", actionButton);
+    } else if (action === "frame-final") {
+      await downloadFrame(item, "final", actionButton);
     } else if (action === "delete") {
       if (!confirm("Удалить этот ролик из Библиотеки?")) return;
       actionButton.disabled = true;
