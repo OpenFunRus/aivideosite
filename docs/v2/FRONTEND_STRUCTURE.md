@@ -1,6 +1,6 @@
-# V2 frontend structure
+# Frontend structure
 
-V2 intentionally uses small focused files. Do not merge it back into one HTML/JS/CSS monolith.
+The V2 architecture is the primary supported frontend and is served at `/` (`/v2` remains a compatibility alias). It intentionally uses small focused files. Do not merge it back into one HTML/JS/CSS monolith.
 
 ## Templates
 
