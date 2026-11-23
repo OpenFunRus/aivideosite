@@ -607,44 +607,6 @@ def prune_job_history(
     return [_decode_job(row) for row in removable]
 
 
-def list_jobs_page(
-    page: int,
-    page_size: int = PAGE_SIZE,
-    owner_id: str | None = None,
-) -> dict[str, Any]:
-    page = max(1, int(page))
-    page_size = max(1, min(100, int(page_size)))
-    with connect() as conn:
-        if owner_id is None:
-            total = int(conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
-        else:
-            total = int(
-                conn.execute(
-                    "SELECT COUNT(*) FROM jobs WHERE owner_id=?",
-                    (owner_id,),
-                ).fetchone()[0]
-            )
-        pages = max(1, (total + page_size - 1) // page_size)
-        page = min(page, pages)
-        if owner_id is None:
-            rows = conn.execute(
-                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (page_size, (page - 1) * page_size),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT *
-                  FROM jobs
-                 WHERE owner_id=?
-                 ORDER BY created_at DESC
-                 LIMIT ? OFFSET ?
-                """,
-                (owner_id, page_size, (page - 1) * page_size),
-            ).fetchall()
-    return _page_result([_decode_job(row) for row in rows], page, page_size, total)
-
-
 def delete_terminal_job(
     job_id: str,
     owner_id: str | None = None,
