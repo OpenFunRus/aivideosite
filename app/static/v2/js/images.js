@@ -2,15 +2,15 @@
   "use strict";
   const api = window.AIVideoV2;
   if (!api) return;
-  const { state, userId, qs, fetchJson, showToast, escapeHtml } = api;
+  const { state, userId, qs, qsa, fetchJson, showToast, escapeHtml } = api;
 
   const form = qs("#v2-image-form");
   const prompt = qs("#v2-image-prompt");
   const count = qs("#v2-image-prompt-count");
   const title = qs("#v2-image-prompt-title");
   const help = qs("#v2-image-prompt-help");
-  const size = qs("#v2-image-size");
   const seed = qs("#v2-image-seed");
+  const wand = qs("#v2-image-wand");
   const grid = qs("#v2-image-results-grid");
   const status = qs("#v2-image-results-status");
   const button = qs("#v2-image-generate");
@@ -23,11 +23,43 @@
   let pollTimer = null;
   let submitting = false;
 
+  const imageSettingValue = (name, fallback) =>
+    String(qs('[data-image-setting="' + name + '"] button.active')?.dataset.value || fallback);
+
+  const applyImageSegment = (name, value, save = true) => {
+    const group = qs('[data-image-setting="' + name + '"]');
+    if (!group) return;
+    const buttons = qsa("[data-value]", group);
+    const target = buttons.find((item) => item.dataset.value === String(value)) || buttons[0];
+    buttons.forEach((item) => item.classList.toggle("active", item === target));
+    if (save) saveLocal();
+  };
+
+  const currentImageAssistantSettings = () => ({
+    workspace: "images",
+    prompt: String(prompt?.value || ""),
+    quality: imageSettingValue("quality", "720"),
+    resolution_shape: imageSettingValue("ratio", "16:9"),
+    seed: String(seed?.value || "").trim() ? Number(seed.value) : -1,
+    image_mode: selectedImageId ? "edit" : (
+      (state.selectedCharacterIds?.size || state.selectedLocationIds?.size || state.selectedMiscIds?.size)
+        ? "reference"
+        : "generate"
+    ),
+    source_image_selected: Boolean(selectedImageId),
+    selected_character_ids: Array.from(state.selectedCharacterIds || []).map(String),
+    selected_location_ids: Array.from(state.selectedLocationIds || []).map(String),
+    selected_misc_ids: Array.from(state.selectedMiscIds || []).map(String),
+  });
+
+  api.currentImageAssistantSettings = currentImageAssistantSettings;
+
   const saveLocal = () => {
     try {
       localStorage.setItem(storageKey, JSON.stringify({
         prompt: prompt?.value || "",
-        size: size?.value || "2688x1536",
+        quality: imageSettingValue("quality", "720"),
+        ratio: imageSettingValue("ratio", "16:9"),
         seed: seed?.value || "",
       }));
     } catch {}
@@ -37,7 +69,8 @@
     try {
       const value = JSON.parse(localStorage.getItem(storageKey) || "{}");
       if (prompt && typeof value.prompt === "string") prompt.value = value.prompt;
-      if (size && Array.from(size.options).some((option) => option.value === value.size)) size.value = value.size;
+      applyImageSegment("quality", value.quality || "720", false);
+      applyImageSegment("ratio", value.ratio || "16:9", false);
       if (seed && value.seed !== undefined && value.seed !== null) seed.value = String(value.seed);
     } catch {}
   };
@@ -173,8 +206,63 @@
     if (count) count.textContent = (prompt.value || "").length.toLocaleString("ru-RU") + " / 16 000";
     saveLocal();
   });
-  size?.addEventListener("change", saveLocal);
+  qsa("[data-image-setting]").forEach((group) => {
+    group.addEventListener("click", (event) => {
+      const target = event.target.closest("[data-value]");
+      if (!target) return;
+      applyImageSegment(group.dataset.imageSetting, target.dataset.value);
+    });
+  });
   seed?.addEventListener("input", saveLocal);
+
+  wand?.addEventListener("click", async () => {
+    const source = (prompt?.value || "").trim();
+    if (!source) {
+      showToast(selectedImageId ? "Сначала опишите, что нужно изменить." : "Сначала опишите изображение.", "error");
+      prompt?.focus();
+      return;
+    }
+
+    wand.disabled = true;
+    showToast(selectedImageId ? "ИИ готовит точную инструкцию перерисовки…" : "ИИ улучшает prompt для H3 Image…");
+    try {
+      const instruction = selectedImageId
+        ? (
+          "Перепиши запрос именно для MiniMax H3 Image REDRAW/EDIT. " +
+          "Выбрано одно исходное изображение, backend сам сделает его edit target / Picture 1. " +
+          "Верни только чистую инструкцию изменения на английском без Shot-блоков, таймингов, audio-полей, JSON и без выдуманных Picture-номеров. " +
+          "Сохрани всё, что пользователь не просил менять: identity, одежду, окружение, композицию, камеру и свет. " +
+          "Учитывай выбранные справа Characters, Locations и Misc как реальные image references. Не меняй настройки формы."
+        )
+        : (
+          "Перепиши запрос именно для MiniMax H3 Image. " +
+          "Верни только один готовый still-image prompt на английском без Shot-блоков, таймингов, audio-полей, JSON и без выдуманных Picture-номеров. " +
+          "Приоритет: точное следование запросу, фотореализм если стиль не указан, естественная анатомия, стабильные лица и понятная композиция. " +
+          "Учитывай выбранные справа Characters, Locations и Misc как реальные image references. Не меняй настройки формы."
+        );
+
+      const result = await fetchJson("/api/assistant/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: instruction + "\n\nUSER IMAGE REQUEST:\n" + source }],
+          settings: currentImageAssistantSettings(),
+          thinking: false,
+        }),
+      });
+      const improved = result?.changes?.prompt;
+      if (typeof improved !== "string" || !improved.trim()) {
+        throw new Error(result?.message || "ИИ не вернул image prompt.");
+      }
+      prompt.value = improved.trim();
+      prompt.dispatchEvent(new Event("input", { bubbles: true }));
+      showToast(selectedImageId ? "Инструкция перерисовки улучшена." : "Prompt улучшен под MiniMax H3 Image.");
+    } catch (error) {
+      showToast("Не удалось улучшить image prompt: " + error.message, "error");
+    } finally {
+      wand.disabled = false;
+    }
+  });
 
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -188,7 +276,8 @@
 
     const data = new FormData();
     data.set("prompt", text);
-    data.set("size", size?.value || "2688x1536");
+    data.set("quality", imageSettingValue("quality", "720"));
+    data.set("ratio", imageSettingValue("ratio", "16:9"));
     data.set("seed", seed?.value || "");
     data.set("source_image_id", selectedImageId);
     data.set("character_ids", JSON.stringify(Array.from(state.selectedCharacterIds || [])));
