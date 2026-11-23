@@ -1782,6 +1782,7 @@ def _v2_enqueue_reference_job(
     generation_mode: str,
     reference_task: str,
     items: list[dict],
+    guides: list[dict] | None = None,
     v2_context: dict | None = None,
     final_audio: dict | None = None,
 ) -> str:
@@ -1827,7 +1828,7 @@ def _v2_enqueue_reference_job(
             "images": [],
             "references": items,
             "reference_map": reference_map,
-            "guides": [],
+            "guides": guides or [],
             "control": {"mode": "none"},
             "v2_context": v2_context or {},
             "final_audio": final_audio or {},
@@ -2098,7 +2099,8 @@ async def api_v2_audio(
     embed_track: Annotated[bool, Form()] = True,
     generate_scene_audio: Annotated[bool, Form()] = False,
     audio: UploadFile | None = File(None),
-    visual_reference: UploadFile | None = File(None),
+    first_frame: UploadFile | None = File(None),
+    last_frame: UploadFile | None = File(None),
     user_id: str = Depends(require_user),
 ):
     _v2_validate_simple_settings(seconds, steps)
@@ -2127,41 +2129,61 @@ async def api_v2_audio(
         items.extend(_v2_location_references(selected_locations, user_id))
         items.extend(_v2_misc_references(selected_misc, user_id))
 
-        if visual_reference is not None and visual_reference.filename:
-            suffix = Path(visual_reference.filename).suffix.lower()
-            video_exts = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
-            visual_type = "video" if suffix in video_exts else "image"
-            visual_path = await save_upload(
-                visual_reference,
-                kind=visual_type,
-                max_bytes=(
-                    settings.max_video_upload_bytes
-                    if visual_type == "video"
-                    else settings.max_image_upload_bytes
-                ),
+        has_first = first_frame is not None and bool(first_frame.filename)
+        has_last = last_frame is not None and bool(last_frame.filename)
+        guides: list[dict] = []
+        frame_reference_candidates: list[dict] = []
+
+        for upload, time_seconds, label in (
+            (first_frame, 0.0, "Начальный кадр"),
+            (last_frame, float(seconds), "Конечный кадр"),
+        ):
+            if upload is None or not upload.filename:
+                continue
+            frame_path = await save_upload(
+                upload,
+                kind="image",
+                max_bytes=settings.max_image_upload_bytes,
             )
-            temporary_paths.append(visual_path)
-            items.append(
+            temporary_paths.append(frame_path)
+            source_name = Path(upload.filename).name
+            guides.append(
                 {
-                    "type": visual_type,
-                    "path": str(visual_path),
+                    "path": str(frame_path),
                     "temporary": True,
-                    "source_name": Path(visual_reference.filename).name,
-                    "role": "character",
-                    "retention": (
-                        "partially_preserved"
-                        if visual_type == "video"
-                        else "fully_preserved"
+                    "source_name": source_name,
+                    "time_seconds": time_seconds,
+                    "note": f"Exact {label.lower()} for audio-driven generation.",
+                }
+            )
+            frame_reference_candidates.append(
+                {
+                    "type": "image",
+                    "path": str(frame_path),
+                    "temporary": True,
+                    "source_name": source_name,
+                    "role": "composition",
+                    "retention": "partially_preserved",
+                    "note": (
+                        f"{label} is also the visual basis for Digital Human when no "
+                        "Character/Location/Misc visual reference is selected. Exact endpoint "
+                        "anchoring is applied separately through MiniMaxH3AddGuide."
                     ),
-                    "note": "Primary visual reference for the audio-driven performance.",
                 }
             )
 
         if not any(item.get("type") in {"image", "video"} for item in items):
-            raise HTTPException(
-                400,
-                "Для генерации по аудио выберите персонажа, локацию, пресет «Прочее» или добавьте визуальный референс.",
-            )
+            if frame_reference_candidates:
+                # Digital Human requires at least one semantic visual reference.
+                # Reuse the opening frame when possible (otherwise the closing frame)
+                # while the same file is also attached as an exact native timeline guide.
+                items.append(frame_reference_candidates[0])
+            else:
+                raise HTTPException(
+                    400,
+                    "Для аудиодорожки выберите персонажа, локацию, «Прочее» "
+                    "или добавьте начальный/конечный кадр.",
+                )
 
         if has_upload:
             assert audio is not None
@@ -2237,8 +2259,10 @@ async def api_v2_audio(
             generation_mode="digital_human",
             reference_task="audio_reference",
             items=items,
+            guides=guides,
             v2_context={
-                "workspace": "audio",
+                "workspace": "create",
+                "audio_mode": True,
                 "track_id": track["id"],
                 "audio_start": float(audio_start),
                 "audio_end": float(timeline_audio_end),
@@ -2246,6 +2270,8 @@ async def api_v2_audio(
                 "audio_reserve": audio_reserve,
                 "embed_track": bool(embed_track),
                 "generate_scene_audio": bool(generate_scene_audio),
+                "has_first_frame": bool(has_first),
+                "has_last_frame": bool(has_last),
             },
             final_audio={
                 "path": str(segment),
@@ -2267,6 +2293,9 @@ async def api_v2_audio(
             "audio_reserve": audio_reserve,
             "embed_track": bool(embed_track),
             "generate_scene_audio": bool(generate_scene_audio),
+            "has_first_frame": bool(has_first),
+            "has_last_frame": bool(has_last),
+            "uses_timeline_guides": bool(guides),
         }
     except Exception:
         for path in temporary_paths:
