@@ -4,7 +4,6 @@
   const W = window.AIVideoV2Workspaces;
   if (!api || !W) return;
 
-  api.loadDraft?.();
   api.restoreDraftToUi?.();
   W.restoreAudioMode?.();
 
