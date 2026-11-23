@@ -32,6 +32,7 @@ class Settings:
     library_dir: Path
     character_dir: Path
     location_dir: Path
+    misc_dir: Path
     temp_dir: Path
     db_path: Path
 
@@ -220,6 +221,7 @@ settings = Settings(
     library_dir=_data_dir / "library",
     character_dir=_data_dir / "characters",
     location_dir=_data_dir / "locations",
+    misc_dir=_data_dir / "misc",
     temp_dir=_data_dir / "tmp",
     db_path=_data_dir / "aivideosite.db",
     site_users=_site_users(),
@@ -279,6 +281,7 @@ for directory in (
     settings.library_dir,
     settings.character_dir,
     settings.location_dir,
+    settings.misc_dir,
     settings.temp_dir,
 ):
     directory.mkdir(parents=True, exist_ok=True)

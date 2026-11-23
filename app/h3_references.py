@@ -233,6 +233,7 @@ def build_reference_prompt(
     retention_lines: list[str] = []
     character_subjects: dict[str, dict[str, Any]] = {}
     location_subjects: dict[str, dict[str, Any]] = {}
+    misc_subjects: dict[str, dict[str, Any]] = {}
 
     for entry in reference_map:
         char_id = str(entry.get("character_id") or "").strip()
@@ -262,6 +263,21 @@ def build_reference_prompt(
         )
         group["labels"].append(str(entry["label"]))
 
+    for entry in reference_map:
+        misc_id = str(entry.get("misc_id") or "").strip()
+        if not misc_id:
+            continue
+        group = misc_subjects.setdefault(
+            misc_id,
+            {
+                "name": str(entry.get("misc_name") or "Misc preset").strip(),
+                "category": str(entry.get("misc_category_label") or entry.get("misc_category") or "Other").strip(),
+                "description": str(entry.get("misc_description") or "").strip(),
+                "labels": [],
+            },
+        )
+        group["labels"].append(str(entry["label"]))
+
     subject_index = 0
     for group in character_subjects.values():
         subject_index += 1
@@ -286,11 +302,26 @@ def build_reference_prompt(
             f"{location_prompt}".strip()
         )
 
+    for group in misc_subjects.values():
+        subject_index += 1
+        labels = ", ".join(group["labels"])
+        description = (
+            f" Saved description: {group['description']}"
+            if group["description"]
+            else ""
+        )
+        subject_lines.append(
+            f"<Subject {subject_index}>: reusable Misc preset \"{group['name']}\" "
+            f"(category: {group['category']}) defined by {labels}. "
+            "Use the references only for this preset's intended semantic role and "
+            f"keep its visible attributes consistent when present.{description}".strip()
+        )
+
     for entry in reference_map:
         label = str(entry["label"])
         role = str(entry.get("role") or "reference").replace("_", " ")
         source_name = str(entry.get("source_name") or "reference")
-        if not entry.get("character_id") and not entry.get("location_id"):
+        if not entry.get("character_id") and not entry.get("location_id") and not entry.get("misc_id"):
             note = str(entry.get("note") or "").strip()
             note_text = f" {note}" if note else ""
             subject_lines.append(f"{label}: {role} reference \"{source_name}\".{note_text}".strip())

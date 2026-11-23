@@ -81,6 +81,31 @@ app.mount(
 )
 templates = Jinja2Templates(directory=settings.root_dir / "app" / "templates")
 
+MISC_PRESET_CATEGORIES = {
+    "prop": "Предмет",
+    "clothing_gear": "Одежда и экипировка",
+    "weapon": "Оружие",
+    "vehicle": "Транспорт",
+    "creature": "Животное / существо",
+    "environment_feature": "Элемент окружения",
+    "visual_trait": "Визуальная особенность",
+    "pose_action": "Поза / действие",
+    "style_look": "Стиль / оформление",
+    "other": "Другое",
+}
+MISC_CATEGORY_H3_ROLE = {
+    "prop": ("object", "fully_preserved"),
+    "clothing_gear": ("object", "fully_preserved"),
+    "weapon": ("object", "fully_preserved"),
+    "vehicle": ("object", "fully_preserved"),
+    "creature": ("character", "fully_preserved"),
+    "environment_feature": ("setting", "fully_preserved"),
+    "visual_trait": ("style", "attribute_transfer"),
+    "pose_action": ("motion", "partially_preserved"),
+    "style_look": ("style", "attribute_transfer"),
+    "other": ("object", "fully_preserved"),
+}
+
 
 def _current_user(request: Request):
     if request.session.get("authenticated") is not True:
@@ -217,7 +242,7 @@ async def api_assistant_chat(
     except local_assistant.AssistantUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
 
-    runtime_settings, _characters, _locations = _assistant_runtime_context(
+    runtime_settings, _characters, _locations, _misc = _assistant_runtime_context(
         user_id,
         payload.get("settings"),
     )
@@ -248,7 +273,7 @@ async def api_assistant_control(
     if not isinstance(payload, dict):
         raise HTTPException(400, "Некорректный запрос управления.")
 
-    runtime_settings, characters, locations = _assistant_runtime_context(
+    runtime_settings, characters, locations, misc = _assistant_runtime_context(
         user_id,
         payload.get("settings"),
     )
@@ -259,6 +284,7 @@ async def api_assistant_control(
             settings=runtime_settings,
             characters=characters,
             locations=locations,
+            misc=misc,
             thinking=bool(payload.get("thinking")),
         )
     except local_assistant.AssistantUnavailable as exc:
@@ -760,6 +786,212 @@ async def location_image(
     return FileResponse(path)
 
 
+
+@app.get("/api/misc")
+async def api_misc(user_id: str = Depends(require_user)):
+    return {
+        "misc": [_misc_public(item) for item in db.list_misc_presets(user_id)],
+        "categories": [
+            {"id": category_id, "name": label}
+            for category_id, label in MISC_PRESET_CATEGORIES.items()
+        ],
+    }
+
+
+@app.post("/api/misc")
+async def api_create_misc(
+    name: Annotated[str, Form()],
+    category: Annotated[str, Form()],
+    description: Annotated[str, Form()] = "",
+    images: list[UploadFile] | None = File(None),
+    user_id: str = Depends(require_user),
+):
+    name = name.strip()
+    category = category.strip()
+    description = description.strip()
+    if not name or len(name) > 80:
+        raise HTTPException(400, "Название пресета должно содержать 1–80 символов.")
+    if category not in MISC_PRESET_CATEGORIES:
+        raise HTTPException(400, "Неизвестная категория пресета.")
+    if len(description) > 4000:
+        raise HTTPException(400, "Описание пресета слишком длинное.")
+
+    uploads = [item for item in (images or []) if item.filename]
+    if not uploads:
+        raise HTTPException(400, "Добавьте хотя бы одно изображение пресета.")
+    if len(uploads) > 4:
+        raise HTTPException(400, "Для одного пресета можно сохранить до 4 изображений.")
+
+    misc_id = uuid.uuid4().hex
+    target_dir = settings.misc_dir / user_id / misc_id
+    target_dir.mkdir(parents=True, exist_ok=False)
+    image_files: list[str] = []
+    temp_paths: list[Path] = []
+    try:
+        for index, upload in enumerate(uploads, start=1):
+            path = await save_upload(
+                upload,
+                kind="image",
+                max_bytes=settings.max_image_upload_bytes,
+            )
+            temp_paths.append(path)
+            destination = target_dir / f"image_{index}{path.suffix.lower()}"
+            shutil.move(str(path), str(destination))
+            temp_paths.remove(path)
+            image_files.append(str(destination))
+        db.insert_misc_preset(
+            misc_id=misc_id,
+            owner_id=user_id,
+            name=name,
+            category=category,
+            description=description,
+            images=image_files,
+        )
+    except Exception:
+        for path in temp_paths:
+            path.unlink(missing_ok=True)
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
+    return {"ok": True, "misc": _misc_public(db.get_misc_preset(misc_id, user_id))}
+
+
+@app.post("/api/misc/{misc_id}")
+async def api_update_misc(
+    misc_id: str,
+    name: Annotated[str, Form()],
+    category: Annotated[str, Form()],
+    description: Annotated[str, Form()] = "",
+    images: list[UploadFile] | None = File(None),
+    keep_image_indices: Annotated[str, Form()] = "",
+    user_id: str = Depends(require_user),
+):
+    name = name.strip()
+    category = category.strip()
+    description = description.strip()
+    if not name or len(name) > 80:
+        raise HTTPException(400, "Название пресета должно содержать 1–80 символов.")
+    if category not in MISC_PRESET_CATEGORIES:
+        raise HTTPException(400, "Неизвестная категория пресета.")
+    if len(description) > 4000:
+        raise HTTPException(400, "Описание пресета слишком длинное.")
+
+    preset = db.get_misc_preset(misc_id, user_id)
+    if preset is None:
+        raise HTTPException(404, "Пресет не найден.")
+
+    existing_images = list(preset.get("images") or [])
+    raw_keep_indices = keep_image_indices.strip()
+    if raw_keep_indices:
+        try:
+            parsed_keep_indices = json.loads(raw_keep_indices)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise HTTPException(400, "Некорректный список сохранённых изображений.") from exc
+        if not isinstance(parsed_keep_indices, list):
+            raise HTTPException(400, "Некорректный список сохранённых изображений.")
+        keep_indices: list[int] = []
+        seen_indices: set[int] = set()
+        for value in parsed_keep_indices:
+            if type(value) is not int or value < 0 or value >= len(existing_images):
+                raise HTTPException(400, "Некорректный индекс изображения пресета.")
+            if value not in seen_indices:
+                seen_indices.add(value)
+                keep_indices.append(value)
+        keep_indices.sort()
+    else:
+        keep_indices = list(range(len(existing_images)))
+
+    uploads = [item for item in (images or []) if item.filename]
+    if len(keep_indices) + len(uploads) < 1:
+        raise HTTPException(400, "У пресета должно остаться хотя бы одно изображение.")
+    if len(keep_indices) + len(uploads) > 4:
+        raise HTTPException(400, "Для одного пресета можно сохранить до 4 изображений.")
+
+    media_changed = keep_indices != list(range(len(existing_images))) or bool(uploads)
+    if media_changed and misc_id in db.active_misc_ids(user_id):
+        raise HTTPException(
+            409,
+            "Пресет используется активной задачей. Референсы можно менять после её завершения.",
+        )
+
+    target_dir = settings.misc_dir / user_id / misc_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    next_images = [existing_images[index] for index in keep_indices]
+    created_paths: list[Path] = []
+    temp_paths: list[Path] = []
+    try:
+        for upload in uploads:
+            path = await save_upload(
+                upload,
+                kind="image",
+                max_bytes=settings.max_image_upload_bytes,
+            )
+            temp_paths.append(path)
+            destination = target_dir / f"image_{uuid.uuid4().hex[:12]}{path.suffix.lower()}"
+            shutil.move(str(path), str(destination))
+            temp_paths.remove(path)
+            created_paths.append(destination)
+            next_images.append(str(destination))
+
+        updated = db.update_misc_preset(
+            misc_id,
+            user_id,
+            name=name,
+            category=category,
+            description=description,
+            images=next_images,
+        )
+        if updated is None:
+            raise HTTPException(404, "Пресет не найден.")
+    except Exception:
+        for path in temp_paths:
+            path.unlink(missing_ok=True)
+        for path in created_paths:
+            path.unlink(missing_ok=True)
+        raise
+
+    kept_paths = set(next_images)
+    for old_path in existing_images:
+        if old_path in kept_paths:
+            continue
+        try:
+            Path(old_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+    return {"ok": True, "misc": _misc_public(updated)}
+
+
+@app.delete("/api/misc/{misc_id}")
+async def api_delete_misc(misc_id: str, user_id: str = Depends(require_user)):
+    if misc_id in db.active_misc_ids(user_id):
+        raise HTTPException(
+            409,
+            "Пресет используется активной задачей. Дождитесь завершения или отмените задачу.",
+        )
+    preset = db.delete_misc_preset(misc_id, user_id)
+    if preset is None:
+        raise HTTPException(404, "Пресет не найден.")
+    shutil.rmtree(settings.misc_dir / user_id / misc_id, ignore_errors=True)
+    return {"ok": True}
+
+
+@app.get("/misc/{misc_id}/image/{image_index}")
+async def misc_image(
+    misc_id: str,
+    image_index: int,
+    user_id: str = Depends(require_user),
+):
+    preset = db.get_misc_preset(misc_id, user_id)
+    if preset is None:
+        raise HTTPException(404, "Пресет не найден.")
+    images = preset.get("images") or []
+    if image_index < 0 or image_index >= len(images):
+        raise HTTPException(404, "Изображение не найдено.")
+    path = Path(images[image_index])
+    if not path.is_file():
+        raise HTTPException(404, "Файл изображения не найден.")
+    return FileResponse(path)
+
+
 @app.post("/api/generate")
 async def api_generate(
     request: Request,
@@ -777,6 +1009,7 @@ async def api_generate(
     ref_image_size: Annotated[str, Form()] = "match",
     character_ids: Annotated[str, Form()] = "[]",
     location_ids: Annotated[str, Form()] = "[]",
+    misc_ids: Annotated[str, Form()] = "[]",
     muted_character_ids: Annotated[str, Form()] = "[]",
     reference_manifest: Annotated[str, Form()] = "{}",
     guide_manifest: Annotated[str, Form()] = "{}",
@@ -984,6 +1217,9 @@ async def api_generate(
 
             reference_items.extend(
                 _v2_location_references(_v2_location_ids(location_ids), user_id)
+            )
+            reference_items.extend(
+                _v2_misc_references(_v2_misc_ids(misc_ids), user_id)
             )
 
             manifest = parse_reference_manifest(reference_manifest)
@@ -1225,6 +1461,25 @@ def _v2_location_ids(raw: str) -> list[str]:
     return result
 
 
+
+def _v2_misc_ids(raw: str) -> list[str]:
+    try:
+        value = json.loads(raw or "[]")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, "Некорректный список пресетов «Прочее».") from exc
+    if not isinstance(value, list):
+        raise HTTPException(400, "Некорректный список пресетов «Прочее».")
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        misc_id = str(item).strip()
+        if not misc_id or misc_id in seen:
+            continue
+        seen.add(misc_id)
+        result.append(misc_id)
+    return result
+
+
 @app.post("/api/v2/generate")
 async def api_v2_generate(
     request: Request,
@@ -1237,6 +1492,7 @@ async def api_v2_generate(
     generate_audio: Annotated[bool, Form()] = True,
     character_ids: Annotated[str, Form()] = "[]",
     location_ids: Annotated[str, Form()] = "[]",
+    misc_ids: Annotated[str, Form()] = "[]",
     muted_character_ids: Annotated[str, Form()] = "[]",
     first_frame: UploadFile | None = File(None),
     last_frame: UploadFile | None = File(None),
@@ -1250,6 +1506,7 @@ async def api_v2_generate(
     width, height = _v2_resolution(quality, ratio)
     selected_characters = _v2_character_ids(character_ids)
     selected_locations = _v2_location_ids(location_ids)
+    selected_misc = _v2_misc_ids(misc_ids)
     has_first = first_frame is not None and bool(first_frame.filename)
     has_last = last_frame is not None and bool(last_frame.filename)
 
@@ -1266,7 +1523,7 @@ async def api_v2_generate(
         seed_value = -1
 
     has_exact_frames = has_first or has_last
-    has_semantic_references = bool(selected_characters or selected_locations)
+    has_semantic_references = bool(selected_characters or selected_locations or selected_misc)
     if has_semantic_references and has_exact_frames:
         generation_mode = "multiframe"
     elif has_semantic_references:
@@ -1311,6 +1568,7 @@ async def api_v2_generate(
         ref_image_size="match",
         character_ids=json.dumps(selected_characters),
         location_ids=json.dumps(selected_locations),
+        misc_ids=json.dumps(selected_misc),
         muted_character_ids=json.dumps(_v2_character_ids(muted_character_ids)),
         reference_manifest="{}",
         guide_manifest=json.dumps(
@@ -1449,6 +1707,49 @@ def _v2_location_references(location_ids: list[str], user_id: str) -> list[dict]
                     "note": (
                         "Reusable location reference. Use it as the scene environment/background "
                         "and keep spatial continuity stable."
+                    ),
+                }
+            )
+    return items
+
+
+
+def _v2_misc_references(misc_ids: list[str], user_id: str) -> list[dict]:
+    items: list[dict] = []
+    for misc_id in misc_ids:
+        preset = db.get_misc_preset(misc_id, user_id)
+        if preset is None:
+            raise HTTPException(404, "Один из выбранных пресетов «Прочее» не найден.")
+        category = str(preset.get("category") or "other")
+        role, retention = MISC_CATEGORY_H3_ROLE.get(
+            category,
+            MISC_CATEGORY_H3_ROLE["other"],
+        )
+        category_label = MISC_PRESET_CATEGORIES.get(category, MISC_PRESET_CATEGORIES["other"])
+        for path_value in preset.get("images") or []:
+            path = Path(path_value)
+            if not path.is_file():
+                raise HTTPException(
+                    409,
+                    f"У пресета «{preset['name']}» отсутствует файл изображения.",
+                )
+            items.append(
+                {
+                    "type": "image",
+                    "path": str(path),
+                    "temporary": False,
+                    "source_name": path.name,
+                    "role": role,
+                    "retention": retention,
+                    "misc_id": misc_id,
+                    "misc_name": preset["name"],
+                    "misc_category": category,
+                    "misc_category_label": category_label,
+                    "misc_description": preset.get("description") or "",
+                    "note": (
+                        "Reusable Misc semantic reference. Apply only the saved "
+                        "object/trait/action/style role described by this preset and "
+                        "preserve it consistently when it is visible."
                     ),
                 }
             )
@@ -1769,7 +2070,7 @@ async def api_assistant_context(
         raise HTTPException(400, "Некорректный запрос контекста.") from exc
     if not isinstance(payload, dict):
         raise HTTPException(400, "Некорректный запрос контекста.")
-    runtime_settings, _characters, _locations = _assistant_runtime_context(
+    runtime_settings, _characters, _locations, _misc = _assistant_runtime_context(
         user_id,
         payload.get("settings"),
     )
@@ -1791,6 +2092,7 @@ async def api_v2_audio(
     seed: Annotated[str, Form()] = "",
     character_ids: Annotated[str, Form()] = "[]",
     location_ids: Annotated[str, Form()] = "[]",
+    misc_ids: Annotated[str, Form()] = "[]",
     track_id: Annotated[str, Form()] = "",
     audio_start: Annotated[float, Form()] = 0.0,
     embed_track: Annotated[bool, Form()] = True,
@@ -1806,6 +2108,7 @@ async def api_v2_audio(
     width, height = _v2_resolution(quality, ratio)
     selected = _v2_character_ids(character_ids)
     selected_locations = _v2_location_ids(location_ids)
+    selected_misc = _v2_misc_ids(misc_ids)
     has_upload = audio is not None and bool(audio.filename)
     if bool(track_id.strip()) == bool(has_upload):
         raise HTTPException(
@@ -1822,6 +2125,7 @@ async def api_v2_audio(
             include_voice=False,
         )
         items.extend(_v2_location_references(selected_locations, user_id))
+        items.extend(_v2_misc_references(selected_misc, user_id))
 
         if visual_reference is not None and visual_reference.filename:
             suffix = Path(visual_reference.filename).suffix.lower()
@@ -1856,7 +2160,7 @@ async def api_v2_audio(
         if not any(item.get("type") in {"image", "video"} for item in items):
             raise HTTPException(
                 400,
-                "Для генерации по аудио выберите персонажа, локацию или добавьте визуальный референс.",
+                "Для генерации по аудио выберите персонажа, локацию, пресет «Прочее» или добавьте визуальный референс.",
             )
 
         if has_upload:
@@ -2624,6 +2928,34 @@ def _location_public(location: dict | None) -> dict:
 
 
 
+
+def _misc_public(preset: dict | None) -> dict:
+    if not preset:
+        return {}
+    images = preset.get("images") or []
+    version = str(preset.get("updated_at") or "")
+    image_urls = [
+        f"/misc/{preset['id']}/image/{index}?v={version}"
+        for index in range(len(images))
+    ]
+    category = str(preset.get("category") or "other")
+    return {
+        "id": preset["id"],
+        "name": preset["name"],
+        "category": category,
+        "category_label": MISC_PRESET_CATEGORIES.get(
+            category,
+            MISC_PRESET_CATEGORIES["other"],
+        ),
+        "description": preset.get("description") or "",
+        "image_count": len(images),
+        "image_urls": image_urls,
+        "preview_url": image_urls[0] if image_urls else None,
+        "created_at": preset.get("created_at"),
+        "updated_at": preset.get("updated_at"),
+    }
+
+
 def _assistant_selected_ids(value: object) -> set[str]:
     if not isinstance(value, list):
         return set()
@@ -2637,10 +2969,11 @@ def _assistant_selected_ids(value: object) -> set[str]:
 def _assistant_runtime_context(
     user_id: str,
     supplied_settings: object,
-) -> tuple[dict, list[dict], list[dict]]:
+) -> tuple[dict, list[dict], list[dict], list[dict]]:
     context = dict(supplied_settings) if isinstance(supplied_settings, dict) else {}
     selected_character_ids = _assistant_selected_ids(context.get("selected_character_ids"))
     selected_location_ids = _assistant_selected_ids(context.get("selected_location_ids"))
+    selected_misc_ids = _assistant_selected_ids(context.get("selected_misc_ids"))
     muted_character_ids = _assistant_selected_ids(context.get("muted_character_ids"))
 
     characters: list[dict] = []
@@ -2679,6 +3012,22 @@ def _assistant_runtime_context(
             }
         )
 
+    misc: list[dict] = []
+    for raw in db.list_misc_presets(user_id):
+        public = _misc_public(raw)
+        misc_id = str(public.get("id") or "")
+        misc.append(
+            {
+                "id": misc_id,
+                "name": str(public.get("name") or ""),
+                "category": str(public.get("category") or "other"),
+                "category_label": str(public.get("category_label") or "Другое"),
+                "description": str(public.get("description") or ""),
+                "image_count": int(public.get("image_count") or 0),
+                "selected": misc_id in selected_misc_ids,
+            }
+        )
+
     selected_characters = [
         {
             "name": item["name"],
@@ -2712,17 +3061,32 @@ def _assistant_runtime_context(
         if item["selected"]
     ]
 
+    selected_misc = [
+        {
+            "name": item["name"],
+            "category": item["category"],
+            "category_label": item["category_label"],
+            "description": item["description"],
+            "image_count": item["image_count"],
+        }
+        for item in misc
+        if item["selected"]
+    ]
+
     context["available_characters"] = characters
     context["available_locations"] = locations
+    context["available_misc"] = misc
     context["selected_characters"] = selected_characters
     context["selected_locations"] = selected_locations
+    context["selected_misc"] = selected_misc
 
     # Internal IDs remain available for backend control/validation, but the assistant
     # should normally describe selected presets by human-readable metadata above.
     context["selected_character_ids"] = sorted(selected_character_ids)
     context["selected_location_ids"] = sorted(selected_location_ids)
+    context["selected_misc_ids"] = sorted(selected_misc_ids)
     context["muted_character_ids"] = sorted(muted_character_ids)
-    return context, characters, locations
+    return context, characters, locations, misc
 
 
 def _editor_float(
