@@ -173,7 +173,8 @@
         : (
           "Это обычный режим Video без driving master track. " +
           "Если First/Last используются без Characters/Locations/Misc — добавь правильную FL2VA alignment line из H3 guide. " +
-          "Если First/Last используются вместе с Characters/Locations/Misc — НЕ добавляй Picture alignment line: backend применит кадры отдельно как exact Timeline Guides. "
+          "Если First/Last используются вместе с Characters/Locations/Misc — НЕ добавляй Picture alignment line: backend применит кадры отдельно как exact Timeline Guides. " +
+          "Если сохранённый Character конфликтует с First/Last по внешности, First/Last являются авторитетом для текущей одежды, аксессуаров, реквизита, причёски и состояния; Character сохраняет идентичность и не должен возвращать старую одежду. "
         );
       const result = await fetchJson("/api/assistant/control", {
         method: "POST",

@@ -414,6 +414,7 @@ async def api_update_character(
         raise HTTPException(404, "Персонаж не найден.")
 
     existing_images = list(character.get("images") or [])
+    uploads = [item for item in (images or []) if item.filename]
     raw_keep_indices = keep_image_indices.strip()
     if raw_keep_indices:
         try:
@@ -431,10 +432,13 @@ async def api_update_character(
                 seen_indices.add(value)
                 keep_indices.append(value)
         keep_indices.sort()
+    elif uploads:
+        # New appearance uploads replace the previous reference set unless the
+        # client explicitly sends keep_image_indices.
+        keep_indices = []
     else:
         keep_indices = list(range(len(existing_images)))
 
-    uploads = [item for item in (images or []) if item.filename]
     if len(keep_indices) + len(uploads) < 1:
         raise HTTPException(400, "У персонажа должно остаться хотя бы одно изображение.")
     if len(keep_indices) + len(uploads) > 4:
@@ -1147,6 +1151,7 @@ async def api_v2_generate(
                 user_id,
                 include_voice=True,
                 muted_character_ids=muted_characters,
+                identity_only=has_exact_frames,
             )
             items.extend(_v2_location_references(selected_locations, user_id))
             items.extend(_v2_misc_references(selected_misc, user_id))
@@ -1295,6 +1300,7 @@ def _v2_character_references(
     *,
     include_voice: bool,
     muted_character_ids: set[str] | None = None,
+    identity_only: bool = False,
 ) -> list[dict]:
     items: list[dict] = []
     muted = muted_character_ids or set()
@@ -1316,10 +1322,24 @@ def _v2_character_references(
                     "temporary": False,
                     "source_name": path.name,
                     "role": "character",
-                    "retention": "fully_preserved",
+                    "retention": (
+                        "partially_preserved" if identity_only else "fully_preserved"
+                    ),
                     "character_id": character_id,
                     "character_name": character["name"],
-                    "character_description": character.get("description") or "",
+                    "character_description": (
+                        "" if identity_only else character.get("description") or ""
+                    ),
+                    "identity_only": bool(identity_only),
+                    "note": (
+                        "Identity reference only. Preserve recognizable identity, face and "
+                        "stable body traits. Exact First/Last timeline guides are authoritative "
+                        "for current clothing, accessories, carried props, hairstyle details "
+                        "and visible condition; never restore conflicting appearance from this "
+                        "saved character picture."
+                        if identity_only
+                        else ""
+                    ),
                 }
             )
         if include_voice and character_id not in muted and character.get("voice_file"):
@@ -1784,10 +1804,13 @@ async def api_v2_audio(
     created_track_id: str | None = None
     _v2_reserve_gpu(gpu_target,job_id)
     try:
+        has_first = first_frame is not None and bool(first_frame.filename)
+        has_last = last_frame is not None and bool(last_frame.filename)
         items = _v2_character_references(
             selected,
             user_id,
             include_voice=False,
+            identity_only=has_first or has_last,
         )
         items.extend(_v2_location_references(selected_locations, user_id))
         items.extend(_v2_misc_references(selected_misc, user_id))
@@ -1795,8 +1818,6 @@ async def api_v2_audio(
             item.get("type") in {"image", "video"} for item in items
         )
 
-        has_first = first_frame is not None and bool(first_frame.filename)
-        has_last = last_frame is not None and bool(last_frame.filename)
         frame_paths: list[str] = []
         guides: list[dict] = []
 

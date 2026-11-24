@@ -91,6 +91,9 @@
     const incoming = Array.from(files || []).filter((file) =>
       file && (file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(file.name))
     );
+    if (editingCharacterId && incoming.length && keptExistingImageIndices.size) {
+      keptExistingImageIndices.clear();
+    }
     const next = append ? [...createImageFiles, ...incoming] : incoming;
     const maxNew = Math.max(0, 4 - keptExistingImageIndices.size);
     const unique = [];
@@ -313,7 +316,7 @@
     if (nameInput) nameInput.value = character.name || "";
     if (descriptionInput) descriptionInput.value = character.description || "";
     if (formTitle) formTitle.textContent = "Редактировать персонажа";
-    if (formSubtitle) formSubtitle.textContent = "Измените описание, референсы внешности и голос. Старые файлы сохранятся, пока вы их явно не уберёте.";
+    if (formSubtitle) formSubtitle.textContent = "Измените описание, референсы внешности и голос. Новые изображения заменяют старый набор референсов внешности.";
     if (submitLabel) submitLabel.textContent = "Сохранить изменения";
     if (deleteButton) deleteButton.hidden = false;
 

@@ -24,7 +24,7 @@ http://IP_ВМ:8000/
 - prompt до 16 000 символов;
 - First Frame / Last Frame;
 - reusable Character / Location / «Прочее» presets;
-- Character: 1–4 appearance refs, описание и optional voice reference;
+- Character: 1–4 appearance refs, описание и optional voice reference; при редактировании новые изображения заменяют старый appearance-набор;
 - Location: 1–4 environment refs + сохранённый prompt;
 - Misc: reusable semantic refs по категориям object / gear / vehicle / creature / environment / visual trait / pose-action / style;
 - ordinary H3 Audio toggle;
@@ -34,7 +34,7 @@ http://IP_ВМ:8000/
 
 - без visual refs -> Frames / FL2VA;
 - Character / Location / Misc -> Ref2VA;
-- semantic preset + First/Last -> Ref2VA + native exact Timeline Guides;
+- semantic preset + First/Last -> Ref2VA + native exact Timeline Guides; для Character endpoint-кадры задают текущую одежду/аксессуары/состояние, а сохранённый Character работает как identity reference;
 - master track без visual input -> обычная генерация + optional final mux;
 - master track + First/Last или semantic preset -> Digital Human с driving audio;
 - First/Last в Digital Human режиме применяются отдельно как native exact Timeline Guides.

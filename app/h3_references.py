@@ -197,9 +197,13 @@ def build_reference_prompt(
                 "name": str(entry.get("character_name") or "Character").strip(),
                 "description": str(entry.get("character_description") or "").strip(),
                 "labels": [],
+                "identity_only": False,
             },
         )
         group["labels"].append(str(entry["label"]))
+        group["identity_only"] = bool(
+            group["identity_only"] or entry.get("identity_only")
+        )
 
     for entry in reference_map:
         location_id = str(entry.get("location_id") or "").strip()
@@ -235,10 +239,20 @@ def build_reference_prompt(
         subject_index += 1
         labels = ", ".join(group["labels"])
         description = f" {group['description']}" if group["description"] else ""
-        subject_lines.append(
-            f"<Subject {subject_index}>: reusable character \"{group['name']}\" "
-            f"defined by {labels}.{description}".strip()
-        )
+        if group["identity_only"]:
+            subject_lines.append(
+                f"<Subject {subject_index}>: reusable character \"{group['name']}\" "
+                f"identity defined by {labels}. Preserve recognizable identity, face and "
+                "stable body traits only. Exact native First/Last timeline guides are "
+                "authoritative for current clothing, accessories, carried props, hairstyle "
+                "details and visible condition; never restore conflicting appearance from "
+                "the saved character pictures."
+            )
+        else:
+            subject_lines.append(
+                f"<Subject {subject_index}>: reusable character \"{group['name']}\" "
+                f"defined by {labels}.{description}".strip()
+            )
 
     for group in location_subjects.values():
         labels = ", ".join(group["labels"])
@@ -279,7 +293,14 @@ def build_reference_prompt(
             subject_lines.append(f"{label}: {role} reference \"{source_name}\".{note_text}".strip())
 
         retention = str(entry.get("retention") or "reference")
-        retention_lines.append(f"{label}: {retention}; role={role}.")
+        if entry.get("identity_only") and entry.get("type") in {"image", "video"}:
+            retention_lines.append(
+                f"{label}: {retention}; role=character identity only; preserve identity "
+                "while allowing exact timeline guides to replace conflicting clothing, "
+                "accessories, props, hairstyle details and visible condition."
+            )
+        else:
+            retention_lines.append(f"{label}: {retention}; role={role}.")
 
     if not subject_lines:
         subject_lines.append("Use the attached references exactly according to their labels and roles.")
