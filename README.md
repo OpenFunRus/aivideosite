@@ -44,7 +44,7 @@ http://IP_ВМ:8000/
 - Magic Wand переписывает обычный запрос в canonical MiniMax H3 prompt;
 - FORMAT LOCK + few-shot примеры для shots, dialogue, singing, First/Last и driving audio;
 - exact dialogue/lyrics сохраняются через stable `(Sx)` + `<d>[Language] ...</d>`;
-- для каждого выбранного Character backend вычисляет `speech_policy`: красный/muted динамик или отсутствие сохранённого голоса = `silent`; Magic Wand обязана вставить `<Name> speech_policy: silent.` в integrated description и не назначать такому персонажу речь/пение;
+- для каждого выбранного Character backend вычисляет `speech_policy`: красный/muted динамик или отсутствие сохранённого голоса = `silent`; Gemma описывает молчание естественным языком и не выводит внутренний маркер;
 - Character с активным голосом имеет `explicit_dialogue_only`: voice reference не разрешает Gemma придумывать реплики без явного запроса пользователя;
 - «Промт пользователя» — persistent per-user инструкция, общая для Chat и Magic Wand;
 - локальная Gemma4 26B A4B Heretic Q4_K_M;
@@ -105,10 +105,8 @@ Legacy `app/templates/index.html`, `app/static/app.js`, `app/static/app.css` и 
 
 - внешний/копируемый H3 guide: `/static/h3-prompting-guide-ai.txt`;
 - site context для внешнего ChatGPT: `/static/v2-chatgpt-site-guide.txt`;
-- preload локальной Gemma:
-  - `app/static/assistant_context/01_minimax_h3_master_guide_en.txt`;
-  - `02_minimax_h3_practical_playbook_en.txt`;
-  - `03_aivideosite_v2_operator_map_en.txt`.
+- служебная инструкция Gemma: `app/static/assistant_context/service_ru.txt`; три старых гайда больше не загружаются автоматически.
+- служебный и пользовательский промты редактируются в полноэкранных модалках, настройки сохраняются в браузере по пользователю.
 
 ## Ожидаемая структура на Ubuntu
 

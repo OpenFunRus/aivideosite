@@ -194,7 +194,6 @@
               "Selected Misc presets — реальные H3 semantic references предметов, одежды, оружия, транспорта, существ, особенностей, поз/действий, стилей и прочего; обязательно учитывай их name/category/description в сцене, не выдумывая новые свойства. " +
               "Сохрани все конкретные факты буквально: если написано 35 лет — в результате тоже должно быть 35, а не диапазон возраста. " +
               "Точную реплику пиши один раз: только как (S1) <d>[Russian] ...</d>, не дублируй её обычными кавычками перед тегом. " +
-              "Для выбранных персонажей смотри CURRENT_SITE_STATE.selected_characters[].speech_policy. Если speech_policy=silent, обязательно добавь в integrated_multimodal_description точную строку '<Имя> speech_policy: silent.' и не давай этому персонажу реплик, пения или артикуляции речи. " +
               "Не придумывай гром, шаги, ветер, транспорт, новые действия или другие детали, которых нет в запросе. " +
               "Не меняй настройки формы и не добавляй события, которых пользователь не просил. " +
               "Не пиши JSON, changes.prompt, message, Mode/Duration/FPS/Steps или другие служебные строки. Верни только три поля H3.\n\n" +
@@ -202,6 +201,7 @@
           }],
           settings: {
             ...(api.currentAssistantSettings?.() || {}),
+            service_prompt: api.getServicePrompt?.() ?? null,
             ...audioContext,
             workspace: "create",
             quality: String(state.draft.quality || "720"),

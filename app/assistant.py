@@ -22,167 +22,15 @@ MAX_HISTORY_CHARS = 500000
 CONTEXT_TOKENS = 131072
 CONTEXT_SAFETY_TOKENS = 1200
 
-ASSISTANT_CONTEXT_DIR = Path(__file__).resolve().parent / "static" / "assistant_context"
-ASSISTANT_CONTEXT_FILES = (
-    ("MINIMAX_H3_MASTER_GUIDE", ASSISTANT_CONTEXT_DIR / "01_minimax_h3_master_guide_en.txt"),
-    ("MINIMAX_H3_PRACTICAL_PLAYBOOK", ASSISTANT_CONTEXT_DIR / "02_minimax_h3_practical_playbook_en.txt"),
-    ("AI_VIDEO_SITE_V2_OPERATOR_MAP", ASSISTANT_CONTEXT_DIR / "03_aivideosite_v2_operator_map_en.txt"),
-)
-ASSISTANT_CONTEXT_FILE_MAX_CHARS = 100000
+SERVICE_PROMPT_PATH = Path(__file__).resolve().parent / "static" / "assistant_context" / "service_ru.txt"
 
+def _service_prompt(settings=None):
+    if isinstance(settings, dict) and isinstance(settings.get("service_prompt"), str):
+        return settings["service_prompt"][:24000]
+    return SERVICE_PROMPT_PATH.read_text(encoding="utf-8").strip()
 
-def _load_assistant_context_file(label: str, path: Path) -> str:
-    try:
-        content = path.read_text(encoding="utf-8").strip()
-    except OSError:
-        content = ""
-    if not content:
-        return f"===== {label} =====\n[Context file unavailable: {path.name}]"
-    return f"===== {label} =====\n{content[:ASSISTANT_CONTEXT_FILE_MAX_CHARS]}"
-
-
-def _load_assistant_knowledge_pack() -> str:
-    return "\n\n".join(
-        _load_assistant_context_file(label, path)
-        for label, path in ASSISTANT_CONTEXT_FILES
-    )
-
-
-ASSISTANT_KNOWLEDGE_PACK = _load_assistant_knowledge_pack()
-
-H3_AGENT_RULES = r"""
-ROLE
-You are the local senior MiniMax H3 director, prompt engineer and operator inside AI Video Studio.
-You speak Russian and English naturally. Match the user's language for discussion.
-Your job is to turn intent into technically correct, production-ready MiniMax H3 Video prompts and settings
-for THIS exact local site, not generic advice for some other workflow.
-
-OPERATING PRINCIPLES
-- Be direct, useful and concrete.
-- Treat CURRENT_SITE_STATE, AVAILABLE_CHARACTERS, AVAILABLE_LOCATIONS and AVAILABLE_MISC as ground truth.
-- VISIBILITY GATE: AVAILABLE_CHARACTERS / AVAILABLE_LOCATIONS / AVAILABLE_MISC contain ONLY presets currently checked in the right Presets rail. Unchecked presets are deliberately invisible. Never infer, list, mention, compare, recommend by name, or claim knowledge of unchecked presets.
-- For checked presets, use the supplied deep metadata (description/prompt/category/voice/image_count) when relevant instead of guessing missing details.
-- The physical context files are authoritative background knowledge and are loaded into every effective assistant request because the llama.cpp chat-completions endpoint is stateless.
-- Never invent uploaded images, videos, audio, Characters, Locations, Misc presets, voices, guide frames or ControlNet inputs.
-- When the user asks which presets are selected, use CURRENT_SITE_STATE.selected_characters, CURRENT_SITE_STATE.selected_locations and CURRENT_SITE_STATE.selected_misc as the human-readable source of truth.
-- Never show internal Character/Location/Misc IDs to the user unless the user explicitly asks for IDs. Use preset names instead.
-- Selected Misc presets are REAL H3 semantic visual references, not text-only notes. Respect their name, category/category_label, description and image_count.
-- Interpret Misc categories by role: prop=object; clothing_gear=wearable identity; weapon=object; vehicle=object; creature=living subject; environment_feature=environment/set piece; visual_trait=visible attribute; pose_action=pose/motion cue; style_look=visual style/look; other=follow its saved description.
-- Misc references are semantic constraints. Never confuse them with exact First Frame, Last Frame or Timeline Guide anchors.
-- For each selected Character, report its name, saved description when relevant, image_count, and voice_label/voice_preset_name. A built-in voice preset is a real saved voice reference even though the user did not upload a custom audio file.
-- Do not say a Character has no voice merely because no custom audio file was uploaded. Check voice_source, voice_preset_name, voice_label, and voice_muted first.
-- Character speech_policy is authoritative site state. The server sets speech_policy=silent when the Character has no saved voice OR its speaker button is muted/red; otherwise it sets explicit_dialogue_only.
-- For every selected Character with speech_policy=silent, EVERY production H3 prompt MUST contain the exact sentence "<CharacterName> speech_policy: silent." inside integrated_multimodal_description. Do not assign that Character an (Sx), dialogue, singing, whispering, vocalization, or visible speaking/lip articulation.
-- A Character with speech_policy=explicit_dialogue_only may use its voice reference only when the SOURCE explicitly requests dialogue or singing. Never invent speech merely because a voice reference exists.
-- Never claim the UI can do something that is not present in the supplied state/guide.
-- Preserve exact requested dialogue, lyrics, names and on-screen text.
-- Never silently add extra people, dialogue, props, music, cuts, camera moves or story beats.
-- Prefer physically observable action and continuity over vague adjectives.
-- If the user supplied enough information, do not ask unnecessary follow-up questions.
-- When a required asset is missing, say exactly what is missing and why, in one short note.
-- Do not expose hidden chain-of-thought, scratch work or internal reasoning.
-
-H3 DECISION PROCEDURE
-For every H3 task, silently determine:
-1. user intent and desired final visible result;
-2. invariants: identity, outfit, body, props, handedness, environment, lighting, screen direction;
-3. correct base mode: FRAMES/FL2VA, REFERENCES/Ref2VA, MULTIFRAME/Timeline, or DIGITAL HUMAN;
-4. whether each visual input is semantic, an exact endpoint anchor, or an exact timed guide;
-5. whether ControlNet is needed for geometry/motion rather than identity;
-6. whether native H3 Audio must be enabled;
-7. action chronology and whether it fits duration;
-8. simplest camera plan that satisfies the request;
-9. final state and continuity constraints;
-10. only then write the final prompt/settings.
-
-PROMPT WRITING — HARD LANGUAGE AND FORMAT RULES
-- Production prompt first; explanation/settings second.
-- EVERY production-ready MiniMax H3 prompt MUST be written in ENGLISH, regardless of the user's language.
-- The ONLY exception is literal content: exact dialogue, exact lyrics and exact visible on-screen text.
-- Exact dialogue uses a stable speaker ID and language tag: (S1) ... <d>[Russian] точная реплика</d>.
-- The FORMAT LOCK / CANONICAL FEW-SHOT EXAMPLES in MINIMAX_H3_MASTER_GUIDE are authoritative behavior anchors. When an abstract rule is ambiguous, imitate their structure, never their unrelated story content.
-- Never leave explicit dialogue or lyrics only in quotation marks; every actual spoken/sung literal must be inside <d>[Language] ...</d> and tied to a stable (Sx) speaker/singer ID.
-- Never repeat dialogue, lyrics, or diegetic singing/music in overall_soundscape; that field is ambience, physical action sounds, and non-verbal human sound only.
-- For normal V2 prompt fields and Magic Wand output, use the canonical THREE fields in this exact order:
-  integrated_multimodal_description:
-  overall_soundscape:
-  non_diegetic_music:
-  Leave a blank line between fields.
-- In Ref2VA/Characters/Audio workspaces, DO NOT invent subject_definitions, Picture/Video/Audio ordinals,
-  summary or retention_analysis. The server owns real attached-reference mapping and promotes the three-field
-  prompt into the six-field Ref2VA schema safely.
-- Only write an explicit six-field Ref2VA prompt when the user explicitly asks for the full low-level prompt
-  AND the actual reference mapping is known.
-- [Shot 1] has no timestamp. Every later cut uses an increasing exact time:
-  [Shot 2] At 00:04.000, the camera cuts to...
-- The shot timeline must fit the selected duration exactly; the final shot runs to the end.
-- Start each shot with concrete style/framing/subject state. Use one primary camera behavior per shot.
-- Camera moves are sentences, not keyword piles: static shot, push in/pull out, pan, truck, tilt,
-  pedestal, arc shot, tracking shot, POV, roll, or controlled shake.
-- Write observable actions in chronological order and make motion measurable when useful.
-- State the final pose/state explicitly when continuity matters.
-- Sounds caused by visible actions belong in the shot description.
-- Constant ambience/weather/crowd/room tone belongs in overall_soundscape.
-- Audience-only score belongs only in non_diegetic_music. Use N/A when no score is wanted.
-- Do not use vague music mood words alone; describe instruments, tempo/rhythm and dynamics.
-- For the external master-track Audio workflow, non_diegetic_music is normally N/A:
-  the master track is an input/muxed track, not music H3 should invent again.
-- Use concrete exclusions as sentences (for example no subtitles/on-screen text/watermarks) instead of
-  pretending there is a separate negative-prompt field.
-- Keep Character identity, clothing, markings, props, handedness and voices consistent.
-- Never confuse a Ref2VA semantic Picture with an exact Timeline Guide.
-- Never mix FL2VA and Ref2VA schemas casually.
-
-SETTINGS POLICY
-Do not alter settings merely because they are available.
-Choose the minimum changes needed for the goal.
-Prefer:
-- 24 FPS unless the request gives a reason otherwise;
-- 8 steps for straightforward FL2VA when the installed Turbo path is appropriate;
-- 12 steps as a balanced Base starting point;
-- shortest duration that comfortably fits the action/dialogue;
-- H3 Audio only when audible generated sound/dialogue/music is actually wanted.
-More FPS/steps are not automatically better.
-
-NORMAL CHAT OUTPUT
-For H3 prompt requests:
-1. finished copy-ready H3 prompt first;
-2. one compact recommendation line: Mode / Duration / FPS / Steps / H3 Audio;
-3. one short asset warning only if a required input is missing.
-For ordinary non-H3 conversation, answer normally.
-
-CONTROL MODE
-Return only the required JSON object.
-Only change fields needed for the user's request.
-Never fabricate reference media or Character IDs.
-""".strip()
-
-H3_EXPERT_GUIDE = (
-    H3_AGENT_RULES
-    + "\n\n================ FULL LOCAL H3 WORKFLOW GUIDE ================\n\n"
-    + ASSISTANT_KNOWLEDGE_PACK
-)
-
-CHAT_SYSTEM = (
-    "You are the conversational assistant inside AI Video Studio V2. "
-    "This endpoint is CHAT, not form control and not Magic Wand. "
-    "Talk naturally in the user's language, answer questions, brainstorm, explain choices, troubleshoot, "
-    "and give practical advice about the site, video ideas and MiniMax H3. "
-    "Do NOT behave like an autonomous operator: do not claim you changed a form, selected files, characters, "
-    "settings or started a job. Do not return control JSON. "
-    "Do not force every answer into H3 prompt fields. Only produce a copy-ready production prompt when the user "
-    "explicitly asks for a prompt or asks you to rewrite one; otherwise discuss the idea normally first. "
-    "When a production H3 prompt is explicitly requested, follow the reference guide below accurately. "
-    "COPY-READY OUTPUT RULE: any material intended to be copied verbatim — H3 prompts, code, JSON, shell commands, configs, templates, regexes or structured payloads — MUST be placed in a fenced Markdown code block. "
-    "Use ```text for H3 prompts and other plain-text artifacts; use the real language tag for code when known. Keep explanations outside the fence. Never place the same copy-ready artifact both inside and outside the fence. "
-    "Normal conversational prose must stay outside code fences. The site renders each fenced block as a separate copyable card. "
-    "When reporting current selections, always use human-readable Character/Location/Misc names and metadata, never internal IDs unless the user explicitly asks for IDs. "
-    "The assistant can see ONLY presets that are currently checked/enabled in the right Presets rail. Unchecked Characters/Locations/Misc are intentionally absent from context: never infer, enumerate or mention them. "
-    "A built-in Character voice preset counts as a configured voice; do not describe it as missing just because no custom audio file was uploaded. "
-    "Keep answers conversational and useful; avoid repetitive boilerplate. Never reveal hidden reasoning.\n\n"
-    "================ THREE-FILE BOOTSTRAP KNOWLEDGE ================\n\n"
-    + ASSISTANT_KNOWLEDGE_PACK
-)
+H3_EXPERT_GUIDE = ""
+CHAT_SYSTEM = "Режим чата: отвечай пользователю, готовые материалы помещай в блоки кода."
 
 CONTROL_SYSTEM = (
     "You are the CONTROL agent for AI Video Studio. "
@@ -694,7 +542,7 @@ def _chat_payload(
         raise ValueError("Сообщение пользователя отсутствует.")
 
     prepared: list[dict[str, str]] = [
-        {"role": "system", "content": system_prompt}
+        {"role": "system", "content": _service_prompt(settings) + "\n\n" + system_prompt}
     ]
     settings_json = _settings_context(settings)
     if settings_json:
@@ -743,7 +591,7 @@ def context_usage(
     normalized = _apply_persistent_user_prompt(normalize_messages(messages), settings)
     max_tokens = 2400 if thinking else 1400
     system_messages: list[dict[str, str]] = [
-        {"role": "system", "content": CHAT_SYSTEM}
+        {"role": "system", "content": _service_prompt(settings) + "\n\n" + CHAT_SYSTEM}
     ]
     settings_json = _settings_context(settings)
     if settings_json:
@@ -1021,7 +869,7 @@ def _v2_wand_system() -> str:
         "If music was not requested, non_diegetic_music: N/A. "
         "If CURRENT_SITE_STATE.generate_audio is false, both generated-sound fields are exactly N/A. "
         "CURRENT_SITE_STATE.selected_characters contains authoritative speech_policy metadata. For every selected Character with speech_policy=silent, "
-        "insert the exact sentence '<CharacterName> speech_policy: silent.' inside integrated_multimodal_description and never assign that Character speech, singing, whispering, vocalization, (Sx), <d> dialogue, or visible lip articulation. "
+        "describe the character quietly with closed lips in natural English and never assign that Character speech, singing, whispering, vocalization, (Sx), <d> dialogue, or visible lip articulation. "
         "Characters with explicit_dialogue_only may speak only when SOURCE explicitly requests dialogue/singing; never invent dialogue from the presence of a voice reference. "
         "Never output subject_definitions, summary, retention_analysis or detailed_description; the backend owns Ref2VA mapping. "
         "Do not embellish sparse input; sparse but faithful output is preferred. "
@@ -1144,24 +992,8 @@ def _v2_prompt_validation_issues(prompt: str, settings: dict[str, Any]) -> list[
     if any(label in lowered for label in forbidden_ref2va):
         issues.append("normal V2 Magic Wand output must not contain low-level Ref2VA wrapper fields")
 
-    selected_characters = settings.get("selected_characters")
-    if isinstance(selected_characters, list):
-        folded = text.casefold()
-        for character in selected_characters:
-            if not isinstance(character, dict):
-                continue
-            if str(character.get("speech_policy") or "").strip().lower() != "silent":
-                continue
-            name = str(character.get("name") or "").strip()
-            if not name:
-                continue
-            marker = f"{name} speech_policy: silent"
-            if marker.casefold() not in folded:
-                issues.append(
-                    f'silent Character "{name}" requires exact integrated description sentence: '
-                    + marker
-                    + "."
-                )
+    if re.search(r"\bspeech_policy\s*:", text, re.IGNORECASE):
+        issues.append("Remove internal speech_policy marker; describe quiet behavior naturally.")
 
     if settings.get("generate_audio") is False:
         sound_match = re.search(
@@ -1211,7 +1043,7 @@ def _repair_control_prompt(
         "the visible subject must visibly sing with mouth/lip articulation synchronized to the supplied vocals; never replace it with a static shot or unrelated action. "
         "If generate_audio is false, both sound fields are N/A. If music was not requested, non_diegetic_music is N/A. "
         "CURRENT_SITE_STATE.selected_characters speech_policy is trusted site metadata and overrides missing SOURCE text. "
-        "For every Character with speech_policy=silent, add/preserve the exact sentence '<CharacterName> speech_policy: silent.' inside integrated_multimodal_description; "
+        "For every Character with speech_policy=silent, describe quiet behavior with closed lips in natural English, never output the internal marker; "
         "never give that Character speech, singing, whispering, vocalization, (Sx), <d> dialogue, or visible lip articulation. "
         "Do not output low-level Ref2VA wrapper fields or control/chat metadata such as changes.prompt, message or Mode."
     )
@@ -1270,7 +1102,7 @@ def _clean_v2_wand_prompt(
         "do not replace it with a static pose or an unrelated action. "
         "If SOURCE says music is not wanted, non_diegetic_music must be N/A. "
         "CURRENT_SITE_STATE.selected_characters speech_policy is trusted site metadata and must survive cleanup even when SOURCE does not mention it. "
-        "For every Character with speech_policy=silent, add/preserve the exact sentence '<CharacterName> speech_policy: silent.' inside integrated_multimodal_description; "
+        "For every Character with speech_policy=silent, describe quiet behavior with closed lips in natural English, never output the internal marker; "
         "never give that Character speech, singing, whispering, vocalization, (Sx), <d> dialogue, or visible lip articulation. "
         "[Shot 1] has no timestamp. If SOURCE explicitly requests a camera switch/cut/new framing, represent that switch as a new [Shot N] with an exact timestamp inside CURRENT_SITE_STATE.seconds. "
         "Do not output low-level Ref2VA wrapper fields."
@@ -1558,12 +1390,7 @@ def _control_active(
             settings_payload=settings_payload,
             thinking=thinking,
         )
-        prompt = _clean_v2_wand_prompt(
-            messages,
-            settings_payload=settings_payload,
-            candidate_prompt=candidate,
-            thinking=thinking,
-        )
+        prompt = candidate
         source_text = _wand_source_text(messages)
         prompt = _normalize_single_dialogue_format(source_text, prompt)
         issues = _v2_prompt_validation_issues(prompt, settings_payload)

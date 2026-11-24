@@ -4,6 +4,31 @@
   if (!api) return;
   const { qs, fetchJson, showToast, copyText } = api;
 
+  const serviceKey = "aivideosite-" + api.userId + "-service-prompt";
+  api.getServicePrompt = () => { try { return localStorage.getItem(serviceKey); } catch { return null; } };
+  const serviceDialog = qs("#v2-service-prompt-dialog");
+  const serviceText = qs("#v2-service-prompt-text");
+  const defaultService = async () => {
+    const response = await fetch("/static/assistant_context/service_ru.txt", {cache:"no-store"});
+    if (!response.ok) throw new Error("Не удалось загрузить инструкцию");
+    return response.text();
+  };
+  const countService = () => { qs("#v2-service-prompt-count").textContent = serviceText.value.length + " / 24 000"; };
+  qs("#v2-service-prompt-open")?.addEventListener("click", async () => {
+    try { serviceText.value = api.getServicePrompt() ?? await defaultService(); countService(); serviceDialog.showModal(); }
+    catch (error) { showToast(error.message, "error"); }
+  });
+  serviceText?.addEventListener("input", countService);
+  qs("#v2-service-prompt-clear")?.addEventListener("click", async () => {
+    try { serviceText.value = await defaultService(); countService(); } catch(error) { showToast(error.message,"error"); }
+  });
+  qs("#v2-service-prompt-form")?.addEventListener("submit", event => {
+    event.preventDefault();
+    try { localStorage.setItem(serviceKey, serviceText.value); serviceDialog.close(); showToast("Служебный промт сохранён."); updateContext(); }
+    catch(error) { showToast(error.message,"error"); }
+  });
+  serviceDialog?.querySelectorAll("[data-service-prompt-close]").forEach(button => button.addEventListener("click", () => serviceDialog.close()));
+
   const CHAT_KEY = "aivideosite-" + api.userId + "-v2-chat";
   let messages = api.readStoredJson(CHAT_KEY, []);
   let busy = false;
@@ -200,6 +225,7 @@
       selected_misc_ids: Array.from(api.state?.selectedMiscIds || []).map(String),
       muted_character_ids: (api.mutedCharacterIds?.() || []).map(String),
       user_prompt: String(api.getAssistantUserPrompt?.() || ""),
+      service_prompt: api.getServicePrompt(),
       create_state: createState,
     };
   };
