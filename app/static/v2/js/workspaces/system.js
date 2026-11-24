@@ -37,6 +37,12 @@
     const load = clamp(gpu.utilization);
     const vram = percent(gpu.memory_used_mb, gpu.memory_total_mb);
     const active = W.gpuJob(Number(gpu.index));
+    const assistantSlot = (W.snapshot?.assistant?.slots || []).find(
+      (item) => Number(item.gpu) === Number(gpu.index)
+    );
+    const occupancy = active
+      ? (active.user_label || 'Генерация видео')
+      : (assistantSlot?.busy_label || 'Свободна');
     const used = (Number(gpu.memory_used_mb || 0) / 1024).toFixed(1);
     const total = (Number(gpu.memory_total_mb || 0) / 1024).toFixed(1);
     return '<article class="v2-system-card">' + cardHead(gpu.name || ('GPU ' + gpu.index), 'gpu', online) +
@@ -46,7 +52,7 @@
       '<div class="v2-system-vram"><div class="v2-system-vram-head"><span>VRAM</span><strong>' + used + ' / ' + total +
       ' GB</strong></div><div class="v2-system-bar"><span style="width:' + vram.toFixed(1) + '%"></span></div></div>' +
       line('Температура', finite(gpu.temperature) ? gpu.temperature + '°C' : '—') +
-      line('Пользователь', active ? (active.user_label || 'Занята') : 'Свободна') +
+      line('Занятость', occupancy) +
       '</div></div></article>';
   };
 
@@ -62,7 +68,13 @@
       tableRow('Цель (TARGET)', assistant?.target || '—') +
       tableRow('Процесс', process) +
       tableRow('Контекст', '128k') +
-      tableRow('GPU заняты видео', (assistant?.reserved_gpus || []).join(', ') || '—') +
+      tableRow(
+        'GPU заняты видео',
+        (assistant?.slots || [])
+          .filter((item) => item?.busy_kind === 'video')
+          .map((item) => item?.label || ('GPU ' + item?.gpu))
+          .join(', ') || '—'
+      ) +
       '</div></div></article>';
   };
 
