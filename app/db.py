@@ -89,6 +89,7 @@ def init_db() -> None:
                 id TEXT PRIMARY KEY,
                 owner_id TEXT NOT NULL DEFAULT 'user1',
                 kind TEXT NOT NULL,
+                gpu_target TEXT,
                 status TEXT NOT NULL,
                 progress REAL NOT NULL DEFAULT 0,
                 stage TEXT NOT NULL DEFAULT '',
@@ -144,6 +145,8 @@ def _ensure_jobs_columns(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0"
         )
+    if "gpu_target" not in columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN gpu_target TEXT")
 
 
 def _ensure_owner_columns(conn: sqlite3.Connection) -> None:
@@ -195,19 +198,21 @@ def enqueue_job(
     kind: str,
     payload: dict[str, Any],
     owner_id: str = "user1",
+    gpu_target: str | None = None,
 ) -> None:
     with connect() as conn:
         conn.execute(
             """
             INSERT INTO jobs(
-                id, owner_id, kind, status, progress, stage, payload_json,
+                id, owner_id, kind, gpu_target, status, progress, stage, payload_json,
                 created_at, external_id, cancel_requested
-            ) VALUES (?, ?, ?, 'queued', 0, 'В очереди', ?, ?, NULL, 0)
+            ) VALUES (?, ?, ?, ?, 'queued', 0, 'В очереди', ?, ?, NULL, 0)
             """,
             (
                 job_id,
                 owner_id,
                 kind,
+                gpu_target,
                 json.dumps(payload, ensure_ascii=False),
                 utcnow(),
             ),
@@ -237,57 +242,32 @@ def clone_failed_job(source_job_id: str, new_job_id: str) -> dict[str, Any]:
         source["kind"],
         source["payload"],
         owner_id=str(source.get("owner_id") or "user1"),
+        gpu_target=str(source.get("gpu_target")) if source.get("gpu_target") else None,
     )
     return source
 
 
-def claim_next_job(kinds: set[str] | None = None) -> dict[str, Any] | None:
+def claim_next_job(
+    kinds: set[str] | None = None,
+    *,
+    gpu_target: str | None = None,
+    allow_unassigned: bool = False,
+) -> dict[str, Any] | None:
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        params: list[Any] = []
-        kind_clause = ""
+        params:list[Any]=[]; clauses=["status='queued'","cancel_requested=0"]
         if kinds:
-            ordered_kinds = sorted(kinds)
-            placeholders = ",".join("?" for _ in ordered_kinds)
-            kind_clause = f" AND kind IN ({placeholders})"
-            params.extend(ordered_kinds)
-
-        row = conn.execute(
-            f"""
-            SELECT *
-              FROM jobs
-             WHERE status='queued' AND cancel_requested=0
-                   {kind_clause}
-             ORDER BY created_at ASC
-             LIMIT 1
-            """,
-            params,
-        ).fetchone()
-        if row is None:
-            conn.execute("COMMIT")
-            return None
-
-        started_at = utcnow()
-        conn.execute(
-            """
-            UPDATE jobs
-               SET status='running',
-                   stage='Запуск',
-                   progress=1,
-                   started_at=?,
-                   external_id=NULL,
-                   cancel_requested=0,
-                   error=NULL
-             WHERE id=?
-            """,
-            (started_at, row["id"]),
-        )
+            ordered=sorted(kinds); clauses.append(f"kind IN ({','.join('?' for _ in ordered)})"); params.extend(ordered)
+        if gpu_target:
+            clauses.append("(gpu_target=? OR gpu_target IS NULL OR gpu_target='')" if allow_unassigned else "gpu_target=?")
+            params.append(str(gpu_target))
+        row=conn.execute(f"SELECT * FROM jobs WHERE {' AND '.join(clauses)} ORDER BY created_at ASC LIMIT 1",params).fetchone()
+        if row is None:conn.execute("COMMIT"); return None
+        started_at=utcnow()
+        conn.execute("""UPDATE jobs SET status='running',stage='Запуск',progress=1,started_at=?,external_id=NULL,
+                        cancel_requested=0,error=NULL WHERE id=?""",(started_at,row["id"]))
         conn.execute("COMMIT")
-
-    result = _decode_job(row)
-    result["status"] = "running"
-    result["started_at"] = started_at
-    result["cancel_requested"] = 0
+    result=_decode_job(row); result["status"]="running"; result["started_at"]=started_at; result["cancel_requested"]=0
     return result
 
 
@@ -653,6 +633,16 @@ def clear_nonrunning_jobs(
         conn.execute("COMMIT")
     return [_decode_job(row) for row in rows]
 
+
+def active_gpu_reservations() -> dict[str, str]:
+    result={}
+    with connect() as conn:
+        rows=conn.execute("""SELECT id,gpu_target FROM jobs WHERE status IN ('queued','running')
+                             AND gpu_target IS NOT NULL AND gpu_target!='' ORDER BY created_at ASC""").fetchall()
+    for row in rows:
+        target=str(row["gpu_target"] or "").strip()
+        if target and target not in result:result[target]=str(row["id"])
+    return result
 
 def active_character_ids(owner_id: str) -> set[str]:
     protected: set[str] = set()

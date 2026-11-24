@@ -43,6 +43,10 @@ from .worker import JobWorker, probe_duration
 async def lifespan(app: FastAPI):
     db.init_db()
     db.recover_interrupted_jobs()
+    try:
+        await asyncio.to_thread(local_assistant.sync_video_reservations, db.active_gpu_reservations())
+    except local_assistant.AssistantUnavailable:
+        pass
     worker = JobWorker()
     worker.start()
     app.state.worker = worker
@@ -182,6 +186,14 @@ async def dashboard(request: Request):
 async def api_v2_status(user_id: str = Depends(require_user)):
     del user_id
     return {"system": get_system_status()}
+
+@app.get("/api/v2/gpu-slots")
+async def api_v2_gpu_slots(user_id: str = Depends(require_user)):
+    del user_id
+    try:
+        return await asyncio.to_thread(local_assistant.gpu_slots)
+    except local_assistant.AssistantUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
 
 
 @app.get("/api/assistant/status")
@@ -969,6 +981,20 @@ V2_ASPECT_RATIOS = {
 }
 V2_DURATIONS = {5, 10, 15}
 V2_STEPS = {8, 12, 16}
+V2_GPU_TARGETS = {"rtx3090", "rtx2080"}
+
+def _v2_gpu_target(raw: object) -> str:
+    target=str(raw or "").strip().lower()
+    if target not in V2_GPU_TARGETS:raise HTTPException(400,"Выберите RTX3090 или RTX2080.")
+    return target
+
+def _v2_reserve_gpu(target:str,job_id:str)->None:
+    try:local_assistant.reserve_video_gpu(target,job_id)
+    except local_assistant.GPUUnavailable as exc:raise HTTPException(409,str(exc)) from exc
+    except local_assistant.AssistantUnavailable as exc:raise HTTPException(503,str(exc)) from exc
+
+def _v2_release_gpu(target:object,job_id:str)->None:
+    local_assistant.release_video_gpu(target,job_id)
 
 
 def _v2_resolution(quality: str, ratio: str) -> tuple[int, int]:
@@ -1059,6 +1085,7 @@ async def api_v2_generate(
     seconds: Annotated[int, Form()] = 10,
     steps: Annotated[int, Form()] = 12,
     seed: Annotated[str, Form()] = "",
+    gpu_target: Annotated[str, Form()] = "",
     generate_audio: Annotated[bool, Form()] = True,
     character_ids: Annotated[str, Form()] = "[]",
     location_ids: Annotated[str, Form()] = "[]",
@@ -1082,6 +1109,8 @@ async def api_v2_generate(
     selected_locations = _v2_location_ids(location_ids)
     selected_misc = _v2_misc_ids(misc_ids)
     muted_characters = set(_v2_character_ids(muted_character_ids))
+    gpu_target=_v2_gpu_target(gpu_target)
+    job_id=uuid.uuid4().hex
 
     has_first = first_frame is not None and bool(first_frame.filename)
     has_last = last_frame is not None and bool(last_frame.filename)
@@ -1110,6 +1139,7 @@ async def api_v2_generate(
     }
 
     temporary_paths: list[Path] = []
+    _v2_reserve_gpu(gpu_target,job_id)
     try:
         if has_semantic_references:
             items = _v2_character_references(
@@ -1147,6 +1177,8 @@ async def api_v2_generate(
                     )
 
             job_id = _v2_enqueue_reference_job(
+                job_id=job_id,
+                gpu_target=gpu_target,
                 user_id=user_id,
                 prompt=compact_prompt,
                 width=width,
@@ -1179,7 +1211,6 @@ async def api_v2_generate(
                 frame_paths.append(str(path))
 
             keyframe_role = "last" if has_last and not has_first else "first"
-            job_id = uuid.uuid4().hex
             db.enqueue_job(
                 job_id,
                 "generate",
@@ -1206,6 +1237,7 @@ async def api_v2_generate(
                     "final_audio": {},
                 },
                 owner_id=user_id,
+                gpu_target=gpu_target,
             )
 
         return {
@@ -1224,11 +1256,13 @@ async def api_v2_generate(
                 "uses_timeline_guides": generation_mode == "multiframe",
                 "has_first_frame": has_first,
                 "has_last_frame": has_last,
+                "gpu_target": gpu_target,
             },
         }
     except Exception:
         for path in temporary_paths:
             path.unlink(missing_ok=True)
+        _v2_release_gpu(gpu_target,job_id)
         raise
 
 
@@ -1386,6 +1420,8 @@ def _v2_misc_references(misc_ids: list[str], user_id: str) -> list[dict]:
 
 def _v2_enqueue_reference_job(
     *,
+    job_id: str | None = None,
+    gpu_target: str | None = None,
     user_id: str,
     prompt: str,
     width: int,
@@ -1422,7 +1458,7 @@ def _v2_enqueue_reference_job(
         task=reference_task,
         items=items,
     )
-    job_id = uuid.uuid4().hex
+    job_id = job_id or uuid.uuid4().hex
     db.enqueue_job(
         job_id,
         "generate",
@@ -1449,6 +1485,7 @@ def _v2_enqueue_reference_job(
             "final_audio": final_audio or {},
         },
         owner_id=user_id,
+        gpu_target=gpu_target,
     )
     return job_id
 
@@ -1645,6 +1682,7 @@ async def api_v2_state(
                 "owner_id": job.get("owner_id"),
                 "user_label": _user_label(str(job.get("owner_id") or "")),
                 "kind": job.get("kind"),
+                "gpu_target": job.get("gpu_target"),
                 "status": job.get("status"),
                 "progress": job.get("progress"),
                 "stage": job.get("stage"),
@@ -1706,6 +1744,7 @@ async def api_v2_audio(
     seconds: Annotated[int, Form()] = 10,
     steps: Annotated[int, Form()] = 12,
     seed: Annotated[str, Form()] = "",
+    gpu_target: Annotated[str, Form()] = "",
     character_ids: Annotated[str, Form()] = "[]",
     location_ids: Annotated[str, Form()] = "[]",
     misc_ids: Annotated[str, Form()] = "[]",
@@ -1739,8 +1778,11 @@ async def api_v2_audio(
             "Выберите ровно один master track: сохранённый или новый файл.",
         )
 
+    gpu_target=_v2_gpu_target(gpu_target)
+    job_id=uuid.uuid4().hex
     temporary_paths: list[Path] = []
     created_track_id: str | None = None
+    _v2_reserve_gpu(gpu_target,job_id)
     try:
         items = _v2_character_references(
             selected,
@@ -1905,6 +1947,8 @@ async def api_v2_audio(
 
         if use_driving_audio:
             job_id = _v2_enqueue_reference_job(
+                job_id=job_id,
+                gpu_target=gpu_target,
                 user_id=user_id,
                 prompt=h3_prompt,
                 width=width,
@@ -1922,7 +1966,6 @@ async def api_v2_audio(
             )
         else:
             keyframe_role = "last" if has_last and not has_first else "first"
-            job_id = uuid.uuid4().hex
             db.enqueue_job(
                 job_id,
                 "generate",
@@ -1949,6 +1992,7 @@ async def api_v2_audio(
                     "final_audio": final_audio,
                 },
                 owner_id=user_id,
+                gpu_target=gpu_target,
             )
 
         return {
@@ -1968,12 +2012,14 @@ async def api_v2_audio(
             "has_first_frame": bool(has_first),
             "has_last_frame": bool(has_last),
             "uses_timeline_guides": bool(use_driving_audio and guides),
+            "gpu_target": gpu_target,
         }
     except Exception:
         for path in temporary_paths:
             path.unlink(missing_ok=True)
         if created_track_id:
             _v2_delete_track_files(created_track_id, user_id)
+        _v2_release_gpu(gpu_target,job_id)
         raise
 
 
@@ -1993,9 +2039,12 @@ async def api_cancel_job(
     request: Request,
     user_id: str = Depends(require_user),
 ):
+    source=db.get_job(job_id,user_id)
+    if source is None:raise HTTPException(404,"Задача не найдена.")
     job = db.request_cancel(job_id, user_id)
-    if job is None:
-        raise HTTPException(404, "Задача не найдена.")
+    if job is None:raise HTTPException(404,"Задача не найдена.")
+    if job["status"]=="canceled" and source.get("gpu_target") and source["kind"]=="generate":
+        _v2_release_gpu(source["gpu_target"],job_id)
 
     if job["status"] == "running" and job["kind"] == "generate":
         request.app.state.worker.cancel_job(
@@ -2054,9 +2103,14 @@ async def api_retry_job(
             "Исходные файлы уже отсутствуют. Создайте задачу заново.",
         )
 
-    new_job_id = uuid.uuid4().hex
-    db.clone_failed_job(job_id, new_job_id)
-    return {"ok": True, "job_id": new_job_id}
+    new_job_id=uuid.uuid4().hex
+    gpu_target=str(source.get("gpu_target") or "rtx3090")
+    _v2_reserve_gpu(gpu_target,new_job_id)
+    try:db.clone_failed_job(job_id,new_job_id)
+    except Exception:
+        _v2_release_gpu(gpu_target,new_job_id)
+        raise
+    return {"ok":True,"job_id":new_job_id,"gpu_target":gpu_target}
 
 
 @app.delete("/api/jobs/{job_id}")
@@ -2083,6 +2137,8 @@ async def api_clear_jobs(
 ):
     jobs = db.clear_nonrunning_jobs(user_id)
     for job in jobs:
+        if job.get("status")=="queued" and job.get("kind")=="generate" and job.get("gpu_target"):
+            _v2_release_gpu(job["gpu_target"],str(job["id"]))
         _cleanup_job_uploads(job)
     counts = db.state_counts(user_id)
     return {

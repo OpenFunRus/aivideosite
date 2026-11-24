@@ -255,92 +255,48 @@
   const createWarning = qs("#v2-create-warning");
   const firstFrameInput = qs("#v2-first-frame");
   const lastFrameInput = qs("#v2-last-frame");
-
-  const createHasFrames = () =>
-    Boolean(firstFrameInput?.files?.length || lastFrameInput?.files?.length);
-
-  const updateCreateCompatibility = () => {
-    const hasPresets =
-      state.selectedCharacterIds.size > 0 ||
-      state.selectedLocationIds.size > 0 ||
-      state.selectedMiscIds.size > 0;
-    const mixed = hasPresets && createHasFrames();
-    if (createWarning) {
-      createWarning.hidden = !mixed;
-      createWarning.textContent = mixed
-        ? "Персонажи, локации и «Прочее» задают semantic references, а First/Last используются как точные Timeline Guides. Их можно применять вместе."
-        : "";
-    }
-    if (generateButton && !generateButton.classList.contains("is-loading")) {
-      generateButton.disabled = false;
-    }
+  const gpuDialog = qs("#v2-gpu-dialog");
+  const gpuDialogClose = qs("[data-v2-gpu-close]", gpuDialog || document);
+  const gpuButtons = Array.from(gpuDialog?.querySelectorAll("[data-v2-gpu-target]") || []);
+  let gpuPollTimer = null, gpuSubmitting = false;
+  const createHasFrames=()=>Boolean(firstFrameInput?.files?.length||lastFrameInput?.files?.length);
+  const updateCreateCompatibility=()=>{
+    const hasPresets=state.selectedCharacterIds.size>0||state.selectedLocationIds.size>0||state.selectedMiscIds.size>0;
+    const mixed=hasPresets&&createHasFrames();
+    if(createWarning){createWarning.hidden=!mixed;createWarning.textContent=mixed?"Персонажи, локации и «Прочее» задают semantic references, а First/Last используются как точные Timeline Guides. Их можно применять вместе.":"";}
+    if(generateButton&&!generateButton.classList.contains("is-loading"))generateButton.disabled=false;
     return true;
   };
-
-  createForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    updateCreateCompatibility();
-    const sourcePrompt = prompt?.value.trim() || "";
-    if (!sourcePrompt) {
-      showToast("Сначала напишите prompt.", "error");
-      prompt?.focus();
-      return;
-    }
-
-    const formData = new FormData();
-    const audioSubmission = window.AIVideoV2Workspaces?.audioSubmission?.() || { enabled: false };
-    formData.set("prompt", sourcePrompt);
-    formData.set("quality", state.draft.quality);
-    formData.set("ratio", state.draft.ratio);
-    formData.set("seconds", state.draft.seconds);
-    formData.set("steps", state.draft.steps);
-    formData.set("seed", state.draft.seed.trim());
-    formData.set("character_ids", JSON.stringify(Array.from(state.selectedCharacterIds)));
-    formData.set("location_ids", JSON.stringify(Array.from(state.selectedLocationIds)));
-    formData.set("misc_ids", JSON.stringify(Array.from(state.selectedMiscIds)));
-    if (firstFrameInput?.files?.[0]) formData.set("first_frame", firstFrameInput.files[0]);
-    if (lastFrameInput?.files?.[0]) formData.set("last_frame", lastFrameInput.files[0]);
-
-    let endpoint = "/api/v2/generate";
-    if (audioSubmission.enabled) {
-      if (!audioSubmission.hasTrack || (!audioSubmission.uploadedAudio && !audioSubmission.trackId)) {
-        showToast("Выберите аудиодорожку.", "error");
-        return;
-      }
-      endpoint = "/api/v2/audio";
-      formData.set("track_id", audioSubmission.trackId || "");
-      if (audioSubmission.uploadedAudio) formData.set("audio", audioSubmission.uploadedAudio);
-      formData.set("audio_start", String(audioSubmission.audioStart ?? 0));
-      formData.set("embed_track", audioSubmission.embedTrack ? "true" : "false");
-      formData.set("generate_scene_audio", audioSubmission.generateSceneAudio ? "true" : "false");
-    } else {
-      formData.set("generate_audio", state.draft.audio ? "true" : "false");
-      formData.set("muted_character_ids", JSON.stringify(api.mutedCharacterIds?.() || []));
-    }
-
-    if (generateButton) {
-      generateButton.disabled = true;
-      generateButton.classList.add("is-loading");
-    }
-    if (generateLabel) generateLabel.textContent = "Добавляем в очередь…";
-
-    try {
-      const result = await fetchJson(endpoint, { method: "POST", body: formData });
-      const shortId = String(result?.job_id || "").slice(0, 8);
-      const resolved = result?.v2;
-      const resolutionText =
-        resolved?.width && resolved?.height ? " · " + resolved.width + "×" + resolved.height : "";
-      showToast("Задача добавлена в очередь" + (shortId ? " · " + shortId : "") + resolutionText);
-      api.setView?.("queue");
-      setTimeout(() => api.refreshSystem?.(), 700);
-    } catch (error) {
-      showToast("Не удалось запустить генерацию: " + error.message, "error");
-    } finally {
-      generateButton?.classList.remove("is-loading");
-      if (generateLabel) generateLabel.textContent = "Сгенерировать видео";
-      updateCreateCompatibility();
-    }
-  });
+  const gpuStateNode=(b)=>b?.querySelector("[data-v2-gpu-state]");
+  const setGpuButton=(b,s)=>{if(!b)return;const n=gpuStateNode(b),ok=Boolean(s?.available)&&!gpuSubmitting;b.disabled=!ok;b.classList.toggle("available",ok);b.classList.toggle("busy",!ok);if(n)n.textContent=s?String(s.busy_label||(s.available?"Свободна":"Занята")):"Нет данных";};
+  const renderGpuSlots=(slots)=>{const m=new Map((Array.isArray(slots)?slots:[]).map(s=>[String(s.target||""),s]));gpuButtons.forEach(b=>setGpuButton(b,m.get(String(b.dataset.v2GpuTarget||""))));};
+  const refreshGpuSlots=async()=>{if(!gpuDialog?.open)return;try{const d=await fetchJson("/api/v2/gpu-slots");renderGpuSlots(d?.slots||[]);}catch{renderGpuSlots([]);}};
+  const stopGpuPolling=()=>{if(gpuPollTimer)clearInterval(gpuPollTimer);gpuPollTimer=null;};
+  const closeGpuDialog=()=>{stopGpuPolling();if(gpuDialog?.open)gpuDialog.close();};
+  const openGpuDialog=async()=>{if(!gpuDialog){showToast("Окно выбора GPU недоступно.","error");return;}gpuSubmitting=false;renderGpuSlots([]);gpuDialog.showModal();await refreshGpuSlots();stopGpuPolling();gpuPollTimer=setInterval(refreshGpuSlots,1000);};
+  const validateCreateRequest=()=>{
+    updateCreateCompatibility();const sourcePrompt=prompt?.value.trim()||"";if(!sourcePrompt){showToast("Сначала напишите prompt.","error");prompt?.focus();return null;}
+    const audioSubmission=window.AIVideoV2Workspaces?.audioSubmission?.()||{enabled:false};
+    if(audioSubmission.enabled&&(!audioSubmission.hasTrack||(!audioSubmission.uploadedAudio&&!audioSubmission.trackId))){showToast("Выберите аудиодорожку.","error");return null;}
+    return {sourcePrompt,audioSubmission};
+  };
+  const submitCreate=async(gpuTarget,req,sourceButton)=>{
+    if(gpuSubmitting)return;gpuSubmitting=true;gpuButtons.forEach(b=>b.disabled=true);const sn=gpuStateNode(sourceButton);if(sn)sn.textContent="Резервируем GPU…";
+    const {sourcePrompt,audioSubmission}=req,formData=new FormData();
+    formData.set("prompt",sourcePrompt);formData.set("quality",state.draft.quality);formData.set("ratio",state.draft.ratio);formData.set("seconds",state.draft.seconds);formData.set("steps",state.draft.steps);formData.set("seed",state.draft.seed.trim());formData.set("gpu_target",gpuTarget);
+    formData.set("character_ids",JSON.stringify(Array.from(state.selectedCharacterIds)));formData.set("location_ids",JSON.stringify(Array.from(state.selectedLocationIds)));formData.set("misc_ids",JSON.stringify(Array.from(state.selectedMiscIds)));
+    if(firstFrameInput?.files?.[0])formData.set("first_frame",firstFrameInput.files[0]);if(lastFrameInput?.files?.[0])formData.set("last_frame",lastFrameInput.files[0]);
+    let endpoint="/api/v2/generate";
+    if(audioSubmission.enabled){endpoint="/api/v2/audio";formData.set("track_id",audioSubmission.trackId||"");if(audioSubmission.uploadedAudio)formData.set("audio",audioSubmission.uploadedAudio);formData.set("audio_start",String(audioSubmission.audioStart??0));formData.set("embed_track",audioSubmission.embedTrack?"true":"false");formData.set("generate_scene_audio",audioSubmission.generateSceneAudio?"true":"false");}
+    else{formData.set("generate_audio",state.draft.audio?"true":"false");formData.set("muted_character_ids",JSON.stringify(api.mutedCharacterIds?.()||[]));}
+    if(generateButton){generateButton.disabled=true;generateButton.classList.add("is-loading");}if(generateLabel)generateLabel.textContent="Добавляем в очередь…";
+    try{const result=await fetchJson(endpoint,{method:"POST",body:formData});const id=String(result?.job_id||"").slice(0,8),r=result?.v2,res=r?.width&&r?.height?" · "+r.width+"×"+r.height:"",name=gpuTarget==="rtx2080"?"RTX2080":"RTX3090";showToast("Задача запущена на "+name+(id?" · "+id:"")+res);closeGpuDialog();api.setView?.("queue");setTimeout(()=>api.refreshSystem?.(),500);}
+    catch(error){showToast("Не удалось запустить генерацию: "+error.message,"error");}
+    finally{gpuSubmitting=false;generateButton?.classList.remove("is-loading");if(generateLabel)generateLabel.textContent="Сгенерировать видео";updateCreateCompatibility();if(gpuDialog?.open)await refreshGpuSlots();}
+  };
+  createForm?.addEventListener("submit",async e=>{e.preventDefault();const req=validateCreateRequest();if(req)await openGpuDialog();});
+  gpuButtons.forEach(b=>b.addEventListener("click",async()=>{if(b.disabled||gpuSubmitting)return;const req=validateCreateRequest();if(!req){closeGpuDialog();return;}await submitCreate(String(b.dataset.v2GpuTarget||""),req,b);}));
+  gpuDialogClose?.addEventListener("click",closeGpuDialog);gpuDialog?.addEventListener("close",stopGpuPolling);gpuDialog?.addEventListener("cancel",()=>{if(!gpuSubmitting)stopGpuPolling();});
 
   const restoreDraftToUi = () => {
     if (prompt) prompt.value = state.draft.prompt;

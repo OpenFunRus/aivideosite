@@ -4,6 +4,9 @@ import json
 import math
 import os
 import re
+import time
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from collections.abc import Iterator
 from typing import Any
@@ -234,6 +237,71 @@ CONTROL_MODES = {"none", "canny_auto", "canny", "pose", "depth", "hed", "mlsd", 
 class AssistantUnavailable(RuntimeError):
     pass
 
+class GPUUnavailable(AssistantUnavailable):
+    pass
+
+VIDEO_GPU_TARGETS={"rtx3090":0,"rtx2080":1}
+
+def normalize_video_gpu_target(value:object)->str:
+    target=str(value or "").strip().lower()
+    if target not in VIDEO_GPU_TARGETS:raise ValueError("Выберите RTX3090 или RTX2080.")
+    return target
+
+def _manager_request(path:str,*,body:dict[str,Any]|None=None,timeout:float=20.0)->dict[str,Any]:
+    try:
+        response=(requests.get(f"{LLM_MANAGER_URL}{path}",timeout=timeout) if body is None
+                  else requests.post(f"{LLM_MANAGER_URL}{path}",json=body,timeout=timeout))
+    except requests.RequestException as exc:raise AssistantUnavailable(f"Менеджер GPU недоступен: {exc}") from exc
+    data=_safe_json(response); detail=str(data.get("error") or data.get("detail") or "").strip()
+    if response.status_code==409:raise GPUUnavailable(detail or "Выбранная видеокарта занята.")
+    if not response.ok:raise AssistantUnavailable(detail or f"Менеджер GPU вернул HTTP {response.status_code}.")
+    return data
+
+def gpu_slots()->dict[str,Any]:
+    data=_manager_request("/status",timeout=3.0)
+    return {"ok":True,"slots":data.get("slots") or [],"assistant_active":bool(data.get("assistant_active")),
+            "assistant_gpu":data.get("assistant_gpu"),"assistant_target":data.get("target")}
+
+def reserve_video_gpu(target:object,reservation_id:str)->dict[str,Any]:
+    normalized=normalize_video_gpu_target(target)
+    return _manager_request("/video/reserve",body={"gpu":VIDEO_GPU_TARGETS[normalized],"reservation_id":str(reservation_id)})
+
+def release_video_gpu(target:object,reservation_id:str)->None:
+    try:
+        normalized=normalize_video_gpu_target(target)
+        _manager_request("/video/release",body={"gpu":VIDEO_GPU_TARGETS[normalized],"reservation_id":str(reservation_id)},timeout=8)
+    except (AssistantUnavailable,ValueError):pass
+
+def sync_video_reservations(reservations:dict[str,str])->None:
+    payload=[{"gpu":VIDEO_GPU_TARGETS[normalize_video_gpu_target(target)],"reservation_id":str(rid)}
+             for target,rid in reservations.items()]
+    _manager_request("/video/sync",body={"reservations":payload},timeout=10)
+
+def _wait_llm_ready(timeout_seconds:float=180.0)->None:
+    deadline=time.monotonic()+timeout_seconds; last=""
+    while time.monotonic()<deadline:
+        try:
+            response=requests.get(f"{LLM_URL}/health",timeout=2)
+            if response.ok:return
+            last=f"HTTP {response.status_code}"
+        except requests.RequestException as exc:last=str(exc)
+        manager=_manager_request("/status",timeout=2)
+        if not manager.get("assistant_active"):raise AssistantUnavailable("ИИ-ассистент потерял резервирование видеокарты.")
+        if not manager.get("llama_alive"):raise AssistantUnavailable("Процесс локальной LLM завершился во время загрузки.")
+        time.sleep(.5)
+    raise AssistantUnavailable("Локальная LLM не успела загрузиться на выбранной видеокарте."+ (f" Последнее состояние: {last}" if last else ""))
+
+@contextmanager
+def _assistant_gpu_session():
+    request_id=uuid.uuid4().hex; acquired=False
+    try:
+        _manager_request("/assistant/acquire",body={"request_id":request_id},timeout=30); acquired=True
+        _wait_llm_ready(); yield
+    finally:
+        if acquired:
+            try:_manager_request("/assistant/release",body={"request_id":request_id},timeout=20)
+            except AssistantUnavailable:pass
+
 
 def _safe_json(response: requests.Response) -> dict[str, Any]:
     try:
@@ -244,38 +312,23 @@ def _safe_json(response: requests.Response) -> dict[str, Any]:
 
 
 def status() -> dict[str, Any]:
-    manager: dict[str, Any] = {}
-    try:
-        response = requests.get(f"{LLM_MANAGER_URL}/status", timeout=1.5)
-        if response.ok:
-            manager = _safe_json(response)
-    except requests.RequestException:
-        pass
-
-    online = False
-    loading = False
-    try:
-        response = requests.get(f"{LLM_URL}/health", timeout=1.5)
-        online = response.ok
-        loading = response.status_code == 503
-    except requests.RequestException:
-        pass
-
-    return {
-        "online": online,
-        "loading": loading,
-        "target": manager.get("target"),
-        "llama_alive": bool(manager.get("llama_alive")),
-        "reserved_gpus": manager.get("reserved_gpus") or [],
-    }
-
+    try:manager=_manager_request("/status",timeout=2)
+    except AssistantUnavailable:
+        return {"online":False,"loading":False,"target":None,"llama_alive":False,"reserved_gpus":[],
+                "assistant_active":False,"assistant_available":False,"slots":[]}
+    active=bool(manager.get("assistant_active")); alive=bool(manager.get("llama_alive")); loading=False
+    if active and alive:
+        try:loading=not requests.get(f"{LLM_URL}/health",timeout=1).ok
+        except requests.RequestException:loading=True
+    return {"online":bool(manager.get("assistant_available")) or active,"loading":loading,"target":manager.get("target"),
+            "llama_alive":alive,"reserved_gpus":manager.get("reserved_gpus") or [],"assistant_active":active,
+            "assistant_available":bool(manager.get("assistant_available")),"assistant_gpu":manager.get("assistant_gpu"),
+            "slots":manager.get("slots") or []}
 
 def ensure_available() -> None:
-    current = status()
-    if not current["online"]:
-        target = current.get("target") or "неизвестно"
-        state = "модель загружается" if current.get("loading") else "LLM недоступна"
-        raise AssistantUnavailable(f"{state} ({target}). Повторите через несколько секунд.")
+    current=status()
+    if current.get("assistant_active"):raise AssistantUnavailable("ИИ-ассистент уже отвечает на другой запрос.")
+    if not current.get("assistant_available"):raise AssistantUnavailable("Нет свободной видеокарты для ИИ-ассистента: RTX2080 и RTX3090 заняты.")
 
 
 def normalize_messages(value: Any) -> list[dict[str, str]]:
@@ -701,6 +754,15 @@ def context_usage(
     return usage
 
 def stream_chat(
+    messages: Any,
+    *,
+    settings: Any = None,
+    thinking: bool = False,
+) -> Iterator[bytes]:
+    with _assistant_gpu_session():
+        yield from _stream_chat_active(messages, settings=settings, thinking=thinking)
+
+def _stream_chat_active(
     messages: Any,
     *,
     settings: Any = None,
@@ -1413,6 +1475,18 @@ def sanitize_changes(
 
 
 def control(
+    messages: Any,
+    *,
+    settings: Any = None,
+    characters: list[dict[str, Any]] | None = None,
+    locations: list[dict[str, Any]] | None = None,
+    misc: list[dict[str, Any]] | None = None,
+    thinking: bool = False,
+) -> dict[str, Any]:
+    with _assistant_gpu_session():
+        return _control_active(messages,settings=settings,characters=characters,locations=locations,misc=misc,thinking=thinking)
+
+def _control_active(
     messages: Any,
     *,
     settings: Any = None,

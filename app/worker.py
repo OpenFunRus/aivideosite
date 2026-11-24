@@ -25,22 +25,12 @@ class JobCancelled(RuntimeError):
 LLM_MANAGER_URL = os.getenv("LLM_MANAGER_URL", "http://127.0.0.1:8091")
 
 
-def _notify_llm_manager(action: str, gpu_index: int) -> None:
-    if action not in {"reserve", "release"}:
-        return
-    payload = json.dumps({"gpu": int(gpu_index)}).encode("utf-8")
-    request = urllib.request.Request(
-        f"{LLM_MANAGER_URL}/{action}",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+def _release_video_reservation(gpu_index:int,reservation_id:str)->None:
+    payload=json.dumps({"gpu":int(gpu_index),"reservation_id":str(reservation_id)}).encode("utf-8")
+    req=urllib.request.Request(f"{LLM_MANAGER_URL}/video/release",data=payload,headers={"Content-Type":"application/json"},method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            response.read()
-    except (urllib.error.URLError, TimeoutError, OSError):
-        # H3 must remain usable even if the optional assistant is unavailable.
-        pass
+        with urllib.request.urlopen(req,timeout=10) as response:response.read()
+    except (urllib.error.URLError,TimeoutError,OSError):pass
 
 
 class JobWorker(threading.Thread):
@@ -56,6 +46,7 @@ class JobWorker(threading.Thread):
                 "key": "primary",
                 "label": "RTX3090",
                 "gpu_index": 0,
+                "target": "rtx3090",
                 "client": ComfyUIClient(settings.comfyui_url),
                 "busy": False,
                 "job_id": None,
@@ -64,6 +55,7 @@ class JobWorker(threading.Thread):
                 "key": "secondary",
                 "label": "RTX2080",
                 "gpu_index": 1,
+                "target": "rtx2080",
                 "client": ComfyUIClient(settings.comfyui_secondary_url),
                 "busy": False,
                 "job_id": None,
@@ -82,14 +74,14 @@ class JobWorker(threading.Thread):
 
             primary = self._available_gpu_lane("primary")
             if primary is not None:
-                job = db.claim_next_job(self.VIDEO_GENERATION_KINDS)
+                job = db.claim_next_job(self.VIDEO_GENERATION_KINDS, gpu_target=str(primary["target"]), allow_unassigned=True)
                 if job is not None:
                     self._start_gpu_job(primary, job)
                     dispatched = True
 
             secondary = self._available_gpu_lane("secondary")
             if secondary is not None:
-                job = db.claim_next_job(self.VIDEO_GENERATION_KINDS)
+                job = db.claim_next_job(self.VIDEO_GENERATION_KINDS, gpu_target=str(secondary["target"]))
                 if job is not None:
                     self._start_gpu_job(secondary, job)
                     dispatched = True
@@ -124,7 +116,6 @@ class JobWorker(threading.Thread):
     def _start_gpu_job(self, lane: dict[str, Any], job: dict[str, Any]) -> None:
         job_id = str(job["id"])
         client = lane["client"]
-        _notify_llm_manager("reserve", int(lane["gpu_index"]))
         with self._lock:
             lane["busy"] = True
             lane["job_id"] = job_id
@@ -190,7 +181,7 @@ class JobWorker(threading.Thread):
                 else:
                     self._cpu_busy = False
             if lane is not None:
-                _notify_llm_manager("release", int(lane["gpu_index"]))
+                _release_video_reservation(int(lane["gpu_index"]), str(job["id"]))
 
     def _process(
         self,
