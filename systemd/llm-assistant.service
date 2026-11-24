@@ -1,5 +1,5 @@
 [Unit]
-Description=Dynamic local Gemma4 26B A4B assistant for AI Video Site
+Description=On-demand GPU-only Gemma4 26B A4B assistant for AI Video Site
 After=network-online.target comfyui.service comfyui-secondary.service
 Wants=network-online.target
 
@@ -17,7 +17,7 @@ Environment=LLM_CONTROL_HOST=127.0.0.1
 Environment=LLM_CONTROL_PORT=8091
 Environment=LLM_CTX_SIZE=131072
 Environment=LLM_THREADS=18
-Environment=LLM_GPU_POLL_SECONDS=2
+Environment=LLM_GPU_POLL_SECONDS=1
 # The manager owns localhost:8090. Clean up a leftover manual/legacy
 # llama-server before it starts so an old test process cannot block binding.
 ExecStartPre=-/usr/bin/pkill -f llama-server.*--port[[:space:]]+8090

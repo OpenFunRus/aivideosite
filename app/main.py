@@ -2104,13 +2104,18 @@ async def api_retry_job(
         )
 
     new_job_id=uuid.uuid4().hex
-    gpu_target=str(source.get("gpu_target") or "rtx3090")
-    _v2_reserve_gpu(gpu_target,new_job_id)
-    try:db.clone_failed_job(job_id,new_job_id)
-    except Exception:
-        _v2_release_gpu(gpu_target,new_job_id)
-        raise
-    return {"ok":True,"job_id":new_job_id,"gpu_target":gpu_target}
+    if source["kind"] == "generate":
+        gpu_target=str(source.get("gpu_target") or "rtx3090")
+        _v2_reserve_gpu(gpu_target,new_job_id)
+        try:
+            db.clone_failed_job(job_id,new_job_id)
+        except Exception:
+            _v2_release_gpu(gpu_target,new_job_id)
+            raise
+        return {"ok":True,"job_id":new_job_id,"gpu_target":gpu_target}
+
+    db.clone_failed_job(job_id,new_job_id)
+    return {"ok":True,"job_id":new_job_id}
 
 
 @app.delete("/api/jobs/{job_id}")

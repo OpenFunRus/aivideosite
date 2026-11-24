@@ -257,9 +257,22 @@ def _manager_request(path:str,*,body:dict[str,Any]|None=None,timeout:float=20.0)
     if not response.ok:raise AssistantUnavailable(detail or f"Менеджер GPU вернул HTTP {response.status_code}.")
     return data
 
+def _public_gpu_slots(items: object) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    allowed = (
+        "gpu", "target", "label", "available", "busy_kind",
+        "busy_label", "assistant_active", "comfy_idle",
+    )
+    return [
+        {key: item.get(key) for key in allowed}
+        for item in items
+        if isinstance(item, dict)
+    ]
+
 def gpu_slots()->dict[str,Any]:
     data=_manager_request("/status",timeout=3.0)
-    return {"ok":True,"slots":data.get("slots") or [],"assistant_active":bool(data.get("assistant_active")),
+    return {"ok":True,"slots":_public_gpu_slots(data.get("slots")),"assistant_active":bool(data.get("assistant_active")),
             "assistant_gpu":data.get("assistant_gpu"),"assistant_target":data.get("target")}
 
 def reserve_video_gpu(target:object,reservation_id:str)->dict[str,Any]:
@@ -323,7 +336,7 @@ def status() -> dict[str, Any]:
     return {"online":bool(manager.get("assistant_available")) or active,"loading":loading,"target":manager.get("target"),
             "llama_alive":alive,"reserved_gpus":manager.get("reserved_gpus") or [],"assistant_active":active,
             "assistant_available":bool(manager.get("assistant_available")),"assistant_gpu":manager.get("assistant_gpu"),
-            "slots":manager.get("slots") or []}
+            "slots":_public_gpu_slots(manager.get("slots"))}
 
 def ensure_available() -> None:
     current=status()
