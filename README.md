@@ -44,6 +44,8 @@ http://IP_ВМ:8000/
 - Magic Wand переписывает обычный запрос в canonical MiniMax H3 prompt;
 - FORMAT LOCK + few-shot примеры для shots, dialogue, singing, First/Last и driving audio;
 - exact dialogue/lyrics сохраняются через stable `(Sx)` + `<d>[Language] ...</d>`;
+- для каждого выбранного Character backend вычисляет `speech_policy`: красный/muted динамик или отсутствие сохранённого голоса = `silent`; Magic Wand обязана вставить `<Name> speech_policy: silent.` в integrated description и не назначать такому персонажу речь/пение;
+- Character с активным голосом имеет `explicit_dialogue_only`: voice reference не разрешает Gemma придумывать реплики без явного запроса пользователя;
 - «Промт пользователя» — persistent per-user инструкция, общая для Chat и Magic Wand;
 - локальная Gemma4 26B A4B Heretic Q4_K_M;
 - 128k context;

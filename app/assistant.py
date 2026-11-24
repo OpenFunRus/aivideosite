@@ -71,6 +71,9 @@ OPERATING PRINCIPLES
 - Misc references are semantic constraints. Never confuse them with exact First Frame, Last Frame or Timeline Guide anchors.
 - For each selected Character, report its name, saved description when relevant, image_count, and voice_label/voice_preset_name. A built-in voice preset is a real saved voice reference even though the user did not upload a custom audio file.
 - Do not say a Character has no voice merely because no custom audio file was uploaded. Check voice_source, voice_preset_name, voice_label, and voice_muted first.
+- Character speech_policy is authoritative site state. The server sets speech_policy=silent when the Character has no saved voice OR its speaker button is muted/red; otherwise it sets explicit_dialogue_only.
+- For every selected Character with speech_policy=silent, EVERY production H3 prompt MUST contain the exact sentence "<CharacterName> speech_policy: silent." inside integrated_multimodal_description. Do not assign that Character an (Sx), dialogue, singing, whispering, vocalization, or visible speaking/lip articulation.
+- A Character with speech_policy=explicit_dialogue_only may use its voice reference only when the SOURCE explicitly requests dialogue or singing. Never invent speech merely because a voice reference exists.
 - Never claim the UI can do something that is not present in the supplied state/guide.
 - Preserve exact requested dialogue, lyrics, names and on-screen text.
 - Never silently add extra people, dialogue, props, music, cuts, camera moves or story beats.
@@ -566,6 +569,7 @@ def _settings_context(settings: Any) -> str:
                 "voice_preset_id": str(item.get("voice_preset_id") or ""),
                 "voice_preset_name": str(item.get("voice_preset_name") or ""),
                 "voice_muted": bool(item.get("voice_muted")),
+                "speech_policy": str(item.get("speech_policy") or ""),
                 "voice_label": str(item.get("voice_label") or ""),
             }
             for item in selected_characters[:100]
@@ -1016,6 +1020,9 @@ def _v2_wand_system() -> str:
         "Whenever audio_mode is true, keep non_diegetic_music: N/A and use overall_soundscape only for optional generated scene/foley sound. "
         "If music was not requested, non_diegetic_music: N/A. "
         "If CURRENT_SITE_STATE.generate_audio is false, both generated-sound fields are exactly N/A. "
+        "CURRENT_SITE_STATE.selected_characters contains authoritative speech_policy metadata. For every selected Character with speech_policy=silent, "
+        "insert the exact sentence '<CharacterName> speech_policy: silent.' inside integrated_multimodal_description and never assign that Character speech, singing, whispering, vocalization, (Sx), <d> dialogue, or visible lip articulation. "
+        "Characters with explicit_dialogue_only may speak only when SOURCE explicitly requests dialogue/singing; never invent dialogue from the presence of a voice reference. "
         "Never output subject_definitions, summary, retention_analysis or detailed_description; the backend owns Ref2VA mapping. "
         "Do not embellish sparse input; sparse but faithful output is preferred. "
         "Follow the workspace-specific user instruction and the H3 Video reference guide below.\n\n"
@@ -1137,6 +1144,25 @@ def _v2_prompt_validation_issues(prompt: str, settings: dict[str, Any]) -> list[
     if any(label in lowered for label in forbidden_ref2va):
         issues.append("normal V2 Magic Wand output must not contain low-level Ref2VA wrapper fields")
 
+    selected_characters = settings.get("selected_characters")
+    if isinstance(selected_characters, list):
+        folded = text.casefold()
+        for character in selected_characters:
+            if not isinstance(character, dict):
+                continue
+            if str(character.get("speech_policy") or "").strip().lower() != "silent":
+                continue
+            name = str(character.get("name") or "").strip()
+            if not name:
+                continue
+            marker = f"{name} speech_policy: silent"
+            if marker.casefold() not in folded:
+                issues.append(
+                    f'silent Character "{name}" requires exact integrated description sentence: '
+                    + marker
+                    + "."
+                )
+
     if settings.get("generate_audio") is False:
         sound_match = re.search(
             r"overall_soundscape:\s*(.*?)(?=\n\s*non_diegetic_music:|\Z)",
@@ -1184,6 +1210,9 @@ def _repair_control_prompt(
         "If CURRENT_SITE_STATE.has_driving_audio is true and SOURCE asks for Song/Sing/Singing or песня/поёт/петь, "
         "the visible subject must visibly sing with mouth/lip articulation synchronized to the supplied vocals; never replace it with a static shot or unrelated action. "
         "If generate_audio is false, both sound fields are N/A. If music was not requested, non_diegetic_music is N/A. "
+        "CURRENT_SITE_STATE.selected_characters speech_policy is trusted site metadata and overrides missing SOURCE text. "
+        "For every Character with speech_policy=silent, add/preserve the exact sentence '<CharacterName> speech_policy: silent.' inside integrated_multimodal_description; "
+        "never give that Character speech, singing, whispering, vocalization, (Sx), <d> dialogue, or visible lip articulation. "
         "Do not output low-level Ref2VA wrapper fields or control/chat metadata such as changes.prompt, message or Mode."
     )
     repair_user = (
@@ -1240,6 +1269,9 @@ def _clean_v2_wand_prompt(
         "preserve that as explicit visible singing synchronized to the supplied driving vocals, including mouth/lip articulation; "
         "do not replace it with a static pose or an unrelated action. "
         "If SOURCE says music is not wanted, non_diegetic_music must be N/A. "
+        "CURRENT_SITE_STATE.selected_characters speech_policy is trusted site metadata and must survive cleanup even when SOURCE does not mention it. "
+        "For every Character with speech_policy=silent, add/preserve the exact sentence '<CharacterName> speech_policy: silent.' inside integrated_multimodal_description; "
+        "never give that Character speech, singing, whispering, vocalization, (Sx), <d> dialogue, or visible lip articulation. "
         "[Shot 1] has no timestamp. If SOURCE explicitly requests a camera switch/cut/new framing, represent that switch as a new [Shot N] with an exact timestamp inside CURRENT_SITE_STATE.seconds. "
         "Do not output low-level Ref2VA wrapper fields."
     )

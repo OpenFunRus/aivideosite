@@ -2726,6 +2726,11 @@ def _assistant_runtime_context(
                 "voice_preset_name": str((preset or {}).get("name") or ""),
                 "selected": character_id in selected_character_ids,
                 "voice_muted": character_id in muted_character_ids,
+                "speech_policy": (
+                    "silent"
+                    if (not has_voice or character_id in muted_character_ids)
+                    else "explicit_dialogue_only"
+                ),
             }
         )
 
@@ -2773,6 +2778,7 @@ def _assistant_runtime_context(
             "voice_preset_id": item["voice_preset_id"],
             "voice_preset_name": item["voice_preset_name"],
             "voice_muted": item["voice_muted"],
+            "speech_policy": item["speech_policy"],
             "voice_label": (
                 f"Preset: {item['voice_preset_name']}"
                 if item["voice_source"] == "preset" and item["voice_preset_name"]
