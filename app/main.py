@@ -334,7 +334,9 @@ async def api_create_character(
     target_dir = settings.character_dir / user_id / character_id
     target_dir.mkdir(parents=True, exist_ok=False)
     image_files: list[str] = []
+    image_names: list[str] = []
     voice_file: str | None = None
+    voice_name: str | None = None
     temp_paths: list[Path] = []
     try:
         for index, upload in enumerate(uploads, start=1):
@@ -348,6 +350,7 @@ async def api_create_character(
             shutil.move(str(path), str(destination))
             temp_paths.remove(path)
             image_files.append(str(destination))
+            image_names.append(_uploaded_reference_name(upload))
 
         if has_custom_voice:
             path = await save_upload(
@@ -360,6 +363,7 @@ async def api_create_character(
             shutil.move(str(path), str(destination))
             temp_paths.remove(path)
             voice_file = str(destination)
+            voice_name = _uploaded_reference_name(voice)
         elif voice_preset:
             preset_path = _voice_preset_path(voice_preset)
             if not preset_path.is_file():
@@ -377,8 +381,10 @@ async def api_create_character(
             name=name,
             description=description,
             images=image_files,
+            image_names=image_names,
             voice_file=voice_file,
             voice_preset_id=voice_preset or None,
+            voice_name=voice_name,
         )
     except Exception:
         for path in temp_paths:
@@ -414,6 +420,7 @@ async def api_update_character(
         raise HTTPException(404, "Персонаж не найден.")
 
     existing_images = list(character.get("images") or [])
+    existing_image_names = list(character.get("image_names") or [])
     uploads = [item for item in (images or []) if item.filename]
     raw_keep_indices = keep_image_indices.strip()
     if raw_keep_indices:
@@ -469,10 +476,12 @@ async def api_update_character(
     target_dir = settings.character_dir / user_id / character_id
     target_dir.mkdir(parents=True, exist_ok=True)
     next_images = [existing_images[index] for index in keep_indices]
+    next_image_names = [existing_image_names[index] for index in keep_indices]
     old_voice_file = character.get("voice_file")
     old_voice_preset_id = _character_voice_preset_id(character)
     next_voice_file = old_voice_file
     next_voice_preset_id = old_voice_preset_id
+    next_voice_name = character.get("voice_name")
     created_paths: list[Path] = []
     temp_paths: list[Path] = []
 
@@ -489,10 +498,12 @@ async def api_update_character(
             temp_paths.remove(path)
             created_paths.append(destination)
             next_images.append(str(destination))
+            next_image_names.append(_uploaded_reference_name(upload))
 
         if remove_voice:
             next_voice_file = None
             next_voice_preset_id = None
+            next_voice_name = None
         elif has_custom_voice:
             path = await save_upload(
                 voice,
@@ -506,6 +517,7 @@ async def api_update_character(
             created_paths.append(destination)
             next_voice_file = str(destination)
             next_voice_preset_id = None
+            next_voice_name = _uploaded_reference_name(voice)
         elif voice_preset:
             preset_path = _voice_preset_path(voice_preset)
             if not preset_path.is_file():
@@ -518,6 +530,7 @@ async def api_update_character(
             created_paths.append(destination)
             next_voice_file = str(destination)
             next_voice_preset_id = voice_preset
+            next_voice_name = None
 
         updated = db.update_character(
             character_id,
@@ -525,8 +538,10 @@ async def api_update_character(
             name=name,
             description=description,
             images=next_images,
+            image_names=next_image_names,
             voice_file=next_voice_file,
             voice_preset_id=next_voice_preset_id,
+            voice_name=next_voice_name,
         )
         if updated is None:
             raise HTTPException(404, "Персонаж не найден.")
@@ -618,6 +633,7 @@ async def api_create_location(
     target_dir = settings.location_dir / user_id / location_id
     target_dir.mkdir(parents=True, exist_ok=False)
     image_files: list[str] = []
+    image_names: list[str] = []
     temp_paths: list[Path] = []
     try:
         for index, upload in enumerate(uploads, start=1):
@@ -627,12 +643,14 @@ async def api_create_location(
             shutil.move(str(path), str(destination))
             temp_paths.remove(path)
             image_files.append(str(destination))
+            image_names.append(_uploaded_reference_name(upload))
         db.insert_location(
             location_id=location_id,
             owner_id=user_id,
             name=name,
             prompt=prompt,
             images=image_files,
+            image_names=image_names,
         )
     except Exception:
         for path in temp_paths:
@@ -662,6 +680,7 @@ async def api_update_location(
         raise HTTPException(404, "Локация не найдена.")
 
     existing_images = list(location.get("images") or [])
+    existing_image_names = list(location.get("image_names") or [])
     raw_keep_indices = keep_image_indices.strip()
     if raw_keep_indices:
         try:
@@ -697,6 +716,7 @@ async def api_update_location(
     target_dir = settings.location_dir / user_id / location_id
     target_dir.mkdir(parents=True, exist_ok=True)
     next_images = [existing_images[index] for index in keep_indices]
+    next_image_names = [existing_image_names[index] for index in keep_indices]
     created_paths: list[Path] = []
     temp_paths: list[Path] = []
     try:
@@ -708,12 +728,14 @@ async def api_update_location(
             temp_paths.remove(path)
             created_paths.append(destination)
             next_images.append(str(destination))
+            next_image_names.append(_uploaded_reference_name(upload))
         updated = db.update_location(
             location_id,
             user_id,
             name=name,
             prompt=prompt,
             images=next_images,
+            image_names=next_image_names,
         )
         if updated is None:
             raise HTTPException(404, "Локация не найдена.")
@@ -807,6 +829,7 @@ async def api_create_misc(
     target_dir = settings.misc_dir / user_id / misc_id
     target_dir.mkdir(parents=True, exist_ok=False)
     image_files: list[str] = []
+    image_names: list[str] = []
     temp_paths: list[Path] = []
     try:
         for index, upload in enumerate(uploads, start=1):
@@ -820,6 +843,7 @@ async def api_create_misc(
             shutil.move(str(path), str(destination))
             temp_paths.remove(path)
             image_files.append(str(destination))
+            image_names.append(_uploaded_reference_name(upload))
         db.insert_misc_preset(
             misc_id=misc_id,
             owner_id=user_id,
@@ -827,6 +851,7 @@ async def api_create_misc(
             category=category,
             description=description,
             images=image_files,
+            image_names=image_names,
         )
     except Exception:
         for path in temp_paths:
@@ -861,6 +886,7 @@ async def api_update_misc(
         raise HTTPException(404, "Пресет не найден.")
 
     existing_images = list(preset.get("images") or [])
+    existing_image_names = list(preset.get("image_names") or [])
     raw_keep_indices = keep_image_indices.strip()
     if raw_keep_indices:
         try:
@@ -897,6 +923,7 @@ async def api_update_misc(
     target_dir = settings.misc_dir / user_id / misc_id
     target_dir.mkdir(parents=True, exist_ok=True)
     next_images = [existing_images[index] for index in keep_indices]
+    next_image_names = [existing_image_names[index] for index in keep_indices]
     created_paths: list[Path] = []
     temp_paths: list[Path] = []
     try:
@@ -912,6 +939,7 @@ async def api_update_misc(
             temp_paths.remove(path)
             created_paths.append(destination)
             next_images.append(str(destination))
+            next_image_names.append(_uploaded_reference_name(upload))
 
         updated = db.update_misc_preset(
             misc_id,
@@ -920,6 +948,7 @@ async def api_update_misc(
             category=category,
             description=description,
             images=next_images,
+            image_names=next_image_names,
         )
         if updated is None:
             raise HTTPException(404, "Пресет не найден.")
@@ -2586,6 +2615,13 @@ def _file_sha256(path: Path) -> bytes:
     return digest.digest()
 
 
+def _uploaded_reference_name(upload: UploadFile) -> str:
+    # Preserve the user's own reference label, not the server's generated filename.
+    # Ignore path prefixes and control characters supplied by upload clients.
+    filename = str(upload.filename or "").replace("\\", "/").split("/")[-1]
+    return "".join(char for char in filename if char.isprintable()).strip()[:180]
+
+
 def _character_voice_preset_id(character: dict) -> str | None:
     stored = str(character.get("voice_preset_id") or "").strip()
     if stored in VOICE_PRESETS:
@@ -2639,14 +2675,18 @@ def _character_public(character: dict | None) -> dict:
         f"/characters/{character['id']}/image/{index}?v={version}"
         for index in range(len(images))
     ]
+    preset_id = _character_voice_preset_id(character)
     return {
         "id": character["id"],
         "name": character["name"],
         "description": character.get("description") or "",
         "image_count": len(images),
         "image_urls": image_urls,
+        "image_names": character.get("image_names") or [None] * len(images),
         "voice": bool(character.get("voice_file")),
-        "voice_preset_id": _character_voice_preset_id(character),
+        "voice_preset_id": preset_id,
+        "voice_preset_name": str(VOICE_PRESETS[preset_id]["name"]) if preset_id else "",
+        "voice_name": character.get("voice_name") or "",
         "preview_url": image_urls[0] if image_urls else None,
         "created_at": character.get("created_at"),
         "updated_at": character.get("updated_at"),
@@ -2668,6 +2708,7 @@ def _location_public(location: dict | None) -> dict:
         "prompt": location.get("prompt") or "",
         "image_count": len(images),
         "image_urls": image_urls,
+        "image_names": location.get("image_names") or [None] * len(images),
         "preview_url": image_urls[0] if image_urls else None,
         "created_at": location.get("created_at"),
         "updated_at": location.get("updated_at"),
@@ -2697,6 +2738,7 @@ def _misc_public(preset: dict | None) -> dict:
         "description": preset.get("description") or "",
         "image_count": len(images),
         "image_urls": image_urls,
+        "image_names": preset.get("image_names") or [None] * len(images),
         "preview_url": image_urls[0] if image_urls else None,
         "created_at": preset.get("created_at"),
         "updated_at": preset.get("updated_at"),

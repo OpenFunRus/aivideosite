@@ -24,6 +24,8 @@ http://IP_ВМ:8000/
 - prompt до 16 000 символов;
 - First Frame / Last Frame;
 - reusable Character / Location / «Прочее» presets;
+- кнопка копирования в правом верхнем углу панели «Пресеты» собирает **только выбранные** Character / Location / Misc в текст для ChatGPT: имена, описания/промпты, названия изображений-референсов, категории и состояние голоса (включая `speech_policy: silent`); изображения и аудио нужно прикладывать к ChatGPT отдельно;
+- исходные названия новых загружаемых референсов сохраняются в SQLite; для ранее загруженных изображений, чьи исходные имена не хранились, экспорт честно указывает, что название неизвестно;
 - Character: 1–4 appearance refs, описание и optional voice reference; при редактировании новые изображения заменяют старый appearance-набор;
 - Location: 1–4 environment refs + сохранённый prompt;
 - Misc: reusable semantic refs по категориям object / gear / vehicle / creature / environment / visual trait / pose-action / style;

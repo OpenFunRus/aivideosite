@@ -49,8 +49,10 @@ def init_db() -> None:
                 name TEXT NOT NULL,
                 description TEXT NOT NULL DEFAULT '',
                 images_json TEXT NOT NULL DEFAULT '[]',
+                image_names_json TEXT NOT NULL DEFAULT '[]',
                 voice_file TEXT,
                 voice_preset_id TEXT,
+                voice_name TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -64,6 +66,7 @@ def init_db() -> None:
                 name TEXT NOT NULL,
                 prompt TEXT NOT NULL DEFAULT '',
                 images_json TEXT NOT NULL DEFAULT '[]',
+                image_names_json TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -78,6 +81,7 @@ def init_db() -> None:
                 category TEXT NOT NULL,
                 description TEXT NOT NULL DEFAULT '',
                 images_json TEXT NOT NULL DEFAULT '[]',
+                image_names_json TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -114,6 +118,7 @@ def init_db() -> None:
         _ensure_jobs_columns(conn)
         _ensure_owner_columns(conn)
         _ensure_character_columns(conn)
+        _ensure_reference_name_columns(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_jobs_owner_created "
             "ON jobs(owner_id, created_at DESC)"
@@ -173,6 +178,17 @@ def _ensure_character_columns(conn: sqlite3.Connection) -> None:
     }
     if "voice_preset_id" not in columns:
         conn.execute("ALTER TABLE characters ADD COLUMN voice_preset_id TEXT")
+
+
+def _ensure_reference_name_columns(conn: sqlite3.Connection) -> None:
+    for table in ("characters", "locations", "misc_presets"):
+        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if "image_names_json" not in columns:
+            conn.execute(
+                f"ALTER TABLE {table} ADD COLUMN image_names_json TEXT NOT NULL DEFAULT '[]'"
+            )
+        if table == "characters" and "voice_name" not in columns:
+            conn.execute("ALTER TABLE characters ADD COLUMN voice_name TEXT")
 
 
 def recover_interrupted_jobs() -> int:
@@ -775,17 +791,19 @@ def insert_character(
     name: str,
     description: str,
     images: list[str],
+    image_names: list[str],
     voice_file: str | None,
     voice_preset_id: str | None,
+    voice_name: str | None,
 ) -> None:
     now = utcnow()
     with connect() as conn:
         conn.execute(
             """
             INSERT INTO characters(
-                id, owner_id, name, description, images_json, voice_file,
-                voice_preset_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, owner_id, name, description, images_json, image_names_json,
+                voice_file, voice_preset_id, voice_name, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 character_id,
@@ -793,8 +811,10 @@ def insert_character(
                 name,
                 description,
                 json.dumps(images, ensure_ascii=False),
+                json.dumps(image_names, ensure_ascii=False),
                 voice_file,
                 voice_preset_id,
+                voice_name,
                 now,
                 now,
             ),
@@ -831,23 +851,27 @@ def update_character(
     name: str,
     description: str,
     images: list[str],
+    image_names: list[str | None],
     voice_file: str | None,
     voice_preset_id: str | None,
+    voice_name: str | None,
 ) -> dict[str, Any] | None:
     with connect() as conn:
         cur = conn.execute(
             """
             UPDATE characters
-               SET name=?, description=?, images_json=?, voice_file=?,
-                   voice_preset_id=?, updated_at=?
+               SET name=?, description=?, images_json=?, image_names_json=?,
+                   voice_file=?, voice_preset_id=?, voice_name=?, updated_at=?
              WHERE id=? AND owner_id=?
             """,
             (
                 name,
                 description,
                 json.dumps(images, ensure_ascii=False),
+                json.dumps(image_names, ensure_ascii=False),
                 voice_file,
                 voice_preset_id,
+                voice_name,
                 utcnow(),
                 character_id,
                 owner_id,
@@ -880,14 +904,16 @@ def insert_location(
     name: str,
     prompt: str,
     images: list[str],
+    image_names: list[str],
 ) -> None:
     now = utcnow()
     with connect() as conn:
         conn.execute(
             """
             INSERT INTO locations(
-                id, owner_id, name, prompt, images_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                id, owner_id, name, prompt, images_json, image_names_json,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 location_id,
@@ -895,6 +921,7 @@ def insert_location(
                 name,
                 prompt,
                 json.dumps(images, ensure_ascii=False),
+                json.dumps(image_names, ensure_ascii=False),
                 now,
                 now,
             ),
@@ -931,18 +958,20 @@ def update_location(
     name: str,
     prompt: str,
     images: list[str],
+    image_names: list[str | None],
 ) -> dict[str, Any] | None:
     with connect() as conn:
         cur = conn.execute(
             """
             UPDATE locations
-               SET name=?, prompt=?, images_json=?, updated_at=?
+               SET name=?, prompt=?, images_json=?, image_names_json=?, updated_at=?
              WHERE id=? AND owner_id=?
             """,
             (
                 name,
                 prompt,
                 json.dumps(images, ensure_ascii=False),
+                json.dumps(image_names, ensure_ascii=False),
                 utcnow(),
                 location_id,
                 owner_id,
@@ -977,6 +1006,7 @@ def insert_misc_preset(
     category: str,
     description: str,
     images: list[str],
+    image_names: list[str],
 ) -> None:
     now = utcnow()
     with connect() as conn:
@@ -984,8 +1014,8 @@ def insert_misc_preset(
             """
             INSERT INTO misc_presets(
                 id, owner_id, name, category, description, images_json,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                image_names_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 misc_id,
@@ -994,6 +1024,7 @@ def insert_misc_preset(
                 category,
                 description,
                 json.dumps(images, ensure_ascii=False),
+                json.dumps(image_names, ensure_ascii=False),
                 now,
                 now,
             ),
@@ -1031,12 +1062,13 @@ def update_misc_preset(
     category: str,
     description: str,
     images: list[str],
+    image_names: list[str | None],
 ) -> dict[str, Any] | None:
     with connect() as conn:
         cur = conn.execute(
             """
             UPDATE misc_presets
-               SET name=?, category=?, description=?, images_json=?, updated_at=?
+               SET name=?, category=?, description=?, images_json=?, image_names_json=?, updated_at=?
              WHERE id=? AND owner_id=?
             """,
             (
@@ -1044,6 +1076,7 @@ def update_misc_preset(
                 category,
                 description,
                 json.dumps(images, ensure_ascii=False),
+                json.dumps(image_names, ensure_ascii=False),
                 utcnow(),
                 misc_id,
                 owner_id,
@@ -1132,35 +1165,40 @@ def _decode_media(row: sqlite3.Row) -> dict[str, Any]:
     return item
 
 
-def _decode_character(row: sqlite3.Row) -> dict[str, Any]:
-    item = dict(row)
+def _decode_reference_images(item: dict[str, Any]) -> None:
     try:
         images = json.loads(item.pop("images_json"))
         item["images"] = [str(value) for value in images if value]
-    except Exception:
+    except (ValueError, TypeError):
         item["images"] = []
         item.pop("images_json", None)
+    try:
+        names = json.loads(item.pop("image_names_json"))
+        if not isinstance(names, list):
+            names = []
+    except (ValueError, TypeError):
+        names = []
+        item.pop("image_names_json", None)
+    item["image_names"] = [
+        str(names[index]) if index < len(names) and names[index] else None
+        for index in range(len(item["images"]))
+    ]
+
+
+def _decode_character(row: sqlite3.Row) -> dict[str, Any]:
+    item = dict(row)
+    _decode_reference_images(item)
     return item
 
 
 
 def _decode_misc_preset(row: sqlite3.Row) -> dict[str, Any]:
     item = dict(row)
-    try:
-        images = json.loads(item.pop("images_json"))
-        item["images"] = [str(value) for value in images if value]
-    except Exception:
-        item["images"] = []
-        item.pop("images_json", None)
+    _decode_reference_images(item)
     return item
 
 
 def _decode_location(row: sqlite3.Row) -> dict[str, Any]:
     item = dict(row)
-    try:
-        images = json.loads(item.pop("images_json"))
-        item["images"] = [str(value) for value in images if value]
-    except Exception:
-        item["images"] = []
-        item.pop("images_json", None)
+    _decode_reference_images(item)
     return item
