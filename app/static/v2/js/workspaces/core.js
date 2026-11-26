@@ -6,6 +6,7 @@
 
   const W = {
     snapshot: null,
+    snapshotReceivedAt: 0,
     allMedia: [],
     refreshing: null,
     objectUrls: new Map(),
@@ -43,6 +44,29 @@
     return String(minutes).padStart(2, "0") + ":" + String(rest).padStart(2, "0");
   };
 
+  // Use the API server clock plus a monotonic browser tick. A workstation
+  // clock that is two minutes ahead must not add two minutes to a new render.
+  W.serverNowMs = () => {
+    const serverSeconds = Number(W.snapshot?.server_now);
+    if (Number.isFinite(serverSeconds) && serverSeconds > 0 && W.snapshotReceivedAt > 0) {
+      return serverSeconds * 1000 + Math.max(0, performance.now() - W.snapshotReceivedAt);
+    }
+    return Date.now();
+  };
+
+  W.generationElapsedSeconds = (job) => {
+    const startValue = job.kind === "editor_export" ? job.started_at : job.sampling_started_at;
+    const startMs = Date.parse(startValue || "");
+    if (!Number.isFinite(startMs)) return 0; // Queued/loading: no sampler time yet.
+    let endMs = W.serverNowMs();
+    const finishedMs = Date.parse(job.finished_at || "");
+    if (Number.isFinite(finishedMs)) endMs = Math.min(endMs, finishedMs);
+    const pauseStartMs = job.test_paused ? Date.parse(job.test_paused_at || "") : NaN;
+    if (Number.isFinite(pauseStartMs)) endMs = Math.min(endMs, pauseStartMs);
+    const pausedSeconds = Math.max(0, Number(job.test_paused_seconds) || 0);
+    return Math.max(0, (endMs - startMs) / 1000 - pausedSeconds);
+  };
+
   W.formatBytes = (value) => {
     let bytes = Number(value);
     if (!Number.isFinite(bytes) || bytes < 0) return "—";
@@ -68,7 +92,7 @@
     if (!start) return "—";
     const startMs = new Date(start).getTime();
     if (!Number.isFinite(startMs)) return "—";
-    const endMs = endSeconds ? Number(endSeconds) * 1000 : Date.now();
+    const endMs = endSeconds ? Number(endSeconds) * 1000 : W.serverNowMs();
     return W.formatSeconds(Math.max(0, (endMs - startMs) / 1000));
   };
 
@@ -134,6 +158,7 @@
             : Promise.resolve({ items: W.allMedia });
         const [stateData, mediaData] = await Promise.all([statePromise, mediaPromise]);
         W.snapshot = stateData;
+        W.snapshotReceivedAt = performance.now();
         W.allMedia = Array.isArray(mediaData.items) ? mediaData.items : W.allMedia;
         W.populateMediaSelectors();
         window.dispatchEvent(new CustomEvent("v2:datarefresh", {

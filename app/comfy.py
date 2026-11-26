@@ -24,6 +24,7 @@ PreviewCallback = Callable[[int, str, bytes], None]
 PreviewStatusCallback = Callable[[bool], None]
 PauseCallback = Callable[[int], None]
 AudioPreviewCallback = Callable[[bytes], None]
+SamplingStartCallback = Callable[[], None]
 logger = logging.getLogger(__name__)
 PromptIdCallback = Callable[[str], None]
 CancelCallback = Callable[[], bool]
@@ -60,6 +61,7 @@ class ComfyUIClient:
         on_preview_status: PreviewStatusCallback | None = None,
         on_pause: PauseCallback | None = None,
         on_test_audio: AudioPreviewCallback | None = None,
+        on_sampling_start: SamplingStartCallback | None = None,
         on_prompt_id: PromptIdCallback | None = None,
         should_cancel: CancelCallback | None = None,
     ) -> dict[str, Any]:
@@ -241,6 +243,7 @@ class ComfyUIClient:
                         on_preview=on_preview if enable_preview else None,
                         on_pause=report_test_pause if test_step else None,
                         on_test_audio=on_test_audio if test_step else None,
+                        on_sampling_start=on_sampling_start,
                         test_step=test_step,
                         test_job_id=job_id,
                     )
@@ -825,10 +828,12 @@ class ComfyUIClient:
         on_preview: PreviewCallback | None = None,
         on_pause: PauseCallback | None = None,
         on_test_audio: AudioPreviewCallback | None = None,
+        on_sampling_start: SamplingStartCallback | None = None,
         test_step: int = 0,
         test_job_id: str = "",
     ) -> None:
         ws.settimeout(2)
+        sampling_reported = False
         while True:
             if should_cancel and should_cancel():
                 self.cancel_prompt(prompt_id)
@@ -886,6 +891,10 @@ class ComfyUIClient:
                 continue
 
             if event_type == "progress":
+                if not sampling_reported:
+                    sampling_reported = True
+                    if on_sampling_start is not None:
+                        on_sampling_start()
                 value = float(event_data.get("value") or 0)
                 maximum = float(event_data.get("max") or 1)
                 fraction = 0 if maximum <= 0 else value / maximum

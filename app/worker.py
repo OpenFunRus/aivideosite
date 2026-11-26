@@ -261,6 +261,7 @@ class JobWorker(threading.Thread):
                 on_preview_status=lambda enabled: db.set_preview_enabled(job_id, enabled),
                 on_pause=lambda step: db.set_test_paused(job_id, True, step),
                 on_test_audio=lambda content: save_test_audio(job_id, content),
+                on_sampling_start=lambda: db.mark_sampling_started(job_id),
                 on_prompt_id=lambda prompt_id: db.update_job(
                     job_id, external_id=prompt_id
                 ),
@@ -363,7 +364,9 @@ class JobWorker(threading.Thread):
 
             duration = probe_duration(output_path)
             timing_job = db.get_job(job_id)
-            started_at = str(job.get("started_at") or "")
+            # Sampling starts on the first ComfyUI step-progress event, not when
+            # the worker claims a job or spends minutes loading its model.
+            started_at = str((timing_job or {}).get("sampling_started_at") or job.get("started_at") or "")
             completed_at = datetime.now(timezone.utc)
             try:
                 elapsed = max(0.0, (completed_at - datetime.fromisoformat(started_at.replace("Z", "+00:00"))).total_seconds())

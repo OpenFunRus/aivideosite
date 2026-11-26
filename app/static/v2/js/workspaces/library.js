@@ -18,15 +18,7 @@
   };
 
   const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-' + name + '"></use></svg>';
-  const generationTime = (item, end = Date.now()) => {
-    const start = Date.parse(item.started_at || item.created_at || "");
-    if (!Number.isFinite(start)) return "—";
-    if (item.finished_at) end = Math.min(end, Date.parse(item.finished_at) || end);
-    const paused = Number(item.test_paused_seconds) || 0;
-    const pauseStart = item.test_paused ? Date.parse(item.test_paused_at || "") : NaN;
-    const elapsed = (Number.isFinite(pauseStart) ? Math.min(end, pauseStart) : end) - start;
-    return W.formatSeconds(Math.max(0, elapsed / 1000 - paused));
-  };
+  const generationTime = (item) => W.formatSeconds(W.generationElapsedSeconds(item));
 
   const downloadFrame = async (item, position, button = null) => {
     const suffix = position === "final" ? "final" : "start";
@@ -216,7 +208,7 @@
         : "—";
       const footer = active
         ? icon("users") + '<span>Пользователь: <strong>' + escapeHtml(active.user_label || active.owner_id || "—") + '</strong></span>' +
-          icon("clock") + '<span>Генерирует: <strong>' + escapeHtml(W.elapsed(active.started_at || active.created_at, W.snapshot.server_now)) + '</strong></span>'
+          icon("clock") + '<span>Генерирует: <strong data-gpu-generation-timer="' + escapeHtml(active.id) + '">' + escapeHtml(generationTime(active)) + '</strong></span>'
         : icon("clock") + '<span>Ожидает новых задач.</span>';
       return '<article class="v2-queue-gpu' + (active ? ' busy' : '') + '">' +
         '<div class="v2-queue-gpu-head"><span class="v2-queue-gpu-icon">' + icon("gpu") + '</span><div class="v2-queue-gpu-name"><h3>' + escapeHtml(name) + '</h3>' +
@@ -244,6 +236,11 @@
     const jobs = new Map(libraryJobs().map((job) => [String(job.id), job]));
     qsa('[data-generation-timer]', qs('#v2-library-grid') || document).forEach((node) => {
       const job = jobs.get(String(node.dataset.generationTimer));
+      if (job) node.textContent = generationTime(job);
+    });
+    const activeJobs = new Map((W.snapshot?.active_global || []).map((job) => [String(job.id), job]));
+    qsa('[data-gpu-generation-timer]', qs('#v2-library-gpus') || document).forEach((node) => {
+      const job = activeJobs.get(String(node.dataset.gpuGenerationTimer));
       if (job) node.textContent = generationTime(job);
     });
   };

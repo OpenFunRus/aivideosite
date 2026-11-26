@@ -102,6 +102,7 @@ def init_db() -> None:
                 error TEXT,
                 created_at TEXT NOT NULL,
                 started_at TEXT,
+                sampling_started_at TEXT,
                 finished_at TEXT,
                 external_id TEXT,
                 cancel_requested INTEGER NOT NULL DEFAULT 0,
@@ -170,6 +171,8 @@ def _ensure_jobs_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE jobs ADD COLUMN test_paused_at TEXT")
     if "test_paused_seconds" not in columns:
         conn.execute("ALTER TABLE jobs ADD COLUMN test_paused_seconds REAL NOT NULL DEFAULT 0")
+    if "sampling_started_at" not in columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN sampling_started_at TEXT")
 
 
 def _ensure_owner_columns(conn: sqlite3.Connection) -> None:
@@ -227,6 +230,7 @@ def recover_interrupted_jobs() -> int:
                    stage='Восстановлено после перезапуска',
                    progress=0,
                    started_at=NULL,
+                   sampling_started_at=NULL,
                    external_id=NULL,
                    cancel_requested=0,
                    preview_step=0,
@@ -314,11 +318,24 @@ def claim_next_job(
         if row is None:conn.execute("COMMIT"); return None
         started_at=utcnow()
         conn.execute("""UPDATE jobs SET status='running',stage='Запуск',progress=1,started_at=?,external_id=NULL,
+                        sampling_started_at=NULL,
                         cancel_requested=0,preview_step=0,preview_mime=NULL,preview_enabled=0,
                         test_paused=0,test_paused_at=NULL,test_paused_seconds=0,error=NULL WHERE id=?""",(started_at,row["id"]))
         conn.execute("COMMIT")
     result=_decode_job(row); result["status"]="running"; result["started_at"]=started_at; result["cancel_requested"]=0
     return result
+
+
+def mark_sampling_started(job_id: str) -> bool:
+    """Capture the first real ComfyUI sampler progress event, exactly once."""
+    with connect() as conn:
+        updated = conn.execute(
+            """UPDATE jobs SET sampling_started_at=?
+               WHERE id=? AND kind='generate' AND status='running'
+                 AND cancel_requested=0 AND sampling_started_at IS NULL""",
+            (utcnow(), job_id),
+        )
+        return updated.rowcount == 1
 
 
 def update_job(

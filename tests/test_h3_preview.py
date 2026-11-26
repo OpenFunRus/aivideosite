@@ -227,6 +227,33 @@ class H3PreviewTests(unittest.TestCase):
         self.assertEqual([event[0] for event in image_events], [1, 2, 3, 4])
         self.assertEqual(image_events[0][2], WEBP_BYTES)
 
+    def test_sampling_start_is_first_progress_not_worker_claim(self):
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE jobs SET started_at=? WHERE id=?",
+                ("2020-01-01T00:00:00+00:00", self.job_id),
+            )
+        self.assertIsNone(db.get_job(self.job_id)["sampling_started_at"])
+        messages = [
+            {"type": "executing", "data": {"node": "5", "prompt_id": "prompt-id"}},
+            {"type": "progress", "data": {"value": 1, "max": 8, "prompt_id": "other-prompt"}},
+            {"type": "progress", "data": {"value": 1, "max": 8, "prompt_id": "prompt-id"}},
+            {"type": "progress", "data": {"value": 2, "max": 8, "prompt_id": "prompt-id"}},
+            {"type": "execution_success", "data": {"prompt_id": "prompt-id"}},
+        ]
+        starts = []
+        client = ComfyUIClient()
+        client._wait_websocket(
+            FakeWebSocket([json.dumps(message) for message in messages]),
+            "prompt-id", lambda *_: None,
+            on_sampling_start=lambda: starts.append(db.mark_sampling_started(self.job_id)),
+        )
+        job = db.get_job(self.job_id)
+        self.assertEqual(starts, [True])
+        self.assertTrue(job["sampling_started_at"])
+        self.assertGreater(job["sampling_started_at"], job["started_at"])
+        self.assertFalse(db.mark_sampling_started(self.job_id))
+
     def test_test_step_validation_and_workflow(self):
         self.assertEqual(_v2_test_step(1, 8), 1)
         self.assertEqual(_v2_test_step(8, 8), 8)
@@ -286,6 +313,7 @@ class H3PreviewTests(unittest.TestCase):
         recovered = db.get_job(self.job_id)
         self.assertEqual(recovered["status"], "queued")
         self.assertFalse(recovered["test_paused"])
+        self.assertIsNone(recovered["sampling_started_at"])
         self.assertNotIn(self.job_id, db.interrupted_test_pauses())
 
     def test_test_audio_owner_protection_and_cleanup(self):

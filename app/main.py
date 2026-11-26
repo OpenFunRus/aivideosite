@@ -1755,6 +1755,7 @@ async def api_v2_state(
             "gpu_target": job.get("gpu_target"),
             "created_at": job["created_at"],
             "started_at": job.get("started_at"),
+            "sampling_started_at": job.get("sampling_started_at"),
             "test_pause_step": int(payload.get("test_pause_step") or 0),
             "test_paused": bool(job.get("test_paused")),
             "test_paused_at": job.get("test_paused_at"),
@@ -1784,6 +1785,10 @@ async def api_v2_state(
                 "stage": job.get("stage"),
                 "created_at": job.get("created_at"),
                 "started_at": job.get("started_at"),
+                "sampling_started_at": job.get("sampling_started_at"),
+                "test_paused": bool(job.get("test_paused")),
+                "test_paused_at": job.get("test_paused_at"),
+                "test_paused_seconds": float(job.get("test_paused_seconds") or 0),
                 "prompt": str(payload.get("user_prompt") or payload.get("prompt") or "")[:180],
             }
         )
