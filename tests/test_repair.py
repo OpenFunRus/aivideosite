@@ -48,6 +48,10 @@ class RepairTests(unittest.TestCase):
             ({"mode": "splice", "media_id": self.sources[0], "second_media_id": self.sources[1], "transition": "fade"}, 4),
             ({"mode": "splice", "media_id": self.sources[0], "second_media_id": self.sources[1], "transition": "wipeleft"}, 4),
             ({"mode": "splice", "media_id": self.sources[2], "second_media_id": self.sources[0], "transition": "slideleft"}, 3.7),
+            ({"mode": "splice_cut", "media_id": self.sources[0], "second_media_id": self.sources[1],
+              "start": .8, "end": .6}, 2.8),
+            ({"mode": "splice_cut", "media_id": self.sources[2], "second_media_id": self.sources[0],
+              "start": .1, "end": 2.3}, .2),
         ]
         # Only exercise the CPU export method; no ComfyUI clients are needed.
         worker = object.__new__(JobWorker)
@@ -63,6 +67,8 @@ class RepairTests(unittest.TestCase):
                 self.assertTrue(output.is_file())
                 self.assertTrue(probe_has_audio(output))
                 self.assertAlmostEqual(probe_duration(output), expected_seconds, delta=.20)
+                if payload["mode"] == "splice_cut":
+                    self.assertEqual(media["meta"]["method"], "hard_cut_cpu")
 
 if __name__ == "__main__":
     unittest.main()

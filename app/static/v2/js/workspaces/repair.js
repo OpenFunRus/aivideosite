@@ -12,15 +12,15 @@
     fragment: { action: "AI-перегенерация", help: "MiniMax H3 заново создаст выделенный участок с опорными начальным и конечным кадрами. Вне выделения исходное видео сохранится.", placeholder: "Опишите, что H3 должен изменить в этом фрагменте…" },
     object: { action: "Заменить объект через H3", help: "Белой кистью закрасьте объект на кадре. MiniMax H3 Fun ControlNet перегенерирует эту область на выбранном временном участке. Маска одинаковая для всего отрезка.", placeholder: "Что должно появиться вместо закрашенного объекта?" },
     sound: { action: "Перегенерировать звук H3", help: "MiniMax H3 создаст новую звуковую дорожку по промпту. Изображение исходника останется прежним. Точные слова и тембр голоса не гарантируются.", placeholder: "Укажите точные новые слова в кавычках, говорящего и особенности голоса…" },
-    splice: { action: "Сгенерировать склейку", help: "Выберите конец сохраняемой части A и начало сохраняемой части B. H3 увидит до 0,5 сек движения и звука с каждой стороны и создаст переход нужной длины без речи.", placeholder: "Опишите естественный переход между видео…" },
+    splice: { action: "Сгенерировать склейку", help: "Выберите конец сохраняемой части A и начало сохраняемой части B. H3 использует только два пограничных кадра, без видео- и аудиореференсов. При 0 сек — обычный монтаж на CPU.", placeholder: "Опишите естественный переход между двумя кадрами…" },
   };
   const defaultSplicePrompt = [
-    "integrated_multimodal_description: [Shot 1] Generate one continuous cinematic transition between the two anchored motion clips. The opening guide is the actual movement immediately before the user-selected cut of video A. The closing guide is the actual movement immediately after the user-selected entry point in video B. Use both guides as strong temporal and visual anchors. Independently choose the most natural way to move between their positions, compositions and actions within the available middle interval: a physically plausible camera move, matched subject motion, natural foreground occlusion, or a motivated whip pan when truly appropriate. Keep the same characters, clothing, objects, proportions, location geometry, lighting, exposure and camera trajectories whenever plausible. Smoothly arrive at the opening frame of B. Do not invent unrelated characters or props. Absolutely NO speaking, NO lip movements suggesting speech, NO dialogue, NO vocals, NO narration, NO singing, NO whispers, NO words, NO muttering, and NO intelligible voice sounds anywhere in the generated transition. All characters remain silent. Avoid cuts to black, artificial wipe graphics, hard cuts, jitter, melting textures and abrupt camera changes.",
-    "overall_soundscape: Only natural non-vocal environmental ambience and diegetic sound effects; maintain a smooth acoustic transition from the first guide to the second. NO speech, NO human or animal voices, NO singing, NO whispers, NO chants, NO breathing or vocalized grunts; silence is preferable to any invented voice. No sudden volume changes.",
+    "integrated_multimodal_description: [Shot 1] FIRST/LAST FRAME VIDEO TRANSITION. The FIRST supplied image is the exact last retained frame of video A, and the SECOND supplied image is the exact first retained frame of video B. Create only a smooth, continuous cinematic motion between these two still images within the requested duration. Begin with the exact composition, subjects, clothing, objects, lighting, position and perspective of the FIRST image; end by matching the exact composition, subjects, lighting, position and perspective of the SECOND image. Choose a physically plausible camera movement, matching action, motivated foreground occlusion, or natural scene transformation where appropriate. The two still images are immutable boundary keyframes, not prompts for unrelated scenes. Invent only the motion necessary to connect them. ABSOLUTE SILENCE OF CHARACTERS: nobody speaks, mouths words, whispers, sings, shouts, narrates, mumbles, laughs or makes vocal sounds. No lip motions suggesting speech; lips stay still and closed where visible. Avoid sudden cuts, fades to black, flashing overlays, extra subjects, changing clothing, geometry distortions, jitter or melting textures.",
+    "overall_soundscape: No dialogue, no voices, no vocals, no singing, no narration, no whispers, no chants, no grunting. Prefer silence; if sound is present, use only subtle non-vocal ambient room tone or realistic environmental effects. The generated transition must contain no recognizable speech or vocal noises.",
     "non_diegetic_music: N/A",
     "speech_policy: silent",
   ].join("\n\n");
-  const splicePromptKey = "aivideosite.repair.splice.prompt.v2";
+  const splicePromptKey = "aivideosite.repair.splice.prompt.v3";
   const FPS = 24;
   const state = { mode: "fragment", a: null, b: null, pickerSlot: "a", start: 0, end: 0, cutA: 0, cutB: 0, previewSlot: "a", dragging: null, uploading: false, submitting: false, maskDrawn: false, splice: { quality: "480", ratio: "auto", steps: "8", seconds: 1 } };
   const mask = qs("#v2-repair-mask");
@@ -39,11 +39,12 @@
   };
   const roundFrame = (time) => Math.round(time * FPS) / FPS;
   const isSplice = () => state.mode === "splice";
-  const bridgeSeconds = () => Number(state.splice.seconds) || 1;
+  const bridgeSeconds = () => Number(state.splice.seconds);
   const spliceOutputDuration = () => Math.max(0, state.cutA) + bridgeSeconds() + Math.max(0, duration(state.b) - state.cutB);
   const h3SpliceSeconds = () => {
+    if (bridgeSeconds() === 0) return 0;
     const frames = Math.max(2, Math.round(bridgeSeconds() * FPS));
-    return (5 + 17 * Math.ceil((Math.max(124, 44 + frames) - 5) / 17)) / FPS;
+    return (5 + 17 * Math.ceil((Math.max(124, frames) - 5) / 17)) / FPS;
   };
   const currentPrompt = () => (isSplice() ? qs("#v2-repair-splice-prompt") : qs("#v2-repair-prompt")).value.trim();
   const spliceSize = () => {
@@ -239,15 +240,17 @@
 
   function renderControls() {
     const action = qs("#v2-repair-submit");
-    action.textContent = modes[state.mode].action;
+    action.textContent = isSplice() && bridgeSeconds() === 0 ? "Склеить на CPU" : modes[state.mode].action;
     const cutValid = state.a && state.b && state.cutA >= .1 && state.cutA <= duration(state.a) + .001 &&
       state.cutB >= 0 && state.cutB <= duration(state.b) - .1 + .001;
-    action.disabled = state.submitting || state.uploading || !state.a || !currentPrompt() ||
+    action.disabled = state.submitting || state.uploading || !state.a ||
+      (!(isSplice() && bridgeSeconds() === 0) && !currentPrompt()) ||
       (state.mode === "object" && !state.maskDrawn) ||
-      (isSplice() ? (!cutValid || !Number.isFinite(state.splice.seconds) || state.splice.seconds < .1 || state.splice.seconds > 15)
+      (isSplice() ? (!cutValid || !Number.isFinite(state.splice.seconds) || state.splice.seconds < 0 || state.splice.seconds > 15)
         : !(state.end >= state.start + .2 && state.end - state.start <= 15 && state.end <= duration(state.a) + .001));
     qs("#v2-repair-note").textContent = isSplice()
-      ? "Останутся A до " + fmt(state.cutA) + " и B после " + fmt(state.cutB) + ". Между ними H3 создаст переход " + bridgeSeconds().toFixed(1) + " сек без речи."
+      ? "Останутся A до " + fmt(state.cutA) + " и B после " + fmt(state.cutB) + ". " +
+        (bridgeSeconds() === 0 ? "Прямая склейка FFmpeg на CPU, без GPU и нейросети." : "H3 соединит два крайних кадра переходом " + bridgeSeconds().toFixed(1) + " сек без речи.")
       : "MiniMax H3 создаст новую версию только выбранного участка. Оригинальный ролик сохраняется.";
     qs("#v2-repair-start").value = state.start.toFixed(3);
     qs("#v2-repair-end").value = state.end.toFixed(3);
@@ -257,11 +260,11 @@
     qs("#v2-repair-splice-cut-a-label").textContent = fmt(state.cutA);
     qs("#v2-repair-splice-cut-b-label").textContent = fmt(state.cutB);
     qs("#v2-repair-splice-output-duration").textContent = state.a && state.b ? "Итог: " + fmt(spliceOutputDuration()) : "Итог: —";
-    qs("#v2-repair-bridge-duration-label").textContent = "MiniMax H3 · " + bridgeSeconds().toFixed(1) + " сек";
-    qs("#v2-repair-h3-duration").textContent = "H3 просчитает ~" + h3SpliceSeconds().toFixed(2) + " сек на 24 FPS";
-    qs("#v2-repair-splice-caution").textContent = h3SpliceSeconds() > 15
-      ? "Внимание: H3 потребуется ~" + h3SpliceSeconds().toFixed(1) + " сек с опорными клипами — больше обученного диапазона 15 сек. Возможны нехватка VRAM и ухудшение качества; начните с 480p."
-      : "Рекомендуем 480p / 8 шагов для проверки. Переход округляется до ближайшего кадра при 24 FPS. Длительные сцены и 1080p требуют значительно больше VRAM.";
+    qs("#v2-repair-bridge-duration-label").textContent = bridgeSeconds() === 0 ? "CPU · прямая склейка" : "MiniMax H3 · " + bridgeSeconds().toFixed(1) + " сек";
+    qs("#v2-repair-h3-duration").textContent = bridgeSeconds() === 0 ? "FFmpeg · GPU не нужна" : "H3 просчитает ~" + h3SpliceSeconds().toFixed(2) + " сек на 24 FPS";
+    qs("#v2-repair-splice-caution").textContent = bridgeSeconds() === 0
+      ? "Ноль секунд: видео A и B соединяются напрямую, без H3. Промпт, шаги, качество и аудиогенерация не используются."
+      : "H3 получает лишь два кадра без исходных аудиореференсов. Короткий переход ускоряется из минимум ~5 секунд H3, поэтому движение может быть резким. Речь запрещена промптом, но абсолютная гарантия невозможна.";
     qs("#v2-repair-mark-start").disabled = isSplice() && (!state.a || state.previewSlot !== "a");
     qs("#v2-repair-mark-end").disabled = isSplice() && (!state.b || state.previewSlot !== "b");
     qs("#v2-repair-monitor-empty").hidden = !!state.a;
@@ -293,13 +296,14 @@
       const lengthA = duration(state.a), lengthB = duration(state.b), bridge = bridgeSeconds();
       const pct = (seconds) => (seconds / whole * 100).toFixed(5) + "%";
       filmstrip.innerHTML = strip(state.a, "a", lengthA / whole * 100) +
-        '<div class="v2-repair-gap" style="flex:0 0 ' + pct(bridge) + '"></div>' +
+        (bridge > 0 ? '<div class="v2-repair-gap" style="flex:0 0 ' + pct(bridge) + '"></div>' : "") +
         strip(state.b, "b", lengthB / whole * 100);
-      let overlay = '<div class="v2-repair-bridge" style="left:' + pct(lengthA) + ';width:' + pct(bridge) + '" title="Нейросетевой переход">' + bridge.toFixed(1) + ' сек</div>';
+      let overlay = bridge > 0 ? '<div class="v2-repair-bridge" style="left:' + pct(lengthA) + ';width:' + pct(bridge) + '" title="Нейросетевой переход">' + bridge.toFixed(1) + ' сек</div>' : "";
       if (lengthA - state.cutA > .015) overlay += '<div class="v2-repair-trimmed" style="left:' + pct(state.cutA) + ';width:' + pct(lengthA - state.cutA) + '"><span>Будет удалено</span></div>';
       if (state.cutB > .015) overlay += '<div class="v2-repair-trimmed" style="left:' + pct(lengthA + bridge) + ';width:' + pct(state.cutB) + '"><span>Будет удалено</span></div>';
-      overlay += '<button class="v2-repair-cut-handle" type="button" data-repair-cut-edge="a" style="left:' + pct(state.cutA) + '" title="Тянуть: начало перехода / конец A" aria-label="Граница конца видео A"></button>' +
-        '<button class="v2-repair-cut-handle" type="button" data-repair-cut-edge="b" style="left:' + pct(lengthA + bridge + state.cutB) + '" title="Тянуть: конец перехода / начало B" aria-label="Граница начала видео B"></button>';
+      const zeroClass = bridge === 0 ? " zero" : "";
+      overlay += '<button class="v2-repair-cut-handle' + zeroClass + '" type="button" data-repair-cut-edge="a" style="left:' + pct(state.cutA) + '" title="Тянуть: начало перехода / конец A" aria-label="Граница конца видео A"></button>' +
+        '<button class="v2-repair-cut-handle' + zeroClass + '" type="button" data-repair-cut-edge="b" style="left:' + pct(lengthA + bridge + state.cutB) + '" title="Тянуть: конец перехода / начало B" aria-label="Граница начала видео B"></button>';
       filmstrip.insertAdjacentHTML("afterend", overlay);
     } else filmstrip.innerHTML = strip(state.a, "a", 100);
     selection.hidden = isSplice();
@@ -425,6 +429,7 @@
 
   async function submit(gpuTarget) {
     if (state.submitting || !state.a) return;
+    const cpuCut = isSplice() && bridgeSeconds() === 0;
     state.submitting = true;
     renderControls();
     renderGpuSlots([]);
@@ -451,7 +456,8 @@
       closeGpuDialog();
       await W.refreshState({ silent: true, includeMedia: true });
       api.setView("library");
-      showToast("AI-исправление запущено на " + (gpuTarget === "rtx2080" ? "RTX2080" : "RTX3090") + ". Смотрите статус в Библиотеке.");
+      showToast(cpuCut ? "Прямая склейка запущена на CPU. Результат появится в Библиотеке." :
+        "AI-исправление запущено на " + (gpuTarget === "rtx2080" ? "RTX2080" : "RTX3090") + ". Смотрите статус в Библиотеке.");
     } catch (error) {
       showToast("Не удалось запустить: " + error.message, "error");
     } finally {
@@ -518,10 +524,10 @@
   });
   qs("#v2-repair-transition-seconds").addEventListener("change", (event) => {
     const parsed = Number(String(event.target.value).replace(",", "."));
-    if (Number.isFinite(parsed) && parsed >= .1 && parsed <= 15) {
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 15) {
       state.splice.seconds = Math.round(parsed * 10) / 10;
       renderTimeline();
-    } else showToast("Укажите длительность перехода от 0,1 до 15 секунд.", "error");
+    } else showToast("Укажите длительность перехода от 0 до 15 секунд.", "error");
     event.target.value = state.splice.seconds.toFixed(1);
     renderControls();
   });
@@ -587,6 +593,10 @@
   }));
   qs("#v2-repair-submit").addEventListener("click", async () => {
     if (qs("#v2-repair-submit").disabled) return;
+    if (isSplice() && bridgeSeconds() === 0) {
+      await submit(null);
+      return;
+    }
     renderGpuSlots([]);
     gpuDialog.showModal();
     await refreshGpuSlots();

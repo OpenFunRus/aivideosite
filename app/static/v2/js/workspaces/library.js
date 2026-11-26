@@ -143,17 +143,18 @@
     const failed = job.status === "failed";
     const exportJob = job.kind === "editor_export";
     const repairJob = job.kind === "repair_export";
+    const hardCut = repairJob && job.payload?.mode === "splice_cut";
     const aiRepairJob = !!job.repair_mode;
     const cpuJob = exportJob || repairJob;
-    const statusLabel = failed ? "Ошибка" : waiting ? "В очереди" : (repairJob || aiRepairJob) ? "AI-исправление" : exportJob ? "Экспорт ролика" : "Генерация";
-    const gpu = cpuJob ? (repairJob ? "CPU · Исправление" : "CPU · Монтаж") : job.gpu_target === "rtx2080" ? "RTX 2080" : "RTX 3090";
+    const statusLabel = failed ? "Ошибка" : waiting ? "В очереди" : hardCut ? "Склейка на CPU" : (repairJob || aiRepairJob) ? "AI-исправление" : exportJob ? "Экспорт ролика" : "Генерация";
+    const gpu = cpuJob ? (hardCut ? "CPU · Склейка" : repairJob ? "CPU · Исправление" : "CPU · Монтаж") : job.gpu_target === "rtx2080" ? "RTX 2080" : "RTX 3090";
     return '<article class="v2-media-card v2-generation-card" data-failed="' + failed + '" data-job-id="' + escapeHtml(job.id) + '">' +
       '<div class="v2-media-cover v2-generation-cover">' +
       '<div class="v2-generation-screen"><span class="v2-generation-spinner" aria-hidden="true"></span><strong>' +
-      escapeHtml(failed ? 'Ошибка' : waiting ? 'Ожидание запуска' : (repairJob || aiRepairJob) ? 'AI-исправление' : exportJob ? 'Экспорт' : 'Генерация') +
+      escapeHtml(failed ? 'Ошибка' : waiting ? 'Ожидание запуска' : hardCut ? 'Склейка на CPU' : (repairJob || aiRepairJob) ? 'AI-исправление' : exportJob ? 'Экспорт' : 'Генерация') +
       '</strong><b>' + progress + '%</b></div>' +
       '<span class="v2-generation-time">' + icon("clock") + '<span data-generation-timer="' + escapeHtml(job.id) + '">' + escapeHtml(generationTime(job)) + '</span></span>' +
-      '<span class="v2-generation-step-badge">' + (aiRepairJob ? 'MINIMAX H3 · AI-ПРАВКА' : repairJob ? 'ИСПРАВЛЕНИЕ' : exportJob ? 'МОНТАЖ' : 'MINIMAX H3 · LIVE') + '</span>' +
+      '<span class="v2-generation-step-badge">' + (aiRepairJob ? 'MINIMAX H3 · AI-ПРАВКА' : hardCut ? 'CPU · БЕЗ НЕЙРОСЕТИ' : repairJob ? 'ИСПРАВЛЕНИЕ' : exportJob ? 'МОНТАЖ' : 'MINIMAX H3 · LIVE') + '</span>' +
       '<span class="v2-generation-gpu">' + escapeHtml(gpu) + '</span></div>' +
       '<div class="v2-media-card-body">' +
       '<h3 title="' + escapeHtml(job.title) + '">' + escapeHtml(job.title || "MiniMax H3") + '</h3>' +

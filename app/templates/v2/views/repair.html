@@ -18,7 +18,7 @@
         <svg class="icon"><use href="/static/icons.svg#icon-volume"></use></svg><strong>Речь и звук</strong><small>AI-замена аудио</small>
       </button>
       <button type="button" data-repair-mode="splice" aria-pressed="false">
-        <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><strong>Склейка</strong><small>0,5 сек + AI + 0,5 сек</small>
+        <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><strong>Склейка</strong><small>Кадр A → AI → кадр B</small>
       </button>
     </div>
 
@@ -111,20 +111,20 @@
       </div>
       <div class="v2-repair-splice-config" id="v2-repair-splice-config" hidden>
         <div class="v2-repair-splice-explanation">
-          <span class="v2-repair-splice-tag">Видео A · последние 0,5 сек</span>
+          <span class="v2-repair-splice-tag">Видео A · последний кадр</span>
           <span class="v2-repair-splice-arrow">→</span>
           <span class="v2-repair-splice-tag accent" id="v2-repair-bridge-duration-label">MiniMax H3 · 1 сек</span>
           <span class="v2-repair-splice-arrow">→</span>
-          <span class="v2-repair-splice-tag">Видео B · первые 0,5 сек</span>
+          <span class="v2-repair-splice-tag">Видео B · первый кадр</span>
         </div>
-        <div class="v2-repair-splice-description">Оставляем видео A до выбранной границы и видео B после второй границы. Нейросеть получает по 0,5 секунды контекста около этих точек, сама придумывает переход. Всё за пределами выбранных частей отрезается, контекст не дублируется.</div>
+        <div class="v2-repair-splice-description">Оставляем видео A до выбранной границы и видео B после второй границы. MiniMax H3 получает только последний кадр A и первый кадр B — без звуковых или видеореференсов — и соединяет их своим движением. При 0 сек — прямая склейка FFmpeg на CPU, без нейросети.</div>
         <div class="v2-repair-splice-prompt-head"><label for="v2-repair-splice-prompt">Универсальный промпт MiniMax H3 <small>Можно редактировать под конкретную сцену</small></label><button type="button" id="v2-repair-splice-prompt-reset">Вернуть стандартный</button></div>
         <textarea id="v2-repair-splice-prompt" rows="8" maxlength="8000" spellcheck="false" aria-label="Промпт AI-перехода"></textarea>
         <div class="v2-repair-splice-quality">
           <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Качество</span><div class="v2-segmented" data-repair-splice-setting="quality"><button type="button" class="active" data-value="480" aria-pressed="true">480p</button><button type="button" data-value="720" aria-pressed="false">720p</button><button type="button" data-value="1080" aria-pressed="false">1080p</button></div></div>
           <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Формат</span><div class="v2-segmented v2-repair-splice-format" data-repair-splice-setting="ratio"><button type="button" class="active" data-value="auto" aria-pressed="true">Авто</button><button type="button" data-value="1:1" aria-pressed="false">1:1</button><button type="button" data-value="16:9" aria-pressed="false">16:9</button><button type="button" data-value="9:16" aria-pressed="false">9:16</button></div></div>
           <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Шаги</span><div class="v2-segmented" data-repair-splice-setting="steps"><button type="button" class="active" data-value="8" aria-pressed="true">8</button><button type="button" data-value="12" aria-pressed="false">12</button><button type="button" data-value="16" aria-pressed="false">16</button></div></div>
-          <div class="v2-repair-splice-group"><label class="v2-repair-splice-label" for="v2-repair-transition-seconds">Длительность перехода</label><input id="v2-repair-transition-seconds" class="v2-repair-splice-duration-input" type="number" inputmode="decimal" min="0.1" max="15" step="0.1" value="1"><small id="v2-repair-h3-duration">H3 генерирует ~5 сек</small></div>
+          <div class="v2-repair-splice-group"><label class="v2-repair-splice-label" for="v2-repair-transition-seconds">Длительность перехода</label><input id="v2-repair-transition-seconds" class="v2-repair-splice-duration-input" type="number" inputmode="decimal" min="0" max="15" step="0.1" value="1"><small id="v2-repair-h3-duration">0 сек = склейка на CPU</small></div>
         </div>
         <div class="v2-repair-splice-bottom">
           <label class="v2-repair-splice-seed"># Seed <input id="v2-repair-splice-seed" type="number" inputmode="numeric" min="-1" max="4294967295" step="1" placeholder="Авто (-1)"></label>

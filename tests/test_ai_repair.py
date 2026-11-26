@@ -18,9 +18,7 @@ _temporary_data = tempfile.TemporaryDirectory(prefix="aivideosite-ai-repair-")
 os.environ["DATA_DIR"] = _temporary_data.name
 
 from app.ai_repair import (  # noqa: E402
-    SPLICE_GUIDE_FRAMES, assembly_command, decode_mask, prepare_ai_inputs,
-    splice_window,
-    splice_canvas_size,
+    assembly_command, decode_mask, prepare_ai_inputs, splice_window, splice_canvas_size,
 )
 from app.config import settings  # noqa: E402
 
@@ -29,7 +27,7 @@ class AIRepairTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.files = []
-        for idx, seconds in enumerate((2.4, 2.6, 5.0, 2.5)):
+        for idx, seconds in enumerate((2.4, 2.6, 6.0, 2.5)):
             file = Path(_temporary_data.name) / f"sample_{idx}.mp4"
             cmd = [str(settings.ffmpeg_bin), "-v", "error", "-y", "-f", "lavfi",
                    "-i", f"testsrc2=s=160x96:r=24:d={seconds}"]
@@ -52,13 +50,6 @@ class AIRepairTests(unittest.TestCase):
                                         "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)])
         return bool(data.strip())
 
-    @staticmethod
-    def probe_frames(path):
-        data = subprocess.check_output(["ffprobe", "-v", "error", "-count_frames",
-                                        "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames",
-                                        "-of", "default=nw=1:nk=1", str(path)])
-        return int(data.strip())
-
     def test_splice_sizes(self):
         self.assertEqual(splice_canvas_size((160, 96), "480", "16:9"), (864, 480))
         self.assertEqual(splice_canvas_size((160, 96), "720", "9:16"), (736, 1312))
@@ -67,25 +58,23 @@ class AIRepairTests(unittest.TestCase):
             splice_canvas_size((160, 96), "4K", "16:9")
 
     def test_splice_window_range(self):
+        self.assertEqual(splice_window(0)["seconds"], 0)
         for selected in (.1, .2, 1, 5, 10, 15):
             with self.subTest(seconds=selected):
                 window = splice_window(selected)
                 self.assertEqual((window["native_frames"] - 5) % 17, 0)
                 self.assertGreaterEqual(window["native_frames"], 124)
-                self.assertGreaterEqual(window["guide_a_frame"], 0)
-                self.assertEqual(window["guide_b_frame"] - window["guide_a_frame"] -
-                                 SPLICE_GUIDE_FRAMES, window["bridge_frames"])
-                self.assertLessEqual(window["guide_b_frame"] + SPLICE_GUIDE_FRAMES,
-                                     window["native_frames"])
-                self.assertAlmostEqual(window["bridge_native_seconds"], selected, delta=1 / 48)
+                self.assertEqual(window["bridge_start_seconds"], 0)
+                self.assertEqual(window["bridge_native_seconds"], window["seconds"])
+                self.assertGreaterEqual(window["seconds"], selected - 1 / 24)
+                self.assertLessEqual(window["native_frames"], 362)
         self.assertGreater(splice_window(15)["seconds"], 15)
-        for bad in (.09, 15.1, float("nan")):
+        for bad in (-.01, 15.1, float("nan")):
             with self.assertRaises(ValueError):
                 splice_window(bad)
 
-    def test_native_video_and_audio_guides(self):
-        # ComfyUI itself is not running in offline tests. Inspect the exact
-        # workflow shape submitted to the server, including both frame batches.
+    def test_two_still_frames_without_reference_audio(self):
+        # Inspect the FL2VA First/Last Frame workflow without launching ComfyUI.
         sys.modules.setdefault("requests", types.ModuleType("requests"))
         sys.modules.setdefault("websocket", types.ModuleType("websocket"))
         from app.comfy import ComfyUIClient
@@ -95,22 +84,18 @@ class AIRepairTests(unittest.TestCase):
             payload={"generation_mode": "frames", "steps": 8, "seed": 123,
                      "prompt": "Smooth transition", "width": 480, "height": 480,
                      "seconds": 5, "fps": 24, "generate_audio": True},
-            uploaded_images=[], staged_references=[],
-            staged_guides=[
-                {"type": "video", "name": "a.mp4", "with_audio": True,
-                 "frame_idx": splice_window(1)["guide_a_frame"]},
-                {"type": "video", "name": "b.mp4", "with_audio": False,
-                 "frame_idx": splice_window(1)["guide_b_frame"]},
-            ],
+            uploaded_images=["last_a.png", "first_b.png"], staged_references=[],
+            staged_guides=[],
             staged_control={},
         )
         self.assertNotEqual(workflow["1"]["inputs"]["fl2va_model"], "none")
-        self.assertEqual(workflow["401"]["class_type"], "LoadVideo")
-        self.assertEqual(workflow["451"]["class_type"], "GetVideoComponents")
-        self.assertEqual(workflow["501"]["inputs"]["image"], ["451", 0])
-        self.assertEqual(workflow["501"]["inputs"]["audio"], ["451", 1])
-        self.assertEqual(workflow["502"]["inputs"]["image"], ["452", 0])
-        self.assertNotIn("audio", workflow["502"]["inputs"])
+        self.assertEqual(workflow["101"]["class_type"], "LoadImage")
+        self.assertEqual(workflow["102"]["inputs"]["image"], "first_b.png")
+        self.assertEqual(workflow["2"]["inputs"]["media_1"], ["101", 0])
+        self.assertEqual(workflow["2"]["inputs"]["media_2"], ["102", 0])
+        self.assertNotIn("401", workflow)
+        self.assertNotIn("501", workflow)
+        self.assertNotIn("media_3", workflow["2"]["inputs"])
 
     def mask_data(self):
         mask = Image.new("RGB", (160, 96), "black")
@@ -141,7 +126,10 @@ class AIRepairTests(unittest.TestCase):
                     mask_png=self.mask_data() if mode == "object" else "",
                 )
                 self.assertAlmostEqual(result["seconds"], splice_window(1)["seconds"] if mode == "splice" else 5)
-                self.assertEqual(len(result["guides"]), 2)
+                self.assertEqual(len(result["images"]), 2 if mode == "splice" else 0)
+                self.assertEqual(len(result["guides"]), 0 if mode == "splice" else 2)
+                for image in result["images"]:
+                    self.assertTrue(Path(image).is_file(), image)
                 for item in result["guides"] + result["references"]:
                     self.assertTrue(Path(item["path"]).is_file(), item)
                 if mode == "object":
@@ -149,17 +137,15 @@ class AIRepairTests(unittest.TestCase):
                     self.assertTrue(Path(result["control"]["mask_video_path"]).is_file())
                 if mode == "splice":
                     self.assertEqual(result["references"], [])
-                    self.assertEqual([g["frame_idx"] for g in result["guides"]],
-                                     [splice_window(1)["guide_a_frame"], splice_window(1)["guide_b_frame"]])
-                    self.assertEqual([g["type"] for g in result["guides"]], ["video", "video"])
-                    self.assertEqual([g["with_audio"] for g in result["guides"]], [True, False])
-                    for guide in result["guides"]:
-                        self.assertEqual(self.probe_frames(Path(guide["path"])), SPLICE_GUIDE_FRAMES)
-                    self.assertEqual(result["splice_window"]["bridge_native_seconds"], 1)
+                    self.assertEqual([Path(p).suffix for p in result["images"]], [".png", ".png"])
+                    for image in result["images"]:
+                        with Image.open(image) as still:
+                            self.assertEqual(still.size, (result["width"], result["height"]))
+                    self.assertEqual(result["splice_window"]["bridge_native_seconds"], splice_window(1)["seconds"])
                 if mode == "fragment":
                     self.assertAlmostEqual(self.probe_seconds(Path(result["references"][0]["path"])), 5, delta=.12)
 
-    def test_splice_tiny_source_edges_and_long_bridge_guides(self):
+    def test_splice_tiny_source_edges_and_long_bridge_frames(self):
         result = prepare_ai_inputs(
             job_id=uuid.uuid4().hex, mode="splice",
             first_video=self.files[0], first_duration=2.4,
@@ -169,10 +155,11 @@ class AIRepairTests(unittest.TestCase):
         )
         window = splice_window(15)
         self.assertEqual(result["seconds"], window["seconds"])
-        self.assertEqual([guide["frame_idx"] for guide in result["guides"]],
-                         [window["guide_a_frame"], window["guide_b_frame"]])
-        for guide in result["guides"]:
-            self.assertEqual(self.probe_frames(Path(guide["path"])), SPLICE_GUIDE_FRAMES)
+        self.assertEqual(len(result["images"]), 2)
+        self.assertEqual(result["guides"], [])
+        for image in result["images"]:
+            with Image.open(image) as still:
+                self.assertEqual(still.size, (result["width"], result["height"]))
 
     def test_generated_montage(self):
         cases = [
@@ -192,7 +179,7 @@ class AIRepairTests(unittest.TestCase):
                 command = assembly_command(
                     mode=mode, source=source, generated=self.files[2], destination=output,
                     start=start, end=end, source_duration=length, size=(160, 96),
-                    generated_duration=5, source_has_audio=source != self.files[3],
+                    generated_duration=6, source_has_audio=source != self.files[3],
                     generated_has_audio=True, second=second,
                     second_duration=2.5 if second else 0, second_has_audio=False,
                     splice_bridge_start=win["bridge_start_seconds"],

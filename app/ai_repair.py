@@ -19,36 +19,25 @@ from PIL import Image
 from .config import settings
 
 
-# H3 AddGuide accepts native 17k+5 frame batches. 22 frames is its shortest
-# useful motion+audio clip longer than five frames, so each real 0.5-second
-# context is gently retimed to 22/24 sec before conditioning.
-SPLICE_CONTEXT_SECONDS = 0.5
-SPLICE_GUIDE_FRAMES = 22
-
-
 def splice_window(transition_seconds: float) -> dict[str, float | int]:
-    """Place two 22-frame guides on a valid H3 (5+17k) frame grid.
+    """Length for H3 First/Last Frame conditioning on its native 5+17k grid.
 
-    A guide shows the last half-second of A, then H3 fills the requested
-    interval, then B's guide shows the first half-second of B. Longer than
-    ~13s pushes H3 beyond its 15s *trained* range (Easy permits up to 30s).
+    A zero-length transition is a pure CPU cut, never sent to H3. For positive
+    durations shorter than the native minimum, the generated clip is retimed.
     """
-    if not math.isfinite(transition_seconds) or not 0.1 <= transition_seconds <= 15:
-        raise ValueError("Длительность перехода должна быть от 0,1 до 15 секунд.")
-    bridge_frames = max(2, round(transition_seconds * 24))
-    required = SPLICE_GUIDE_FRAMES * 2 + bridge_frames
-    native_frames = 5 + 17 * math.ceil((max(124, required) - 5) / 17)
-    a_frame = (native_frames - required) // 2
-    bridge_start = a_frame + SPLICE_GUIDE_FRAMES
-    b_frame = bridge_start + bridge_frames
+    if not math.isfinite(transition_seconds) or not 0 <= transition_seconds <= 15:
+        raise ValueError("Длительность перехода должна быть от 0 до 15 секунд.")
+    if transition_seconds == 0:
+        return {"seconds": 0.0, "native_frames": 0, "bridge_frames": 0,
+                "bridge_native_seconds": 0.0, "bridge_start_seconds": 0.0}
+    requested_frames = max(2, round(transition_seconds * 24))
+    native_frames = 5 + 17 * math.ceil((max(124, requested_frames) - 5) / 17)
     return {
         "seconds": native_frames / 24,
         "native_frames": native_frames,
-        "bridge_frames": bridge_frames,
-        "bridge_native_seconds": bridge_frames / 24,
-        "bridge_start_seconds": bridge_start / 24,
-        "guide_a_frame": a_frame,
-        "guide_b_frame": b_frame,
+        "bridge_frames": requested_frames,
+        "bridge_native_seconds": native_frames / 24,
+        "bridge_start_seconds": 0.0,
     }
 
 
@@ -64,15 +53,6 @@ def splice_canvas_size(size: tuple[int, int], quality: str, ratio: str) -> tuple
         raise ValueError("Неверное соотношение сторон исходного видео.")
     grid_up = lambda value: max(32, int(math.ceil(value / 32)) * 32)
     return (grid_up(short * max(1.0, aspect)), grid_up(short * max(1.0, 1 / aspect)))
-
-
-def _has_audio(path: Path) -> bool:
-    result = subprocess.run(
-        [str(settings.ffprobe_bin), "-v", "error", "-select_streams", "a:0",
-         "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
-        capture_output=True, text=True, timeout=30, check=False,
-    )
-    return result.returncode == 0 and bool(result.stdout.strip())
 
 
 def h3_duration(selected_seconds: float) -> int:
@@ -131,12 +111,7 @@ def prepare_ai_inputs(
     splice_size: tuple[int, int] | None = None,
     second_duration: float = 0, transition_seconds: float = 1,
 ) -> dict[str, Any]:
-    """Stage H3-compatible video references and still-frame guides.
-
-    For a splice, H3 receives two native 22-frame guided motion clips,
-    derived from up to 0.5 seconds on each side of the user-selected cut;
-    only the unanchored frames are used in the final video.
-    """
+    """Stage H3-compatible media; splice uses ONLY two boundary stills."""
     width, height = splice_size if mode == "splice" and splice_size else ai_canvas_size(*size)
     segment_duration = end - start
     window = splice_window(transition_seconds) if mode == "splice" else None
@@ -152,7 +127,10 @@ def prepare_ai_inputs(
         destination = path(label, "png")
         for seek in (moment, moment - .15, moment - .5):
             _run([str(settings.ffmpeg_bin), "-y", "-ss", f"{max(0, seek):.6f}",
-                  "-i", str(source), "-frames:v", "1", "-vf", f"scale={width}:{height}", str(destination)])
+                  "-i", str(source), "-frames:v", "1",
+                  "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+                         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1",
+                  str(destination)])
             if destination.is_file():
                 break
         if not destination.is_file():
@@ -177,23 +155,14 @@ def prepare_ai_inputs(
                 raise ValueError("Для перехода выберите два видео.")
             if start < .1 or second_duration - end < .1:
                 raise ValueError("Оставьте хотя бы 0,1 сек видео A до перехода и видео B после него.")
-            guide_seconds = SPLICE_GUIDE_FRAMES / 24
-            before_length = min(SPLICE_CONTEXT_SECONDS, start)
-            after_length = min(SPLICE_CONTEXT_SECONDS, second_duration - end)
-            before = clip(first_video, start - before_length,
-                          before_length, guide_seconds, "transition_context_a")
-            after = clip(second_video, end, after_length, guide_seconds, "transition_context_b")
-            guides = [
-                {"type": "video", "path": str(before), "temporary": True,
-                 "frame_idx": int(window["guide_a_frame"]), "with_audio": _has_audio(before),
-                 "source_name": "Final 0.5 seconds of video A"},
-                {"type": "video", "path": str(after), "temporary": True,
-                 "frame_idx": int(window["guide_b_frame"]), "with_audio": _has_audio(after),
-                 "source_name": "First 0.5 seconds of video B"},
-            ]
+            first = frame(first_video, max(0, start - 1 / 24), "transition_last_a")
+            last = frame(second_video, end, "transition_first_b")
+            images = [str(first), str(last)]
+            guides = []
             references = []
             control = {"mode": "none"}
         else:
+            images = []
             reference = clip(first_video, start, segment_duration, seconds, "source_segment")
             first_frame = frame(first_video, start, "segment_first")
             last_frame = frame(first_video, end - 1 / 24, "segment_last")
@@ -218,6 +187,7 @@ def prepare_ai_inputs(
                            "mask_video_path": str(mask_video), "strength": 1.0}
         return {"width": width, "height": height, "seconds": seconds,
                 "splice_window": window,
+                "images": images,
                 "references": references, "guides": guides, "control": control}
     except Exception:
         for temporary in created:

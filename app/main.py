@@ -36,7 +36,7 @@ from .config import settings
 from . import assistant as local_assistant
 from .comfy import ComfyUIClient
 from .h3_references import build_reference_prompt, validate_reference_items
-from .ai_repair import prepare_ai_inputs, splice_canvas_size, SPLICE_CONTEXT_SECONDS
+from .ai_repair import prepare_ai_inputs, splice_canvas_size
 from .worker import JobWorker, probe_duration, probe_video_size, probe_has_audio, run_command
 
 
@@ -2295,18 +2295,8 @@ async def api_repair_export(
         raise HTTPException(422, "Выберите режим: фрагмент, объект, звук или AI-склейка.")
 
     raw_prompt = str(payload.get("prompt") or "").strip()
-    if not raw_prompt:
-        raise HTTPException(400, "Введите промпт для MiniMax H3.")
     if len(raw_prompt) > 8000:
         raise HTTPException(400, "Промпт слишком длинный (максимум 8000 символов).")
-    gpu_target = _v2_gpu_target(payload.get("gpu_target"))
-    try:
-        steps = int(payload.get("steps") or 8)
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(400, "Проходы должны быть числом: 8, 12 или 16.") from exc
-    if steps not in V2_STEPS:
-        raise HTTPException(400, "Доступны только 8, 12 или 16 проходов.")
-    seed = _v2_seed(payload.get("seed"))
     if mode == "object" and str(settings.h3_controlnet_model_patch).strip().lower() in {"", "none"}:
         raise HTTPException(409, "Для замены объекта нужен H3 Fun ControlNet Union patch.")
 
@@ -2351,8 +2341,8 @@ async def api_repair_export(
             raise HTTPException(400, "Для AI-перехода нужны два видео не короче 0,1 секунды.")
         start = _editor_float(payload.get("start", source_length), "Конец видео A", .1, source_length)
         end = _editor_float(payload.get("end", 0), "Начало видео B", 0, second_length - .1)
-        transition_seconds = _editor_float(payload.get("transition_seconds", 1), "Длина перехода", .1, 15)
-        title = f"AI-переход · {source['title']} + {second['title']}"[:120]
+        transition_seconds = _editor_float(payload.get("transition_seconds", 1), "Длина перехода", 0, 15)
+        title = f"{'Прямая склейка' if transition_seconds == 0 else 'AI-переход'} · {source['title']} + {second['title']}"[:120]
     else:
         start = _editor_float(payload.get("start", 0), "Начало", 0, source_length)
         end = _editor_float(payload.get("end", 0), "Конец", 0, source_length)
@@ -2360,6 +2350,28 @@ async def api_repair_export(
             raise HTTPException(400, "Для MiniMax H3 выделите от 0,2 до 15 секунд.")
         mode_label = {"fragment": "фрагмент", "object": "объект", "sound": "звук"}[mode]
         title = f"AI-{mode_label} · {source['title']}"[:120]
+
+    if mode == "splice" and transition_seconds == 0:
+        # Pure FFmpeg job. No ComfyUI, no GPU selection/reservation, no H3 media.
+        job_id = uuid.uuid4().hex
+        db.enqueue_job(job_id, "repair_export", {
+            "title": title, "mode": "splice_cut", "media_id": source_id,
+            "second_media_id": second_id, "start": start, "end": end,
+            "seconds": round(start + second_length - end, 3),
+            "v2_context": {"workspace": "repair", "repair_mode": "splice"},
+        }, owner_id=user_id)
+        return {"ok": True, "job_id": job_id, "cpu": True, "bridge_seconds": 0}
+
+    if not raw_prompt:
+        raise HTTPException(400, "Введите промпт для MiniMax H3.")
+    gpu_target = _v2_gpu_target(payload.get("gpu_target"))
+    try:
+        steps = int(payload.get("steps") or 8)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, "Проходы должны быть числом: 8, 12 или 16.") from exc
+    if steps not in V2_STEPS:
+        raise HTTPException(400, "Доступны только 8, 12 или 16 проходов.")
+    seed = _v2_seed(payload.get("seed"))
 
     if mode == "sound":
         directive = {
@@ -2371,7 +2383,7 @@ async def api_repair_export(
 
     repair = {"mode": mode, "media_id": source_id, "second_media_id": second_id,
               "start": start, "end": end, "sound_type": sound_type, "bridge_seconds": transition_seconds,
-              "context_seconds": SPLICE_CONTEXT_SECONDS if mode == "splice" else None}
+              "keyframes_only": mode == "splice"}
     job_id = uuid.uuid4().hex
     _v2_reserve_gpu(gpu_target, job_id)
     prepared: dict = {}
@@ -2386,10 +2398,14 @@ async def api_repair_export(
         )
         items = prepared["references"]
         if mode == "splice":
-            # Native H3 AddGuide video clips are the temporal references here;
-            # they don't need Ref2VA media tags or its separate checkpoint.
+            # FL2VA First/Last Frame receives exactly two PNG stills. No video,
+            # audio or native AddGuide conditioning leaks source voices.
             actual_prompt = (raw_prompt + "\n\n"
                              "speech_policy: silent\n"
+                             "The first attached image is the final kept frame of video A. "
+                             "The second attached image is the first kept frame of video B. "
+                             "Generate a continuous visual transition from the FIRST still to the LAST still. "
+                             "Use only those two still images as source conditioning. "
                              "Mandatory silence rule: absolutely NO spoken words, dialogue, narration, "
                              "singing, voices, whispers or intelligible vocalizations during the "
                              "generated bridge. Do not animate speech or lip movement. "
@@ -2411,7 +2427,7 @@ async def api_repair_export(
                 "steps": steps, "seed": seed, "generate_audio": generate_audio,
                 "generation_mode": "frames" if mode == "splice" else "reference", "keyframe_role": "first",
                 "reference_task": "timeline_guides", "ref_image_size": "match",
-                "images": [], "references": items, "reference_map": reference_map,
+                "images": prepared["images"], "references": items, "reference_map": reference_map,
                 "guides": prepared["guides"], "control": prepared["control"],
                 "repair": repair, "v2_context": {"workspace": "repair", "repair_mode": mode},
                 "final_audio": {},
@@ -2421,6 +2437,8 @@ async def api_repair_export(
                 "h3_seconds": prepared["seconds"],
                 "bridge_seconds": transition_seconds if mode == "splice" else None}
     except Exception as exc:
+        for image in prepared.get("images") or []:
+            Path(image).unlink(missing_ok=True)
         for item in (prepared.get("references") or []) + (prepared.get("guides") or []):
             if isinstance(item, dict) and item.get("path"):
                 Path(item["path"]).unlink(missing_ok=True)

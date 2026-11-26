@@ -76,6 +76,8 @@
 .v2-repair-trimmed span{display:block;padding:6px 9px;color:#97a0b7;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .v2-repair-cut-handle{position:absolute;top:var(--ruler-height);bottom:0;z-index:6;width:12px;transform:translateX(-50%);padding:0;border:1px solid #e7d4ff;border-radius:4px;background:#ad82ff;box-shadow:0 0 0 2px rgba(28,12,54,.6),0 0 12px rgba(153,106,250,.6);cursor:ew-resize;touch-action:none}
 .v2-repair-cut-handle:before{content:'⋮';position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);font-size:15px;line-height:1;color:#251144;text-align:center}
+.v2-repair-cut-handle.zero[data-repair-cut-edge="a"]{bottom:51%;border-bottom-color:#a974f3}
+.v2-repair-cut-handle.zero[data-repair-cut-edge="b"]{top:51%;border-top-color:#a974f3;background:#72a8ff}
 .v2-repair-selection{position:absolute;z-index:4;top:var(--ruler-height);bottom:0;border:2px solid #cba4ff;background:rgba(132,87,248,.25);pointer-events:none}
 .v2-repair-selection-caption{position:absolute;bottom:5px;left:50%;transform:translateX(-50%);padding:3px 6px;border-radius:5px;background:rgba(42,23,95,.8);font-size:9px;white-space:nowrap}
 .v2-repair-handle{position:absolute;top:-2px;bottom:-2px;width:12px;padding:0;border:1px solid #e1cdff;border-radius:3px;background:#9f80ff;pointer-events:auto;cursor:ew-resize;touch-action:none}

@@ -298,7 +298,8 @@ class JobWorker(threading.Thread):
                         generated_has_audio=probe_has_audio(generated_path),
                         second=second_path, second_duration=second_duration,
                         second_has_audio=second_audio,
-                        splice_bridge_start=float(repair.get("bridge_start_seconds") or 2.416667),
+                        splice_bridge_start=(float(repair["bridge_start_seconds"])
+                                             if "bridge_start_seconds" in repair else 2.416667),
                         splice_bridge_native_seconds=float(repair.get("bridge_native_seconds") or 1),
                         splice_bridge_seconds=float(repair.get("bridge_seconds") or 1),
                     )
@@ -840,6 +841,23 @@ class JobWorker(threading.Thread):
             expression = f"between(t\\,{start:.6f}\\,{end:.6f})"
             filters.append(f"[0:a:0]volume={volume:.4f}:enable='{expression}'[aout]")
             metadata.update(start=start, end=end, volume=volume)
+        elif mode == "splice_cut":
+            second = _require_media(str(payload["second_media_id"]), owner_id=owner_id)
+            second_path = settings.library_dir / second["filename"]
+            second_length = probe_duration(second_path)
+            cut_a = float(payload["start"])
+            cut_b = float(payload["end"])
+            if (not second_length or not .1 <= cut_a <= first_length
+                    or not 0 <= cut_b <= second_length - .1):
+                raise RuntimeError("Укажите корректные точки склейки двух видео.")
+            command.extend(["-i", str(source_path), "-i", str(second_path)])
+            video_chain(0, cut_a)
+            video_chain(1, second_length - cut_b, cut_b)
+            audio_chain(0, source_path, cut_a)
+            audio_chain(1, second_path, second_length - cut_b, cut_b)
+            filters.append("[v0][a0][v1][a1]concat=n=2:v=1:a=1[vout][aout]")
+            metadata.update(second_media_id=second["id"], start=cut_a, end=cut_b,
+                            transition_seconds=0, method="hard_cut_cpu")
         elif mode == "splice":
             second = _require_media(str(payload["second_media_id"]), owner_id=owner_id)
             second_path = settings.library_dir / second["filename"]
