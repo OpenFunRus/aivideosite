@@ -8,6 +8,9 @@
   const detailCell = (label, value) =>
     "<div><span>" + escapeHtml(label) + "</span><strong>" + escapeHtml(value) + "</strong></div>";
 
+  let activePreviewJobId = null;
+  let displayedPreviewStep = 0;
+  let displayedPreviewMime = "";
 
   const downloadFrame = async (item, position, button = null) => {
     const suffix = position === "final" ? "final" : "start";
@@ -48,6 +51,7 @@
   const openMediaDialog = (item) => {
     const dialog = qs("#v2-media-dialog");
     if (!dialog || !item) return;
+    activePreviewJobId = null;
     const meta = item.meta || {};
     const prompt = W.mediaPrompt(item) || "Prompt не сохранён";
     dialog.innerHTML =
@@ -155,22 +159,45 @@
       '</div></div></article>';
   };
 
+  const previewPlayerHtml = (job) => {
+    const previewUrl = "/api/jobs/" + encodeURIComponent(job.id) + "/preview?step=" + Number(job.preview_step);
+    return job.preview_mime === "video/mp4"
+      ? '<video src="' + previewUrl + '" controls autoplay loop playsinline></video>'
+      : '<img class="v2-generation-preview-animation" src="' + previewUrl + '" alt="Анимированный предпросмотр видео">';
+  };
+
   const openPreviewDialog = (job) => {
     const dialog = qs("#v2-media-dialog");
     if (!dialog || !job || Number(job.preview_step) < 2) return;
-    const previewUrl = "/api/jobs/" + encodeURIComponent(job.id) + "/preview?step=" + Number(job.preview_step);
-    const player = job.preview_mime === "video/mp4"
-      ? '<video src="' + previewUrl + '" controls autoplay loop playsinline></video>'
-      : '<img class="v2-generation-preview-animation" src="' + previewUrl + '" alt="Анимированный предпросмотр видео">';
+    activePreviewJobId = String(job.id);
+    displayedPreviewStep = Number(job.preview_step);
+    displayedPreviewMime = String(job.preview_mime || "");
     dialog.innerHTML = '<div class="v2-media-dialog-inner v2-generation-dialog">' +
-      '<div class="v2-media-dialog-head"><h3>Предпросмотр · шаг ' + Number(job.preview_step) +
+      '<div class="v2-media-dialog-head"><h3 data-generation-preview-title>Предпросмотр · шаг ' + Number(job.preview_step) +
       ' из ' + escapeHtml(String(job.steps || 8)) + '</h3>' +
       '<button class="v2-icon-button" type="button" data-media-dialog-close aria-label="Закрыть">' + icon("x") + '</button></div>' +
-      player +
-      '<p class="v2-generation-dialog-note">Это промежуточная версия: движение и детали могут измениться на следующих шагах. Готовый ролик появится здесь после генерации.</p>' +
+      '<div data-generation-preview-player>' + previewPlayerHtml(job) + '</div>' +
+      '<p class="v2-generation-dialog-note">Предпросмотр автоматически обновляется на шагах 2, 4, 6, 8. Tiny VAE показывает грубую картинку даже на последнем шаге; чёткий результат появится после финального декодирования.</p>' +
       '</div>';
     qs("[data-media-dialog-close]", dialog)?.addEventListener("click", () => dialog.close());
     dialog.showModal();
+  };
+
+  const updateOpenPreviewDialog = () => {
+    if (!activePreviewJobId) return;
+    const dialog = qs("#v2-media-dialog");
+    if (!dialog?.open) return;
+    const job = (W.snapshot?.library_jobs || []).find((item) => String(item.id) === activePreviewJobId);
+    if (!job || Number(job.preview_step) < 2) return;
+    const step = Number(job.preview_step);
+    const mime = String(job.preview_mime || "");
+    if (step <= displayedPreviewStep && mime === displayedPreviewMime) return;
+    displayedPreviewStep = step;
+    displayedPreviewMime = mime;
+    const title = qs("[data-generation-preview-title]", dialog);
+    if (title) title.textContent = "Предпросмотр · шаг " + step + " из " + String(job.steps || 8);
+    const player = qs("[data-generation-preview-player]", dialog);
+    if (player) player.innerHTML = previewPlayerHtml(job);
   };
 
   const renderLibrary = () => {
@@ -229,6 +256,7 @@
       grid.querySelectorAll(":scope > .v2-generation-card").forEach((card) => card.remove());
       if (generatingHtml) grid.insertAdjacentHTML("afterbegin", generatingHtml);
     }
+    updateOpenPreviewDialog();
   };
 
   qs("#v2-library-refresh")?.addEventListener("click", () => {
@@ -303,6 +331,11 @@
 
   qs("#v2-media-dialog")?.addEventListener("click", (event) => {
     if (event.target === event.currentTarget) event.currentTarget.close();
+  });
+  qs("#v2-media-dialog")?.addEventListener("close", () => {
+    activePreviewJobId = null;
+    displayedPreviewStep = 0;
+    displayedPreviewMime = "";
   });
 
   window.addEventListener("v2:datarefresh", renderLibrary);
