@@ -1,0 +1,105 @@
+<section class="v2-view" data-v2-view="repair">
+  <div class="v2-repair" id="v2-repair">
+    <div class="v2-repair-heading">
+      <div>
+        <p>Выберите готовый ролик, остановите на нужном кадре и отметьте участок на таймлайне.</p>
+      </div>
+      <span class="v2-repair-heading-badge"><svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg> Работа с готовым видео</span>
+    </div>
+
+    <div class="v2-repair-modes" role="group" aria-label="Режим исправления">
+      <button class="active" type="button" data-repair-mode="fragment" aria-pressed="true">
+        <svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg><strong>Фрагмент</strong><small>Убрать участок</small>
+      </button>
+      <button type="button" data-repair-mode="object" aria-pressed="false">
+        <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg><strong>Объект</strong><small>AI · эксперимент</small>
+      </button>
+      <button type="button" data-repair-mode="motion" aria-pressed="false">
+        <svg class="icon"><use href="/static/icons.svg#icon-activity"></use></svg><strong>Движение</strong><small>AI · эксперимент</small>
+      </button>
+      <button type="button" data-repair-mode="sound" aria-pressed="false">
+        <svg class="icon"><use href="/static/icons.svg#icon-volume"></use></svg><strong>Звук</strong><small>На участке</small>
+      </button>
+      <button type="button" data-repair-mode="splice" aria-pressed="false">
+        <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><strong>Склейка</strong><small>Два видео · 1 сек</small>
+      </button>
+    </div>
+
+    <div class="v2-repair-stage">
+      <div class="v2-repair-player-panel">
+        <div class="v2-repair-panel-title"><strong>Предпросмотр</strong><span id="v2-repair-frame-label">24 кадра/сек · точная позиция</span></div>
+        <div class="v2-repair-monitor">
+          <video id="v2-repair-preview" controls playsinline preload="metadata"></video>
+          <div class="v2-repair-monitor-empty" id="v2-repair-monitor-empty">
+            <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
+            <strong>Выберите видео</strong>
+            <span>Из Библиотеки или загрузите своё</span>
+          </div>
+        </div>
+        <div class="v2-repair-transport">
+          <span class="v2-repair-time" id="v2-repair-time">00:00.000 / 00:00.000</span>
+          <div class="v2-repair-transport-buttons">
+            <button type="button" id="v2-repair-back" title="Назад на кадр" aria-label="Назад на кадр">−1 кадр</button>
+            <button type="button" class="v2-repair-play" id="v2-repair-play" title="Воспроизвести или остановить">▶ <span>Пуск</span></button>
+            <button type="button" id="v2-repair-forward" title="Вперёд на кадр" aria-label="Вперёд на кадр">+1 кадр</button>
+          </div>
+          <button type="button" class="v2-repair-mark" id="v2-repair-mark-start" title="Поставить начало выделения на текущем кадре">Начало</button>
+          <button type="button" class="v2-repair-mark" id="v2-repair-mark-end" title="Поставить конец выделения на текущем кадре">Конец</button>
+        </div>
+      </div>
+
+      <aside class="v2-repair-inspector">
+        <div class="v2-repair-panel-title"><strong>Исходные видео</strong><span>MP4 · MOV · MKV · WebM</span></div>
+        <div class="v2-repair-source" data-repair-source="a">
+          <div class="v2-repair-source-preview"><img id="v2-repair-thumb-a" alt="Кадр выбранного видео A" hidden><svg class="icon" id="v2-repair-empty-a"><use href="/static/icons.svg#icon-video"></use></svg></div>
+          <div class="v2-repair-source-details"><span>ВИДЕО A</span><strong id="v2-repair-name-a">Не выбрано</strong><small id="v2-repair-duration-a">Начальный ролик</small></div>
+          <div class="v2-repair-source-actions"><button type="button" data-repair-select="a">Из Библиотеки</button><button type="button" data-repair-upload="a">Загрузить своё</button></div>
+        </div>
+        <div class="v2-repair-source" id="v2-repair-source-b" data-repair-source="b" hidden>
+          <div class="v2-repair-source-preview"><img id="v2-repair-thumb-b" alt="Кадр выбранного видео B" hidden><svg class="icon" id="v2-repair-empty-b"><use href="/static/icons.svg#icon-video"></use></svg></div>
+          <div class="v2-repair-source-details"><span>ВИДЕО B</span><strong id="v2-repair-name-b">Не выбрано</strong><small id="v2-repair-duration-b">Второй ролик</small></div>
+          <div class="v2-repair-source-actions"><button type="button" data-repair-select="b">Из Библиотеки</button><button type="button" data-repair-upload="b">Загрузить своё</button></div>
+        </div>
+        <input id="v2-repair-file-a" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm,.m4v" hidden>
+        <input id="v2-repair-file-b" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm,.m4v" hidden>
+        <div class="v2-repair-settings" id="v2-repair-splice-settings" hidden>
+          <label><span>Переход</span><select id="v2-repair-transition"><option value="fade">Плавное растворение</option><option value="wipeleft">Шторка влево</option><option value="slideleft">Сдвиг влево</option></select></label>
+          <div class="v2-repair-transition-length"><span>Длительность перехода</span><strong>1,0 сек</strong></div>
+        </div>
+        <div class="v2-repair-settings" id="v2-repair-sound-settings" hidden>
+          <label><span>Звук на выделении</span><select id="v2-repair-volume"><option value="0">Выключить (0%)</option><option value="0.3">Приглушить (30%)</option><option value="0.6">Тише (60%)</option><option value="1.5">Громче (150%)</option></select></label>
+        </div>
+        <div class="v2-repair-context" id="v2-repair-context">Выбранный отрезок будет удалён. Остальная часть ролика сохранится.</div>
+      </aside>
+    </div>
+
+    <section class="v2-repair-timeline-panel" aria-label="Таймлайн видео">
+      <div class="v2-repair-timeline-head"><strong>Таймлайн</strong><span id="v2-repair-timeline-help">Перетащите границы или поставьте начало и конец на текущем кадре</span></div>
+      <div class="v2-repair-timeline" id="v2-repair-timeline">
+        <div class="v2-repair-ruler" id="v2-repair-ruler"></div>
+        <div class="v2-repair-filmstrip" id="v2-repair-filmstrip">
+          <div class="v2-repair-film-empty">Выберите ролик для отображения дорожки</div>
+        </div>
+        <div class="v2-repair-selection" id="v2-repair-selection" hidden><span class="v2-repair-selection-caption">Выделено</span><button class="v2-repair-handle left" type="button" data-repair-handle="start" aria-label="Перетащить начало выделения"></button><button class="v2-repair-handle right" type="button" data-repair-handle="end" aria-label="Перетащить конец выделения"></button></div>
+        <div class="v2-repair-playhead" id="v2-repair-playhead" hidden></div>
+      </div>
+      <div class="v2-repair-range-row" id="v2-repair-range-row">
+        <label>Начало <input type="number" id="v2-repair-start" min="0" step="0.001" value="0"><span>сек</span></label>
+        <label>Конец <input type="number" id="v2-repair-end" min="0" step="0.001" value="0"><span>сек</span></label>
+        <span class="v2-repair-range-duration">Выделено: <strong id="v2-repair-selected-length">00:00.000</strong></span>
+        <span class="v2-repair-timeline-key">Пробел — пуск/пауза · ← / → — по кадрам</span>
+      </div>
+    </section>
+
+    <div class="v2-repair-footer">
+      <label class="v2-repair-prompt" id="v2-repair-prompt-field"><span>Промпт исправления</span><textarea id="v2-repair-prompt" rows="2" maxlength="8000" placeholder="Опишите, что должно измениться на выбранном участке…"></textarea></label>
+      <div class="v2-repair-submit-row"><div class="v2-repair-note" id="v2-repair-note">Оригинал останется в Библиотеке. Результат появится как новый ролик.</div><button class="v2-primary-button" id="v2-repair-submit" type="button" disabled>Исправить</button></div>
+    </div>
+  </div>
+
+  <dialog id="v2-repair-picker" class="v2-repair-picker">
+    <div class="v2-repair-picker-head"><div><strong>Выбрать видео из Библиотеки</strong><span>Нажмите на нужный ролик</span></div><button id="v2-repair-picker-close" type="button" aria-label="Закрыть">✕</button></div>
+    <input id="v2-repair-picker-search" type="search" placeholder="Поиск по названию…" aria-label="Поиск видео">
+    <div class="v2-repair-picker-grid" id="v2-repair-picker-grid"></div>
+  </dialog>
+</section>

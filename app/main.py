@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 30666)
+Total output lines: 3164
+
 from __future__ import annotations
 
 import asyncio
@@ -36,7 +39,7 @@ from .config import settings
 from . import assistant as local_assistant
 from .comfy import ComfyUIClient
 from .h3_references import build_reference_prompt, validate_reference_items
-from .worker import JobWorker, probe_duration
+from .worker import JobWorker, probe_duration, probe_video_size, probe_has_audio, run_command
 
 
 @asynccontextmanager
@@ -1292,604 +1295,7 @@ async def api_v2_generate(
                 "seconds": seconds,
                 "steps": steps,
                 "generation_mode": generation_mode,
-                "uses_timeline_guides": generation_mode == "multiframe",
-                "has_first_frame": has_first,
-                "has_last_frame": has_last,
-                "gpu_target": gpu_target,
-            },
-        }
-    except Exception:
-        for path in temporary_paths:
-            path.unlink(missing_ok=True)
-        _v2_release_gpu(gpu_target,job_id)
-        raise
-
-
-def _v2_seed(raw: object) -> int:
-    text = str(raw or "").strip()
-    if not text:
-        return -1
-    try:
-        value = int(text)
-    except ValueError as exc:
-        raise HTTPException(
-            400,
-            "Seed должен быть целым числом или пустым для Auto (-1).",
-        ) from exc
-    if value < -1 or value > 4294967295:
-        raise HTTPException(400, "Seed должен быть от -1 до 4294967295.")
-    return value
-
-
-def _v2_validate_simple_settings(seconds: int, steps: int) -> None:
-    if seconds not in V2_DURATIONS:
-        raise HTTPException(400, "V2 поддерживает длительность только 5, 10 или 15 секунд.")
-    if steps not in V2_STEPS:
-        raise HTTPException(400, "V2 поддерживает только 8, 12 или 16 шагов.")
-
-
-def _v2_character_references(
-    character_ids: list[str],
-    user_id: str,
-    *,
-    include_voice: bool,
-    muted_character_ids: set[str] | None = None,
-    identity_only: bool = False,
-) -> list[dict]:
-    items: list[dict] = []
-    muted = muted_character_ids or set()
-    for character_id in character_ids:
-        character = db.get_character(character_id, user_id)
-        if character is None:
-            raise HTTPException(404, "Один из выбранных персонажей не найден.")
-        for path_value in character.get("images") or []:
-            path = Path(path_value)
-            if not path.is_file():
-                raise HTTPException(
-                    409,
-                    f"У персонажа «{character['name']}» отсутствует файл изображения.",
-                )
-            items.append(
-                {
-                    "type": "image",
-                    "path": str(path),
-                    "temporary": False,
-                    "source_name": path.name,
-                    "role": "character",
-                    "retention": (
-                        "partially_preserved" if identity_only else "fully_preserved"
-                    ),
-                    "character_id": character_id,
-                    "character_name": character["name"],
-                    "character_description": (
-                        "" if identity_only else character.get("description") or ""
-                    ),
-                    "identity_only": bool(identity_only),
-                    "note": (
-                        "Identity reference only. Preserve recognizable identity, face and "
-                        "stable body traits. Exact First/Last timeline guides are authoritative "
-                        "for current clothing, accessories, carried props, hairstyle details "
-                        "and visible condition; never restore conflicting appearance from this "
-                        "saved character picture."
-                        if identity_only
-                        else ""
-                    ),
-                }
-            )
-        if include_voice and character_id not in muted and character.get("voice_file"):
-            path = Path(str(character["voice_file"]))
-            if not path.is_file():
-                raise HTTPException(
-                    409,
-                    f"У персонажа «{character['name']}» отсутствует файл голоса.",
-                )
-            items.append(
-                {
-                    "type": "audio",
-                    "path": str(path),
-                    "temporary": False,
-                    "source_name": path.name,
-                    "role": "voice",
-                    "retention": "reference",
-                    "character_id": character_id,
-                    "character_name": character["name"],
-                    "character_description": character.get("description") or "",
-                }
-            )
-    return items
-
-
-def _v2_location_references(location_ids: list[str], user_id: str) -> list[dict]:
-    items: list[dict] = []
-    for location_id in location_ids:
-        location = db.get_location(location_id, user_id)
-        if location is None:
-            raise HTTPException(404, "Одна из выбранных локаций не найдена.")
-        for path_value in location.get("images") or []:
-            path = Path(path_value)
-            if not path.is_file():
-                raise HTTPException(409, f"У локации «{location['name']}» отсутствует файл изображения.")
-            items.append(
-                {
-                    "type": "image",
-                    "path": str(path),
-                    "temporary": False,
-                    "source_name": path.name,
-                    "role": "setting",
-                    "retention": "fully_preserved",
-                    "location_id": location_id,
-                    "location_name": location["name"],
-                    "location_prompt": location.get("prompt") or "",
-                    "note": (
-                        "Reusable location reference. Use it as the scene environment/background "
-                        "and keep spatial continuity stable."
-                    ),
-                }
-            )
-    return items
-
-
-
-def _v2_misc_references(misc_ids: list[str], user_id: str) -> list[dict]:
-    items: list[dict] = []
-    for misc_id in misc_ids:
-        preset = db.get_misc_preset(misc_id, user_id)
-        if preset is None:
-            raise HTTPException(404, "Один из выбранных пресетов «Прочее» не найден.")
-        category = str(preset.get("category") or "other")
-        role, retention = MISC_CATEGORY_H3_ROLE.get(
-            category,
-            MISC_CATEGORY_H3_ROLE["other"],
-        )
-        category_label = MISC_PRESET_CATEGORIES.get(category, MISC_PRESET_CATEGORIES["other"])
-        for path_value in preset.get("images") or []:
-            path = Path(path_value)
-            if not path.is_file():
-                raise HTTPException(
-                    409,
-                    f"У пресета «{preset['name']}» отсутствует файл изображения.",
-                )
-            items.append(
-                {
-                    "type": "image",
-                    "path": str(path),
-                    "temporary": False,
-                    "source_name": path.name,
-                    "role": role,
-                    "retention": retention,
-                    "misc_id": misc_id,
-                    "misc_name": preset["name"],
-                    "misc_category": category,
-                    "misc_category_label": category_label,
-                    "misc_description": preset.get("description") or "",
-                    "note": (
-                        "Reusable Misc semantic reference. Apply only the saved "
-                        "object/trait/action/style role described by this preset and "
-                        "preserve it consistently when it is visible."
-                    ),
-                }
-            )
-    return items
-
-
-def _v2_enqueue_reference_job(
-    *,
-    job_id: str | None = None,
-    gpu_target: str | None = None,
-    user_id: str,
-    prompt: str,
-    width: int,
-    height: int,
-    seconds: int,
-    steps: int,
-    seed: int,
-    generate_audio: bool,
-    generation_mode: str,
-    reference_task: str,
-    items: list[dict],
-    guides: list[dict] | None = None,
-    v2_context: dict | None = None,
-    final_audio: dict | None = None,
-) -> str:
-    compact_prompt = " ".join(prompt.split()) if "\n" not in prompt else prompt.strip()
-    if not compact_prompt:
-        raise HTTPException(400, "Введите prompt.")
-    if len(compact_prompt) > 16000:
-        raise HTTPException(400, "Prompt слишком длинный.")
-
-    media_order = {"image": 0, "video": 1, "audio": 2}
-    items.sort(key=lambda item: media_order.get(str(item.get("type") or ""), 99))
-    try:
-        validate_reference_items(
-            items,
-            digital_human=generation_mode == "digital_human",
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-
-    actual_prompt, reference_map = build_reference_prompt(
-        compact_prompt,
-        task=reference_task,
-        items=items,
-    )
-    job_id = job_id or uuid.uuid4().hex
-    db.enqueue_job(
-        job_id,
-        "generate",
-        {
-            "prompt": actual_prompt,
-            "user_prompt": compact_prompt,
-            "width": int(width),
-            "height": int(height),
-            "seconds": float(seconds),
-            "fps": 24,
-            "steps": int(steps),
-            "seed": int(seed),
-            "generate_audio": bool(generate_audio),
-            "generation_mode": generation_mode,
-            "keyframe_role": "first",
-            "reference_task": reference_task,
-            "ref_image_size": "match",
-            "images": [],
-            "references": items,
-            "reference_map": reference_map,
-            "guides": guides or [],
-            "control": {"mode": "none"},
-            "v2_context": v2_context or {},
-            "final_audio": final_audio or {},
-        },
-        owner_id=user_id,
-        gpu_target=gpu_target,
-    )
-    return job_id
-
-
-def _v2_track_root(user_id: str) -> Path:
-    root = settings.data_dir / "audio_tracks" / user_id
-    root.mkdir(parents=True, exist_ok=True)
-    return root
-
-
-def _v2_track_id(value: object) -> str:
-    track_id = str(value or "").strip().lower()
-    if len(track_id) != 32 or any(ch not in "0123456789abcdef" for ch in track_id):
-        raise HTTPException(400, "Некорректный ID master track.")
-    return track_id
-
-
-def _v2_track_info(track_id: str, user_id: str) -> dict:
-    normalized = _v2_track_id(track_id)
-    meta_path = _v2_track_root(user_id) / f"{normalized}.json"
-    try:
-        data = json.loads(meta_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise HTTPException(404, "Master track не найден.") from exc
-    if not isinstance(data, dict):
-        raise HTTPException(404, "Master track не найден.")
-    stored_filename = str(data.get("stored_filename") or "")
-    audio_path = (_v2_track_root(user_id) / stored_filename).resolve()
-    try:
-        audio_path.relative_to(_v2_track_root(user_id).resolve())
-    except ValueError as exc:
-        raise HTTPException(404, "Master track не найден.") from exc
-    if not audio_path.is_file():
-        raise HTTPException(404, "Файл master track отсутствует.")
-    data["path"] = str(audio_path)
-    return data
-
-
-def _v2_list_tracks(user_id: str) -> list[dict]:
-    root = _v2_track_root(user_id)
-    result: list[dict] = []
-    for meta_path in root.glob("*.json"):
-        try:
-            data = json.loads(meta_path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                continue
-            track_id = _v2_track_id(data.get("id"))
-            stored_filename = str(data.get("stored_filename") or "")
-            audio_path = (root / stored_filename).resolve()
-            audio_path.relative_to(root.resolve())
-            if not audio_path.is_file():
-                continue
-            size_bytes = audio_path.stat().st_size
-            duration = data.get("duration")
-            bitrate_kbps = None
-            if duration:
-                try:
-                    bitrate_kbps = round(size_bytes * 8 / float(duration) / 1000)
-                except (TypeError, ValueError, ZeroDivisionError):
-                    bitrate_kbps = None
-            result.append(
-                {
-                    "id": track_id,
-                    "title": str(data.get("title") or stored_filename),
-                    "duration": duration,
-                    "size_bytes": size_bytes,
-                    "bitrate_kbps": bitrate_kbps,
-                    "extension": audio_path.suffix.lower().lstrip("."),
-                    "created_at": data.get("created_at"),
-                }
-            )
-        except Exception:
-            continue
-    result.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
-    return result
-
-
-async def _v2_store_master_track(upload: UploadFile, user_id: str) -> dict:
-    original_name = Path(upload.filename or "track").name
-    temporary = await save_upload(
-        upload,
-        kind="audio",
-        max_bytes=settings.max_audio_upload_bytes,
-    )
-    track_id = uuid.uuid4().hex
-    root = _v2_track_root(user_id)
-    destination = root / f"{track_id}{temporary.suffix.lower()}"
-    try:
-        shutil.move(str(temporary), str(destination))
-        duration = probe_duration(destination)
-        data = {
-            "id": track_id,
-            "title": original_name,
-            "stored_filename": destination.name,
-            "duration": duration,
-            "size_bytes": destination.stat().st_size,
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }
-        (root / f"{track_id}.json").write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        data["path"] = str(destination)
-        return data
-    except Exception:
-        temporary.unlink(missing_ok=True)
-        destination.unlink(missing_ok=True)
-        (root / f"{track_id}.json").unlink(missing_ok=True)
-        raise
-
-
-def _v2_delete_track_files(track_id: str, user_id: str) -> None:
-    try:
-        data = _v2_track_info(track_id, user_id)
-    except HTTPException:
-        return
-    Path(str(data["path"])).unlink(missing_ok=True)
-    (_v2_track_root(user_id) / f"{track_id}.json").unlink(missing_ok=True)
-
-
-async def _v2_audio_segment(
-    source: Path,
-    *,
-    start_seconds: float,
-    duration: float,
-) -> Path:
-    destination = settings.upload_dir / f"{uuid.uuid4().hex}_segment.wav"
-
-    def extract() -> None:
-        subprocess.run(
-            [
-                str(settings.ffmpeg_bin),
-                "-y",
-                "-ss",
-                f"{max(0.0, start_seconds):.6f}",
-                "-i",
-                str(source),
-                "-t",
-                f"{max(0.1, duration):.6f}",
-                "-vn",
-                "-ac",
-                "2",
-                "-ar",
-                "48000",
-                "-c:a",
-                "pcm_s16le",
-                str(destination),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
-
-    try:
-        await asyncio.to_thread(extract)
-    except Exception as exc:
-        destination.unlink(missing_ok=True)
-        raise HTTPException(400, "Не удалось подготовить сегмент аудиотрека.") from exc
-
-    if not destination.is_file():
-        raise HTTPException(400, "Не удалось подготовить сегмент аудиотрека.")
-    return destination
-
-
-@app.get("/api/v2/tracks/{track_id}/audio")
-async def api_v2_track_audio(
-    track_id: str,
-    user_id: str = Depends(require_user),
-):
-    track = _v2_track_info(track_id, user_id)
-    path = Path(str(track["path"]))
-    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-    return FileResponse(path, media_type=media_type)
-
-
-@app.get("/api/v2/state")
-async def api_v2_state(
-    media_page: int = Query(1, ge=1),
-    user_id: str = Depends(require_user),
-):
-    media_data = db.list_media_page(media_page, 40, owner_id=user_id)
-    for old_job in db.prune_job_history(user_id, keep=20):
-        _cleanup_job_uploads(old_job)
-    jobs = db.list_jobs(20, owner_id=user_id)
-    library_jobs = []
-    for job in db.list_active_generation_jobs(user_id):
-        payload = job.get("payload") or {}
-        library_jobs.append({
-            "id": job["id"],
-            "title": str(payload.get("title") or payload.get("user_prompt") or payload.get("prompt") or "MiniMax H3")[:140],
-            "status": job["status"],
-            "progress": job["progress"],
-            "stage": job["stage"],
-            "gpu_target": job.get("gpu_target"),
-            "created_at": job["created_at"],
-            "started_at": job.get("started_at"),
-            "sampling_started_at": job.get("sampling_started_at"),
-            "steps": payload.get("steps") or 8,
-            "seconds": payload.get("seconds") or 5,
-        })
-    active_global = []
-    for job in db.list_jobs(200):
-        if job.get("status") not in {"queued", "running"}:
-            continue
-        payload = job.get("payload") or {}
-        active_global.append(
-            {
-                "id": job.get("id"),
-                "owner_id": job.get("owner_id"),
-                "user_label": _user_label(str(job.get("owner_id") or "")),
-                "kind": job.get("kind"),
-                "gpu_target": job.get("gpu_target"),
-                "status": job.get("status"),
-                "progress": job.get("progress"),
-                "stage": job.get("stage"),
-                "created_at": job.get("created_at"),
-                "started_at": job.get("started_at"),
-                "sampling_started_at": job.get("sampling_started_at"),
-                "prompt": str(payload.get("user_prompt") or payload.get("prompt") or "")[:180],
-            }
-        )
-
-    return {
-        "server_now": time.time(),
-        "user": {"id": user_id, "label": _user_label(user_id)},
-        "users": [
-            {"id": item.id, "label": item.label}
-            for item in settings.site_users
-        ],
-        "media": media_data["items"],
-        "media_pagination": {
-            key: media_data[key] for key in ("page", "page_size", "total", "pages")
-        },
-        "jobs": jobs,
-        "library_jobs": library_jobs,
-        "active_global": active_global,
-        "counts": db.state_counts(user_id),
-        "global_counts": db.state_counts(),
-        "system": get_system_status(),
-        "assistant": await asyncio.to_thread(local_assistant.status),
-        "tracks": _v2_list_tracks(user_id),
-    }
-
-
-@app.post("/api/assistant/context")
-async def api_assistant_context(
-    request: Request,
-    user_id: str = Depends(require_user),
-):
-    try:
-        payload = await request.json()
-    except (json.JSONDecodeError, ValueError) as exc:
-        raise HTTPException(400, "Некорректный запрос контекста.") from exc
-    if not isinstance(payload, dict):
-        raise HTTPException(400, "Некорректный запрос контекста.")
-    runtime_settings, _characters, _locations, _misc = _assistant_runtime_context(
-        user_id,
-        payload.get("settings"),
-    )
-    return await asyncio.to_thread(
-        local_assistant.context_usage,
-        payload.get("messages"),
-        settings=runtime_settings,
-        thinking=bool(payload.get("thinking")),
-    )
-
-
-@app.post("/api/v2/audio")
-async def api_v2_audio(
-    prompt: Annotated[str, Form()],
-    quality: Annotated[str, Form()] = "720",
-    ratio: Annotated[str, Form()] = "16:9",
-    seconds: Annotated[int, Form()] = 10,
-    steps: Annotated[int, Form()] = 12,
-    seed: Annotated[str, Form()] = "",
-    gpu_target: Annotated[str, Form()] = "",
-    character_ids: Annotated[str, Form()] = "[]",
-    location_ids: Annotated[str, Form()] = "[]",
-    misc_ids: Annotated[str, Form()] = "[]",
-    track_id: Annotated[str, Form()] = "",
-    audio_start: Annotated[float, Form()] = 0.0,
-    embed_track: Annotated[bool, Form()] = True,
-    generate_scene_audio: Annotated[bool, Form()] = False,
-    audio: UploadFile | None = File(None),
-    first_frame: UploadFile | None = File(None),
-    last_frame: UploadFile | None = File(None),
-    user_id: str = Depends(require_user),
-):
-    _v2_validate_simple_settings(seconds, steps)
-    if not math.isfinite(audio_start) or audio_start < 0 or audio_start > 86400:
-        raise HTTPException(400, "Начало аудиофрагмента должно быть неотрицательным.")
-
-    compact_prompt = " ".join(prompt.split()) if "\n" not in prompt else prompt.strip()
-    if not compact_prompt:
-        raise HTTPException(400, "Введите prompt.")
-    if len(compact_prompt) > 16000:
-        raise HTTPException(400, "Prompt слишком длинный.")
-
-    width, height = _v2_resolution(quality, ratio)
-    selected = _v2_character_ids(character_ids)
-    selected_locations = _v2_location_ids(location_ids)
-    selected_misc = _v2_misc_ids(misc_ids)
-    has_upload = audio is not None and bool(audio.filename)
-    if bool(track_id.strip()) == bool(has_upload):
-        raise HTTPException(
-            400,
-            "Выберите ровно один master track: сохранённый или новый файл.",
-        )
-
-    gpu_target=_v2_gpu_target(gpu_target)
-    job_id=uuid.uuid4().hex
-    temporary_paths: list[Path] = []
-    created_track_id: str | None = None
-    _v2_reserve_gpu(gpu_target,job_id)
-    try:
-        has_first = first_frame is not None and bool(first_frame.filename)
-        has_last = last_frame is not None and bool(last_frame.filename)
-        items = _v2_character_references(
-            selected,
-            user_id,
-            include_voice=False,
-            identity_only=has_first or has_last,
-        )
-        items.extend(_v2_location_references(selected_locations, user_id))
-        items.extend(_v2_misc_references(selected_misc, user_id))
-        has_semantic_visual = any(
-            item.get("type") in {"image", "video"} for item in items
-        )
-
-        frame_paths: list[str] = []
-        guides: list[dict] = []
-
-        for upload, time_seconds, frame_idx, label in (
-            (first_frame, 0.0, 0, "Начальный кадр"),
-            (last_frame, float(seconds), -1, "Конечный кадр"),
-        ):
-            if upload is None or not upload.filename:
-                continue
-            frame_path = await save_upload(
-                upload,
-                kind="image",
-                max_bytes=settings.max_image_upload_bytes,
-            )
-            temporary_paths.append(frame_path)
-            source_name = Path(upload.filename).name
-            frame_paths.append(str(frame_path))
-            guides.append(
-                {
-                    "path": str(frame_path),
+                "uses_timeline_guides": generat…5666 tokens truncated…        "path": str(frame_path),
                     "temporary": True,
                     "source_name": source_name,
                     "time_seconds": time_seconds,
@@ -2138,7 +1544,7 @@ async def api_retry_job(
         raise HTTPException(404, "Задача не найдена.")
     if source["status"] != "failed":
         raise HTTPException(409, "Повторить можно только задачу с ошибкой.")
-    if source["kind"] not in {"generate", "editor_export"}:
+    if source["kind"] not in {"generate", "editor_export", "repair_export"}:
         raise HTTPException(409, "Этот тип задачи больше не поддерживается.")
 
     payload = source.get("payload") or {}
@@ -2170,6 +1576,11 @@ async def api_retry_job(
         media = db.get_media(str(clip["media_id"]), user_id)
         if media is None or not (settings.library_dir / media["filename"]).is_file():
             missing.append(f"media:{clip['media_id']}")
+    for key in ("media_id", "second_media_id"):
+        if payload.get(key):
+            media = db.get_media(str(payload[key]), user_id)
+            if media is None or not (settings.library_dir / media["filename"]).is_file():
+                missing.append(f"media:{payload[key]}")
     if missing:
         raise HTTPException(
             409,
@@ -2231,6 +1642,104 @@ async def api_editor_media(
     user_id: str = Depends(require_user),
 ):
     return {"items": db.list_media(500, owner_id=user_id)}
+
+
+@app.post("/api/repair/upload")
+async def api_repair_upload(
+    video: UploadFile = File(...),
+    user_id: str = Depends(require_user),
+):
+    """Import a local video into Library as a normalized MP4 for playback/editing."""
+    original_name = Path(video.filename or "Видео").name
+    uploaded = await save_upload(video, kind="video", max_bytes=settings.max_video_upload_bytes)
+    media_id = uuid.uuid4().hex
+    destination = settings.library_dir / f"{media_id}_import.mp4"
+    try:
+        def convert():
+            command = [
+                str(settings.ffmpeg_bin), "-y", "-i", str(uploaded),
+                "-map", "0:v:0", "-map", "0:a:0?",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                "-movflags", "+faststart", str(destination),
+            ]
+            run_command(command, timeout=7200)
+            return probe_duration(destination), probe_video_size(destination)
+
+        length, size = await asyncio.to_thread(convert)
+        if not destination.is_file() or not length or length <= 0 or size is None:
+            raise HTTPException(400, "Видео не удалось прочитать или преобразовать.")
+        db.insert_media(
+            media_id=media_id, owner_id=user_id, filename=destination.name,
+            kind="imported", title=original_name[:120], parent_id=None,
+            metadata={"operation": "import", "source_name": original_name, "width": size[0], "height": size[1]},
+            size_bytes=destination.stat().st_size, duration=length,
+        )
+        return {"ok": True, "media": db.get_media(media_id, user_id)}
+    except HTTPException:
+        destination.unlink(missing_ok=True)
+        raise
+    except Exception as exc:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(400, "Не удалось импортировать видео. Проверьте файл и формат.") from exc
+    finally:
+        uploaded.unlink(missing_ok=True)
+
+
+@app.post("/api/repair")
+async def api_repair_export(
+    payload: dict,
+    user_id: str = Depends(require_user),
+):
+    """Queue precisely scoped FFmpeg operations; AI inpainting is intentionally unavailable."""
+    mode = str(payload.get("mode") or "").strip()
+    if mode not in {"fragment", "sound", "splice"}:
+        raise HTTPException(422, "Точное AI-исправление объекта и движения пока не поддерживается.")
+
+    source_id = str(payload.get("media_id") or "").strip()
+    source = _ensure_media(source_id, user_id)
+    source_path = settings.library_dir / source["filename"]
+    if not source_path.is_file():
+        raise HTTPException(404, "Файл исходного видео отсутствует.")
+    source_length = await asyncio.to_thread(probe_duration, source_path)
+    if not source_length or source_length <= 0:
+        raise HTTPException(400, "Невозможно определить длительность видео.")
+
+    operation: dict = {"mode": mode, "media_id": source_id}
+    title_prefix = {"fragment": "Без фрагмента", "sound": "Исправлен звук", "splice": "Склейка"}[mode]
+    if mode == "splice":
+        second_id = str(payload.get("second_media_id") or "").strip()
+        second = _ensure_media(second_id, user_id)
+        second_path = settings.library_dir / second["filename"]
+        if not second_path.is_file():
+            raise HTTPException(404, "Файл второго видео отсутствует.")
+        second_length = await asyncio.to_thread(probe_duration, second_path)
+        if not second_length or source_length <= 1.05 or second_length <= 1.05:
+            raise HTTPException(400, "Для перехода нужны два видео продолжительностью более 1 секунды.")
+        transition = str(payload.get("transition") or "fade")
+        if transition not in {"fade", "wipeleft", "slideleft"}:
+            raise HTTPException(400, "Неизвестный тип перехода.")
+        operation.update(second_media_id=second_id, transition=transition, transition_seconds=1.0)
+        title = f"{title_prefix} · {source['title']} + {second['title']}"[:120]
+    else:
+        start = _editor_float(payload.get("start", 0), "Начало", 0, source_length)
+        end = _editor_float(payload.get("end", 0), "Конец", 0, source_length)
+        if end - start < 0.04:
+            raise HTTPException(400, "Выберите участок длиной хотя бы один кадр.")
+        if mode == "fragment" and end - start >= source_length - 0.04:
+            raise HTTPException(400, "Нельзя удалить весь ролик.")
+        operation.update(start=start, end=end)
+        if mode == "sound":
+            if not await asyncio.to_thread(probe_has_audio, source_path):
+                raise HTTPException(400, "У выбранного ролика нет звуковой дорожки.")
+            factor = _editor_float(payload.get("volume", 0), "Громкость", 0, 1.5)
+            operation["volume"] = factor
+        title = f"{title_prefix} · {source['title']}"[:120]
+
+    operation["title"] = title
+    job_id = uuid.uuid4().hex
+    db.enqueue_job(job_id, "repair_export", operation, owner_id=user_id)
+    return {"ok": True, "job_id": job_id}
 
 
 @app.post("/api/editor/export")

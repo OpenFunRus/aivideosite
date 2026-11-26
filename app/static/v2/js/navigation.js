@@ -7,6 +7,7 @@
   const titleMap = {
     create: "Видео",
     library: "Библиотека",
+    repair: "Исправить",
     editor: "Монтаж",
     chat: "Чат с ИИ",
     system: "Система",

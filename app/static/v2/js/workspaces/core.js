@@ -58,7 +58,7 @@
     // The user starts video generation when they submit a GPU job, not when
     // ComfyUI finishes loading the model and reports its first sampler step.
     // Library video jobs omit `kind`; only editor_export uses worker start.
-    const isVideo = job.kind !== "editor_export";
+    const isVideo = !["editor_export", "repair_export"].includes(job.kind);
     const startValue = isVideo
       ? (job.created_at || job.started_at || job.sampling_started_at)
       : job.started_at;

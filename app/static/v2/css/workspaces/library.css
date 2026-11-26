@@ -29,9 +29,10 @@
 .v2-library-workspace .v2-media-card h3{font-size:13px;font-weight:750;line-height:1.35}
 .v2-library-workspace .v2-media-meta{display:flex;flex-wrap:nowrap;gap:9px;margin-top:6px;overflow:hidden;color:#9ba5bb;font-size:9px;white-space:nowrap}
 .v2-library-workspace .v2-media-meta span{overflow:hidden;text-overflow:ellipsis}
-.v2-library-workspace .v2-media-actions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;align-items:stretch;margin-top:auto;padding-top:10px}
+.v2-library-workspace .v2-media-actions{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;align-items:stretch;margin-top:auto;padding-top:10px}
 .v2-library-workspace .v2-media-actions>button,.v2-library-workspace .v2-media-actions>a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:45px;padding:4px 2px;border:0;border-radius:9px;background:transparent;color:#d9e0ef;font-size:9px;white-space:nowrap;cursor:pointer}
 .v2-library-workspace .v2-media-actions>button:hover,.v2-library-workspace .v2-media-actions>a:hover{background:#242a3e}
+.v2-library-workspace .v2-media-actions>button span,.v2-library-workspace .v2-media-actions>a span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .v2-library-workspace .v2-media-actions .icon{width:17px;height:17px;flex:0 0 auto}
 .v2-library-workspace .v2-media-actions .v2-media-action-open{background:rgba(0,123,214,.12);color:#25b4ff;font-weight:750}
 .v2-library-workspace .v2-media-actions .v2-media-action-open:hover{background:rgba(0,123,214,.22)}

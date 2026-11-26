@@ -46,7 +46,7 @@ def _release_video_reservation(gpu_index:int,reservation_id:str)->None:
 
 class JobWorker(threading.Thread):
     VIDEO_GENERATION_KINDS = {"generate"}
-    CPU_KINDS = {"editor_export"}
+    CPU_KINDS = {"editor_export", "repair_export"}
 
     def __init__(self) -> None:
         super().__init__(name="aivideosite-dispatcher", daemon=True)
@@ -209,6 +209,8 @@ class JobWorker(threading.Thread):
             return self._generate(job, comfy, gpu_label)
         if kind == "editor_export":
             return self._editor_export(job)
+        if kind == "repair_export":
+            return self._repair_export(job)
         raise RuntimeError(f"Unknown job type: {kind}")
 
     @staticmethod
@@ -710,6 +712,126 @@ class JobWorker(threading.Thread):
             )
             if audio_path is not None:
                 _remove_uploads([audio_path])
+            return media_id
+        except Exception:
+            output_path.unlink(missing_ok=True)
+            raise
+
+    def _repair_export(self, job: dict[str, Any]) -> str:
+        """Keep source MP4 untouched and export a deterministic montage result.
+
+        Fragment removal and transitions re-encode output; this is not AI inpainting.
+        """
+        payload = job["payload"]
+        mode = str(payload.get("mode") or "")
+        job_id = str(job["id"])
+        owner_id = str(job.get("owner_id") or "user1")
+        source = _require_media(str(payload["media_id"]), owner_id=owner_id)
+        source_path = settings.library_dir / source["filename"]
+        first_length = probe_duration(source_path)
+        if not first_length:
+            raise RuntimeError("Source video duration cannot be determined.")
+
+        output_size = probe_video_size(source_path)
+        if output_size is None:
+            raise RuntimeError("Source video dimensions cannot be determined.")
+        width, height = (max(2, dimension - dimension % 2) for dimension in output_size)
+        media_id = uuid.uuid4().hex
+        output_path = settings.library_dir / f"{media_id}_repair.mp4"
+        command = [str(settings.ffmpeg_bin), "-y"]
+        filters: list[str] = []
+        metadata = {"operation": "repair", "repair_mode": mode, "source_media_id": source["id"]}
+
+        def video_chain(index: int, length: float, start: float = 0) -> None:
+            filters.append(
+                f"[{index}:v:0]trim=start={start:.6f}:duration={length:.6f},"
+                "setpts=PTS-STARTPTS,"
+                f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,"
+                "setsar=1,fps=24,settb=AVTB,format=yuv420p"
+                f"[v{index}]"
+            )
+
+        def audio_chain(index: int, path: Path, length: float, start: float = 0) -> None:
+            if probe_has_audio(path):
+                filters.append(
+                    f"[{index}:a:0]atrim=start={start:.6f}:duration={length:.6f},"
+                    "asetpts=PTS-STARTPTS,aresample=48000,"
+                    "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                    f"apad,atrim=duration={length:.6f}[a{index}]"
+                )
+            else:
+                filters.append(
+                    "anullsrc=r=48000:cl=stereo,"
+                    f"atrim=duration={length:.6f},asetpts=PTS-STARTPTS[a{index}]"
+                )
+
+        if mode == "fragment":
+            start, end = float(payload["start"]), float(payload["end"])
+            segments = [(0.0, start), (end, first_length - end)]
+            segments = [(offset, length) for offset, length in segments if length > .04]
+            if not segments:
+                raise RuntimeError("Nothing remains after the selected segment is removed.")
+            for index, (offset, length) in enumerate(segments):
+                command.extend(["-i", str(source_path)])
+                video_chain(index, length, offset)
+                audio_chain(index, source_path, length, offset)
+            filters.append(
+                "".join(f"[v{i}][a{i}]" for i in range(len(segments)))
+                + f"concat=n={len(segments)}:v=1:a=1[vout][aout]"
+            )
+            metadata.update(start=start, end=end, removed_seconds=end - start)
+        elif mode == "sound":
+            if not probe_has_audio(source_path):
+                raise RuntimeError("Source video does not have an audio track.")
+            start, end, volume = float(payload["start"]), float(payload["end"]), float(payload["volume"])
+            command.extend(["-i", str(source_path)])
+            # FFmpeg's enable expression gates the volume filter to this interval.
+            expression = f"between(t\\,{start:.6f}\\,{end:.6f})"
+            filters.append(f"[0:a:0]volume={volume:.4f}:enable='{expression}'[aout]")
+            metadata.update(start=start, end=end, volume=volume)
+        elif mode == "splice":
+            second = _require_media(str(payload["second_media_id"]), owner_id=owner_id)
+            second_path = settings.library_dir / second["filename"]
+            second_length = probe_duration(second_path)
+            if not second_length or first_length <= 1.05 or second_length <= 1.05:
+                raise RuntimeError("Both clips must exceed the 1-second transition.")
+            command.extend(["-i", str(source_path), "-i", str(second_path)])
+            video_chain(0, first_length)
+            video_chain(1, second_length)
+            audio_chain(0, source_path, first_length)
+            audio_chain(1, second_path, second_length)
+            transition = str(payload["transition"])
+            filters.append(
+                f"[v0][v1]xfade=transition={transition}:duration=1:offset={first_length - 1:.6f}[vout]"
+            )
+            filters.append("[a0][a1]acrossfade=d=1:c1=tri:c2=tri[aout]")
+            metadata.update(second_media_id=second["id"], transition=transition, transition_seconds=1)
+        else:
+            raise RuntimeError("Unsupported repair mode.")
+
+        command.extend(["-filter_complex", ";".join(filters)])
+        if mode == "sound":
+            command.extend(["-map", "0:v:0", "-map", "[aout]", "-c:v", "copy"])
+        else:
+            command.extend(["-map", "[vout]", "-map", "[aout]", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-r", "24"])
+        command.extend(["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(output_path)])
+        try:
+            self._check_cancel(job_id)
+            db.update_job(job_id, progress=10, stage="Исправление: подготовка видео")
+            db.update_job(job_id, progress=20, stage="FFmpeg: обработка фрагмента")
+            run_command(command, timeout=7200, should_cancel=lambda: db.is_cancel_requested(job_id))
+            self._check_cancel(job_id)
+            if not output_path.is_file():
+                raise RuntimeError("FFmpeg did not save the repaired video.")
+            db.update_job(job_id, progress=95, stage="Исправление: сохранение")
+            db.insert_media(
+                media_id=media_id, owner_id=owner_id, filename=output_path.name,
+                kind="edited", title=str(payload.get("title") or "Исправленное видео"),
+                parent_id=str(source["id"]),
+                metadata={**metadata, "width": width, "height": height},
+                size_bytes=output_path.stat().st_size, duration=probe_duration(output_path),
+            )
             return media_id
         except Exception:
             output_path.unlink(missing_ok=True)

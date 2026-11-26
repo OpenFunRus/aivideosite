@@ -80,6 +80,7 @@ Browser security не позволяет после reload восстанови�
 - две H3 GPU lanes: перед каждой генерацией пользователь вручную выбирает свободную RTX3090 или RTX2080;
 - failed-job Retry сохраняет нужные temporary inputs; удаление/prune очищают их;
 - FFmpeg editor: sequential video timeline, reorder, trim, split, per-clip volume, fade in/out, one Music track, JSON project save/open, export to Library;
+- «Исправить»: отдельный workspace с выбором видео из Библиотеки или импортом своего MP4/MOV/MKV/WebM, покадровым предпросмотром и таймлайном с точными границами. Рабочие CPU-операции: удаление выбранного фрагмента, изменение громкости на участке и склейка двух видео 1-секундным FFmpeg-переходом со смешиванием звука. Результат — новая запись в Библиотеке, исходник сохраняется. Режимы «Объект» и «Движение» показаны как неподключённые AI-функции: текущий H3 workflow не обеспечивает точную правку только выбранной области готового ролика;
 - системный экран: GPU/VRAM/load/temp, Gemma target/status, оба ComfyUI, RAM/CPU/disk, queue counts и графики;
 - мобильные drawers для навигации и Presets.
 
