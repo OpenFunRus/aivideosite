@@ -2404,12 +2404,18 @@ async def api_repair_export(
                              "speech_policy: silent\n"
                              "The first attached image is the final kept frame of video A. "
                              "The second attached image is the first kept frame of video B. "
-                             "Generate a continuous visual transition from the FIRST still to the LAST still. "
+                             "These may be two DIFFERENT scenes or locations. The result MUST be a cinematic "
+                             "camera FLY-THROUGH transition BETWEEN scenes: depart A, travel through a fast "
+                             "whip-pan / push-through / motion-blurred foreground occlusion, and arrive at B. "
+                             "Do NOT simply continue the action in A, freeze on a subject or pretend the two "
+                             "locations are the same room. Precisely match both endpoint images. "
                              "Use only those two still images as source conditioning. "
                              "Mandatory silence rule: absolutely NO spoken words, dialogue, narration, "
                              "singing, voices, whispers or intelligible vocalizations during the "
                              "generated bridge. Do not animate speech or lip movement. "
-                             "Use only environmental ambience and non-vocal sound effects.")
+                             "Sound MUST be an airy cinematic camera fly-by WHOOSH / rushing wind synchronized "
+                             "to the transition motion, with a soft tail on arrival. NO music, guitars, "
+                             "instruments, melodies, rhythmic beats, singing, radio or random sound effects.")
             reference_map = []
             window = prepared["splice_window"]
             repair.update(bridge_start_seconds=window["bridge_start_seconds"],
