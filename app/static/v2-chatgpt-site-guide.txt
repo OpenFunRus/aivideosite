@@ -117,7 +117,12 @@ Local H3 reference validator:
 
 LIBRARY
 -------
-Generated videos:
+GPU status, currently generating videos, and completed videos:
+- RTX3090 primary and RTX2080 secondary live GPU status;
+- ordinary generation: animated progress only, no per-step previews;
+- test generation: select GPU and one pause step from 1 to configured maximum;
+- test pause: approximate video/audio preview, Continue (resume the same sampler) or Cancel;
+- overlay render elapsed time; player shows start time and render duration;
 - Open
 - Download
 - Start Frame PNG
@@ -126,11 +131,7 @@ Generated videos:
 
 Final Frame PNG -> Video First Frame is the normal manual continuation workflow.
 
-QUEUE
------
-Two Video GPU lanes:
-- RTX3090 primary;
-- RTX2080 secondary/overflow.
+There is no separate Queue tab; the Library handles generation status.
 
 EDITOR
 ------

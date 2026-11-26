@@ -7,7 +7,6 @@
   const titleMap = {
     create: "Видео",
     library: "Библиотека",
-    queue: "Очередь",
     editor: "Монтаж",
     chat: "Чат с ИИ",
     system: "Система",
@@ -21,7 +20,7 @@
   };
 
   const setView = (nextView, { updateHash = true } = {}) => {
-    const view = titleMap[nextView] ? nextView : "create";
+    const view = nextView === "queue" ? "library" : (titleMap[nextView] ? nextView : "create");
     state.view = view;
     qsa("[data-v2-view]").forEach((panel) => {
       panel.classList.toggle("active", panel.dataset.v2View === view);

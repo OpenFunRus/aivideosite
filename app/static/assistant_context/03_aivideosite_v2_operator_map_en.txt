@@ -210,20 +210,22 @@ Start/Final Frame export real PNG frames using FFmpeg.
 Final Frame -> Video First Frame is the normal continuation workflow.
 
 ===============================================================================
-7. QUEUE
+7. LIBRARY GPU & ACTIVE JOBS
 ===============================================================================
 
 Purpose:
-Show both GPUs and the rolling job log.
+Show both GPUs and active generation/export cards in Library. The Queue view is retired.
 
 GPU lanes:
 - RTX3090 primary H3 Video lane;
 - RTX2080 secondary/overflow H3 Video lane.
 
 Jobs:
-- rolling latest 20 user jobs;
-- queued/running jobs are preserved;
-- cancel/retry/result when applicable.
+- normal generation shows animated progress and elapsed time, with no intermediate images;
+- test generation accepts a pause step 1..total and supports Preview, Continue, Cancel;
+- preview video uses Tiny VAE, audio (if enabled) uses the audio preview decoder;
+- completed videos show start date and generation duration;
+- queued/running jobs are preserved in the backend database.
 
 ===============================================================================
 8. EDITOR
@@ -300,7 +302,6 @@ CURRENT_SITE_STATE may contain:
 active_view:
 - create
 - library
-- queue
 - editor
 - chat
 - system

@@ -8,10 +8,25 @@
   const detailCell = (label, value) =>
     "<div><span>" + escapeHtml(label) + "</span><strong>" + escapeHtml(value) + "</strong></div>";
 
-  let activePreviewJobId = null;
-  let displayedPreviewStep = 0;
-  let displayedPreviewMime = "";
-  let followLatestPreview = true;
+  const formatFullDate = (value) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("ru-RU", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
+  };
+
+  const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-' + name + '"></use></svg>';
+  const generationTime = (item, end = Date.now()) => {
+    const start = Date.parse(item.started_at || item.created_at || "");
+    if (!Number.isFinite(start)) return "—";
+    if (item.finished_at) end = Math.min(end, Date.parse(item.finished_at) || end);
+    const paused = Number(item.test_paused_seconds) || 0;
+    const pauseStart = item.test_paused ? Date.parse(item.test_paused_at || "") : NaN;
+    const elapsed = (Number.isFinite(pauseStart) ? Math.min(end, pauseStart) : end) - start;
+    return W.formatSeconds(Math.max(0, elapsed / 1000 - paused));
+  };
 
   const downloadFrame = async (item, position, button = null) => {
     const suffix = position === "final" ? "final" : "start";
@@ -52,7 +67,6 @@
   const openMediaDialog = (item) => {
     const dialog = qs("#v2-media-dialog");
     if (!dialog || !item) return;
-    activePreviewJobId = null;
     const meta = item.meta || {};
     const prompt = W.mediaPrompt(item) || "Prompt не сохранён";
     dialog.innerHTML =
@@ -60,6 +74,9 @@
       '<div class="v2-media-dialog-head"><h3>' + escapeHtml(item.title || "Видео") +
       '</h3><button class="v2-icon-button" type="button" data-media-dialog-close><svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button></div>' +
       '<video src="/media/' + encodeURIComponent(item.id) + '" controls autoplay playsinline></video>' +
+      '<div class="v2-media-timing-detail">' + icon("clock") +
+      '<span>Запущено: <strong>' + escapeHtml(formatFullDate(meta.generation_started_at || item.created_at)) + '</strong></span>' +
+      '<span>Генерировалось: <strong>' + escapeHtml(meta.generation_seconds != null ? W.formatSeconds(meta.generation_seconds) : "—") + '</strong></span></div>' +
       '<div class="v2-media-detail-grid">' +
       detailCell("Дата", W.formatDate(item.created_at)) +
       detailCell("Размер", W.mediaResolution(item)) +
@@ -105,7 +122,6 @@
   const saveLibraryUi = () => W.saveJson(LIBRARY_UI_KEY, { page, search: searchText });
   const searchInput = qs("#v2-library-search");
   if (searchInput) searchInput.value = searchText;
-  const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-' + name + '"></use></svg>';
   const pageNumbers = (current, total) => {
     const numbers = new Set([1, total, current - 1, current, current + 1]);
     return [...numbers].filter((value) => value >= 1 && value <= total).sort((a, b) => a - b);
@@ -130,19 +146,22 @@
   };
 
   const renderGeneratingCard = (job) => {
-    const step = Math.max(0, Number(job.preview_step) || 0);
-    const ready = step >= 2 && Boolean(job.preview_mime);
     const progress = Math.max(0, Math.min(100, Math.round(Number(job.progress) || 0)));
     const waiting = job.status === "queued";
-    const unavailable = !waiting && !job.preview_enabled && progress >= 10;
-    const statusLabel = waiting ? "В очереди" : ready ? "Предпросмотр готов" : unavailable ? "Без предпросмотра" : "Генерация";
-    const previewLabel = ready ? "Воспроизвести шаг " + step : unavailable ? "Превью не подключено" : "Ожидаем шаг 2";
-    const gpu = job.gpu_target === "rtx2080" ? "RTX 2080" : "RTX 3090";
-    const posterUrl = "/api/jobs/" + encodeURIComponent(job.id) + "/preview?poster=1&step=" + step;
-    return '<article class="v2-media-card v2-generation-card" data-preview-job-id="' + escapeHtml(job.id) + '">' +
+    const failed = job.status === "failed";
+    const test = Number(job.test_pause_step) > 0;
+    const paused = Boolean(job.test_paused);
+    const exportJob = job.kind === "editor_export";
+    const ready = paused && Number(job.preview_step) === Number(job.test_pause_step) && Boolean(job.preview_mime);
+    const statusLabel = failed ? "Ошибка" : waiting ? "В очереди" : paused ? "Ожидает продолжения" : exportJob ? "Экспорт ролика" : test ? "Тестовая генерация" : "Генерация";
+    const gpu = exportJob ? "CPU · Монтаж" : job.gpu_target === "rtx2080" ? "RTX 2080" : "RTX 3090";
+    return '<article class="v2-media-card v2-generation-card" data-paused="' + paused + '" data-failed="' + failed + '" data-preview-job-id="' + escapeHtml(job.id) + '">' +
       '<div class="v2-media-cover v2-generation-cover">' +
-      (ready ? '<img class="v2-generation-poster" src="' + posterUrl + '" alt="Кадр после шага ' + step + '" loading="eager">' : '') +
-      '<span class="v2-generation-step-badge">' + (ready ? 'ШАГ ' + step + ' / ' + escapeHtml(String(job.steps || 8)) : waiting ? 'В ОЧЕРЕДИ' : unavailable ? 'БЕЗ ПРЕВЬЮ' : 'ОЖИДАНИЕ КАДРА') + '</span>' +
+      '<div class="v2-generation-screen"><span class="v2-generation-spinner" aria-hidden="true"></span><strong>' +
+      escapeHtml(failed ? 'Ошибка' : paused ? 'Тест · Пауза' : waiting ? 'Ожидание запуска' : exportJob ? 'Экспорт' : 'Генерация') +
+      '</strong><b>' + progress + '%</b></div>' +
+      '<span class="v2-generation-time">' + icon("clock") + '<span data-generation-timer="' + escapeHtml(job.id) + '">' + escapeHtml(generationTime(job)) + '</span></span>' +
+      '<span class="v2-generation-step-badge">' + (exportJob ? 'МОНТАЖ' : test ? 'ТЕСТ · ШАГ ' + escapeHtml(String(job.test_pause_step)) + '/' + escapeHtml(String(job.steps || 8)) : 'MINIMAX H3 · LIVE') + '</span>' +
       '<span class="v2-generation-gpu">' + escapeHtml(gpu) + '</span></div>' +
       '<div class="v2-media-card-body">' +
       '<h3 title="' + escapeHtml(job.title) + '">' + escapeHtml(job.title || "MiniMax H3") + '</h3>' +
@@ -151,83 +170,87 @@
       '<span>' + escapeHtml(statusLabel) + '</span></div>' +
       '<div class="v2-generation-progress"><span style="width:' + progress + '%"></span></div>' +
       '<div class="v2-generation-progress-label"><span>' + escapeHtml(job.stage || "Подготовка") + '</span><b>' + progress + '%</b></div>' +
+      (failed ? '<p class="v2-generation-error" title="' + escapeHtml(job.error || '') + '">' + escapeHtml(String(job.error || 'Не удалось выполнить задачу.').slice(0, 160)) + '</p>' : '') +
       '<div class="v2-generation-actions">' +
-      '<button class="v2-generation-play" type="button" data-library-action="preview" ' + (ready ? '' : 'disabled ') + '>' + icon("player-play") + escapeHtml(previewLabel) + '</button>' +
-      '<button class="v2-generation-cancel" type="button" data-library-action="cancel">' + icon("x") + 'Отменить генерацию</button>' +
+      (failed ? '<button class="v2-generation-play" type="button" data-library-action="retry">' + icon("refresh") + 'Повторить</button>' +
+      '<button class="v2-generation-cancel" type="button" data-library-action="dismiss">' + icon("trash") + 'Убрать ошибку</button>' :
+      (paused ? '<button class="v2-generation-play" type="button" data-library-action="preview" ' + (ready ? '' : 'disabled ') + '>' + icon("player-play") + (ready ? 'Посмотреть тест' : 'Готовим тест…') + '</button>' +
+      '<button class="v2-generation-play" type="button" data-library-action="continue">' + icon("player-play") + 'Продолжить</button>' : '') +
+      '<button class="v2-generation-cancel" type="button" data-library-action="cancel">' + icon("x") + 'Отменить генерацию</button>') +
       '</div></div></article>';
   };
 
-  const availablePreviewSteps = (job) => Array.isArray(job.preview_steps) && job.preview_steps.length
-    ? job.preview_steps
-    : [{ step: Number(job.preview_step), mime: job.preview_mime }];
-
-  const previewPlayerHtml = (job, step, mime) => {
-    const previewUrl = "/api/jobs/" + encodeURIComponent(job.id) + "/preview?step=" + step;
-    return mime === "video/mp4"
+  const previewPlayerHtml = (job) => {
+    const previewUrl = "/api/jobs/" + encodeURIComponent(job.id) + "/preview?step=" + Number(job.test_pause_step);
+    return job.preview_mime === "video/mp4"
       ? '<video src="' + previewUrl + '" controls autoplay loop playsinline></video>'
-      : '<img class="v2-generation-preview-animation" src="' + previewUrl + '" alt="Анимированный предпросмотр видео">';
-  };
-
-  const previewStepsHtml = (job) =>
-    '<div class="v2-generation-step-nav" aria-label="Сравнение шагов">' +
-    availablePreviewSteps(job).map((item) =>
-      '<button type="button" data-generation-step="' + Number(item.step) + '" aria-pressed="' + (Number(item.step) === displayedPreviewStep) + '"' +
-      (Number(item.step) === displayedPreviewStep ? ' class="active"' : '') + '>Шаг ' + Number(item.step) + '</button>'
-    ).join("") +
-    '<button type="button" data-generation-follow aria-pressed="' + followLatestPreview + '"' +
-    (followLatestPreview ? ' class="active follow"' : ' class="follow"') + '>Авто</button></div>';
-
-  const showPreviewStep = (job, step) => {
-    const selected = availablePreviewSteps(job).find((item) => Number(item.step) === Number(step));
-    const dialog = qs("#v2-media-dialog");
-    if (!selected || !dialog?.open) return;
-    const mime = String(selected.mime || "");
-    const changed = displayedPreviewStep !== step || displayedPreviewMime !== mime;
-    displayedPreviewStep = step;
-    displayedPreviewMime = mime;
-    const title = qs("[data-generation-preview-title]", dialog);
-    if (title) title.textContent = "Предпросмотр · шаг " + step + " из " + String(job.steps || 8);
-    const player = qs("[data-generation-preview-player]", dialog);
-    if (player && changed) player.innerHTML = previewPlayerHtml(job, step, mime);
-    const nav = qs("[data-generation-preview-nav]", dialog);
-    if (nav) nav.innerHTML = previewStepsHtml(job);
+      : '<img class="v2-generation-preview-animation" src="' + previewUrl + '" alt="Черновое тестовое видео">';
   };
 
   const openPreviewDialog = (job) => {
     const dialog = qs("#v2-media-dialog");
-    if (!dialog || !job || Number(job.preview_step) < 2) return;
-    activePreviewJobId = String(job.id);
-    displayedPreviewStep = Number(job.preview_step);
-    displayedPreviewMime = String(job.preview_mime || "");
-    followLatestPreview = true;
+    if (!dialog || !job || !job.test_paused || !job.preview_mime) return;
     dialog.innerHTML = '<div class="v2-media-dialog-inner v2-generation-dialog">' +
-      '<div class="v2-media-dialog-head"><h3 data-generation-preview-title>Предпросмотр · шаг ' + Number(job.preview_step) +
+      '<div class="v2-media-dialog-head"><h3>Тестовая генерация · шаг ' + Number(job.test_pause_step) +
       ' из ' + escapeHtml(String(job.steps || 8)) + '</h3>' +
       '<button class="v2-icon-button" type="button" data-media-dialog-close aria-label="Закрыть">' + icon("x") + '</button></div>' +
-      '<div data-generation-preview-player>' + previewPlayerHtml(job, displayedPreviewStep, displayedPreviewMime) + '</div>' +
-      '<div data-generation-preview-nav>' + previewStepsHtml(job) + '</div>' +
-      '<p class="v2-generation-dialog-note">Можно сравнить шаги 2, 4, 6, 8. Кнопка «Авто» переключает на новейший предпросмотр. Tiny VAE показывает черновое изображение; финальный ролик декодируется отдельно.</p>' +
+      '<div>' + previewPlayerHtml(job) + '</div>' +
+      (job.test_audio_ready ? '<div class="v2-test-audio-preview"><strong>Черновая озвучка</strong><audio controls preload="metadata" src="/api/jobs/' + encodeURIComponent(job.id) + '/test-audio"></audio></div>' : '<p class="v2-generation-dialog-note">Черновая озвучка ещё не готова или звук отключён.</p>') +
+      '<p class="v2-generation-dialog-note">На промежуточном шаге видео Tiny VAE размыто, а озвучка может содержать шум. Для окончательной оценки нажмите «Продолжить».</p>' +
       '</div>';
     qs("[data-media-dialog-close]", dialog)?.addEventListener("click", () => dialog.close());
     dialog.showModal();
   };
 
-  const updateOpenPreviewDialog = () => {
-    if (!activePreviewJobId) return;
-    const dialog = qs("#v2-media-dialog");
-    if (!dialog?.open) return;
-    const job = (W.snapshot?.library_jobs || []).find((item) => String(item.id) === activePreviewJobId);
-    if (!job || Number(job.preview_step) < 2) return;
-    const step = Number(job.preview_step);
-    if (followLatestPreview && step > displayedPreviewStep) showPreviewStep(job, step);
-    else {
-      const nav = qs("[data-generation-preview-nav]", dialog);
-      const html = previewStepsHtml(job);
-      if (nav && nav.innerHTML !== html) nav.innerHTML = html;
-    }
+  const renderLibraryGpus = () => {
+    const root = qs("#v2-library-gpus");
+    if (!root || !W.snapshot) return;
+    const gpus = W.snapshot.system?.gpus || [];
+    root.innerHTML = [0, 1].map((index) => {
+      const gpu = gpus.find((item) => Number(item.index) === index);
+      const active = W.gpuJob(index);
+      const name = gpu?.name || (index === 0 ? "RTX 3090" : "RTX 2080 Ti");
+      const util = Math.max(0, Math.min(100, Number(gpu?.utilization) || 0));
+      const memory = gpu && Number.isFinite(Number(gpu.memory_total_mb))
+        ? (Number(gpu.memory_used_mb || 0) / 1024).toFixed(1) + " / " + (Number(gpu.memory_total_mb) / 1024).toFixed(0) + " GB"
+        : "—";
+      const footer = active
+        ? icon("users") + '<span>Пользователь: <strong>' + escapeHtml(active.user_label || active.owner_id || "—") + '</strong></span>' +
+          icon("clock") + '<span>Генерирует: <strong>' + escapeHtml(W.elapsed(active.started_at || active.created_at, W.snapshot.server_now)) + '</strong></span>'
+        : icon("clock") + '<span>Ожидает новых задач.</span>';
+      return '<article class="v2-queue-gpu' + (active ? ' busy' : '') + '">' +
+        '<div class="v2-queue-gpu-head"><span class="v2-queue-gpu-icon">' + icon("gpu") + '</span><div class="v2-queue-gpu-name"><h3>' + escapeHtml(name) + '</h3>' +
+        '<div class="v2-queue-gpu-metrics">VRAM ' + escapeHtml(memory) + ' <span>·</span> GPU ' + util + '% <span>·</span> ' + escapeHtml(gpu?.temperature == null ? '—' : gpu.temperature + '°C') + '</div></div>' +
+        '<span class="v2-queue-gpu-status">' + (active ? 'Занята' : 'Свободна') + '</span></div>' +
+        '<div class="v2-queue-utilization"><span style="width:' + util + '%"></span></div>' +
+        '<div class="v2-queue-gpu-job">' + footer + '</div></article>';
+    }).join('');
   };
 
+  const libraryJobs = () => {
+    const otherJobs = (W.snapshot?.jobs || []).filter((job) =>
+      ["generate", "editor_export"].includes(job.kind) &&
+      (job.status === "failed" || (job.kind === "editor_export" && ["queued", "running"].includes(job.status)))
+    ).map((job) => ({ ...job,
+      title: job.payload?.title || job.payload?.user_prompt || job.payload?.prompt || "Экспорт видео",
+      test_pause_step: job.payload?.test_pause_step || 0,
+      steps: job.payload?.steps || 8,
+      seconds: job.payload?.seconds || 5,
+    }));
+    return (W.snapshot?.library_jobs || []).concat(otherJobs);
+  };
+
+  const updateGenerationTimers = () => {
+    const jobs = new Map(libraryJobs().map((job) => [String(job.id), job]));
+    qsa('[data-generation-timer]', qs('#v2-library-grid') || document).forEach((node) => {
+      const job = jobs.get(String(node.dataset.generationTimer));
+      if (job) node.textContent = generationTime(job);
+    });
+  };
+  setInterval(updateGenerationTimers, 1000);
+
   const renderLibrary = () => {
+    renderLibraryGpus();
     const grid = qs("#v2-library-grid");
     const empty = qs("#v2-library-empty");
     const count = qs("#v2-library-count");
@@ -236,7 +259,7 @@
     const filtered = W.allMedia.filter((item) =>
       String(item.title || item.filename || "Видео").toLocaleLowerCase("ru-RU").includes(search)
     );
-    const generating = (W.snapshot?.library_jobs || []).filter((job) =>
+    const generating = libraryJobs().filter((job) =>
       String(job.title || "MiniMax H3").toLocaleLowerCase("ru-RU").includes(search)
     );
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -257,6 +280,7 @@
       return (
         '<article class="v2-media-card" data-media-id="' + escapeHtml(item.id) + '">' +
         '<div class="v2-media-cover"><video src="/media/' + encodeURIComponent(item.id) + '" preload="metadata" muted playsinline></video>' +
+        '<span class="v2-media-generation-time">' + icon("clock") + escapeHtml(meta.generation_seconds != null ? W.formatSeconds(meta.generation_seconds) : "—") + '</span>' +
         '<span class="v2-media-duration">' + icon("video") + escapeHtml(duration ? W.formatSeconds(duration) : "—") + '</span></div>' +
         '<div class="v2-media-card-body">' +
         "<h3>" + escapeHtml(item.title || "Видео") + "</h3>" +
@@ -278,8 +302,7 @@
       grid.innerHTML = generatingHtml + mediaHtml;
       renderedMediaHtml = mediaHtml;
     } else {
-      // Preserve both completed videos and unchanged preview <img> instances.
-      // Recreating the images on each four-second poll causes visible flicker.
+      // Preserve completed video elements while refreshing running cards.
       const existing = new Map(Array.from(grid.querySelectorAll(":scope > .v2-generation-card"))
         .map((card) => [card.dataset.previewJobId, card]));
       const template = document.createElement("template");
@@ -288,18 +311,13 @@
       for (const card of cards) {
         const old = existing.get(card.dataset.previewJobId);
         if (!old) continue;
-        const oldPoster = old.querySelector(".v2-generation-poster");
-        const newPoster = card.querySelector(".v2-generation-poster");
-        if (oldPoster && newPoster && oldPoster.getAttribute("src") === newPoster.getAttribute("src")) {
-          newPoster.replaceWith(oldPoster);
-        }
         old.replaceWith(card);
         existing.delete(card.dataset.previewJobId);
       }
       existing.forEach((card) => card.remove());
       for (let index = cards.length - 1; index >= 0; index--) grid.prepend(cards[index]);
     }
-    updateOpenPreviewDialog();
+    updateGenerationTimers();
   };
 
   qs("#v2-library-refresh")?.addEventListener("click", () => {
@@ -328,12 +346,33 @@
     if (!actionButton) return;
     const jobCard = actionButton.closest("[data-preview-job-id]");
     if (jobCard) {
-      const job = (W.snapshot?.library_jobs || []).find((item) => String(item.id) === jobCard.dataset.previewJobId);
+      const job = libraryJobs().find((item) => String(item.id) === jobCard.dataset.previewJobId);
       if (!job) return;
       if (actionButton.dataset.libraryAction === "preview") {
         openPreviewDialog(job);
+      } else if (actionButton.dataset.libraryAction === "retry" || actionButton.dataset.libraryAction === "dismiss") {
+        actionButton.disabled = true;
+        try {
+          const retry = actionButton.dataset.libraryAction === "retry";
+          await fetchJson("/api/jobs/" + encodeURIComponent(job.id) + (retry ? "/retry" : ""), { method: retry ? "POST" : "DELETE" });
+          showToast(retry ? "Повторная задача запущена." : "Запись об ошибке удалена.");
+          await W.refreshState({ silent: true });
+        } catch (error) {
+          showToast("Не удалось выполнить действие: " + error.message, "error");
+          actionButton.disabled = false;
+        }
+      } else if (actionButton.dataset.libraryAction === "continue") {
+        actionButton.disabled = true;
+        try {
+          await fetchJson("/api/jobs/" + encodeURIComponent(job.id) + "/continue", { method: "POST" });
+          showToast("Тестовая генерация продолжена.");
+          await W.refreshState({ silent: true });
+        } catch (error) {
+          showToast("Не удалось продолжить: " + error.message, "error");
+          actionButton.disabled = false;
+        }
       } else if (actionButton.dataset.libraryAction === "cancel") {
-        if (!confirm("Отменить генерацию? Карточка и предпросмотр исчезнут из Библиотеки.")) return;
+        if (!confirm("Отменить генерацию? Карточка исчезнет из Библиотеки.")) return;
         actionButton.disabled = true;
         try {
           await fetchJson("/api/jobs/" + encodeURIComponent(job.id) + "/cancel", { method: "POST" });
@@ -373,22 +412,7 @@
   });
 
   qs("#v2-media-dialog")?.addEventListener("click", (event) => {
-    const stepButton = event.target.closest("[data-generation-step]");
-    const followButton = event.target.closest("[data-generation-follow]");
-    if ((stepButton || followButton) && activePreviewJobId) {
-      const job = (W.snapshot?.library_jobs || []).find((item) => String(item.id) === activePreviewJobId);
-      if (!job) return;
-      followLatestPreview = Boolean(followButton);
-      showPreviewStep(job, followButton ? Number(job.preview_step) : Number(stepButton.dataset.generationStep));
-      return;
-    }
     if (event.target === event.currentTarget) event.currentTarget.close();
-  });
-  qs("#v2-media-dialog")?.addEventListener("close", () => {
-    activePreviewJobId = null;
-    displayedPreviewStep = 0;
-    displayedPreviewMime = "";
-    followLatestPreview = true;
   });
 
   window.addEventListener("v2:datarefresh", renderLibrary);

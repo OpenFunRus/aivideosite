@@ -253,6 +253,7 @@
 
   const createForm = qs("#v2-create-form");
   const generateButton = qs("#v2-generate");
+  const testButton = qs("#v2-test-generate");
   const generateLabel = qs(".v2-generate-label", generateButton || document);
   const createWarning = qs("#v2-create-warning");
   const firstFrameInput = qs("#v2-first-frame");
@@ -260,6 +261,9 @@
   const gpuDialog = qs("#v2-gpu-dialog");
   const gpuDialogClose = qs("[data-v2-gpu-close]", gpuDialog || document);
   const gpuButtons = Array.from(gpuDialog?.querySelectorAll("[data-v2-gpu-target]") || []);
+  const testStepChoice = qs("#v2-test-step-choice");
+  const testStepInput = qs("#v2-test-step");
+  let testMode = false;
   let gpuPollTimer = null, gpuSubmitting = false;
   const createHasFrames=()=>Boolean(firstFrameInput?.files?.length||lastFrameInput?.files?.length);
   const updateCreateCompatibility=()=>{
@@ -275,7 +279,15 @@
   const refreshGpuSlots=async()=>{if(!gpuDialog?.open)return;try{const d=await fetchJson("/api/v2/gpu-slots");renderGpuSlots(d?.slots||[]);}catch{renderGpuSlots([]);}};
   const stopGpuPolling=()=>{if(gpuPollTimer)clearInterval(gpuPollTimer);gpuPollTimer=null;};
   const closeGpuDialog=()=>{stopGpuPolling();if(gpuDialog?.open)gpuDialog.close();};
-  const openGpuDialog=async()=>{if(!gpuDialog){showToast("Окно выбора GPU недоступно.","error");return;}gpuSubmitting=false;renderGpuSlots([]);gpuDialog.showModal();await refreshGpuSlots();stopGpuPolling();gpuPollTimer=setInterval(refreshGpuSlots,1000);};
+  const openGpuDialog=async(asTest=false)=>{if(!gpuDialog){showToast("Окно выбора GPU недоступно.","error");return;}testMode=asTest;gpuSubmitting=false;renderGpuSlots([]);
+    const maximum=Math.max(1,Number(state.draft.steps)||8);
+    if(testStepInput){testStepInput.max=String(maximum);testStepInput.value=String(Math.min(maximum,Math.max(1,Math.round(maximum*.75))));}
+    if(testStepChoice)testStepChoice.hidden=!asTest;
+    if(qs("#v2-test-step-max"))qs("#v2-test-step-max").textContent=String(maximum);
+    if(qs("#v2-test-step-value"))qs("#v2-test-step-value").textContent=testStepInput?.value||"—";
+    if(qs("#v2-gpu-dialog-title"))qs("#v2-gpu-dialog-title").textContent=asTest?"Тестовая генерация · выбор GPU":"Выберите видеокарту";
+    gpuDialog.showModal();await refreshGpuSlots();stopGpuPolling();gpuPollTimer=setInterval(refreshGpuSlots,1000);};
+  testStepInput?.addEventListener("input",()=>{const el=qs("#v2-test-step-value");if(el)el.textContent=testStepInput.value;});
   const validateCreateRequest=()=>{
     updateCreateCompatibility();const sourcePrompt=prompt?.value.trim()||"";if(!sourcePrompt){showToast("Сначала напишите prompt.","error");prompt?.focus();return null;}
     const audioSubmission=window.AIVideoV2Workspaces?.audioSubmission?.()||{enabled:false};
@@ -286,17 +298,19 @@
     if(gpuSubmitting)return;gpuSubmitting=true;gpuButtons.forEach(b=>b.disabled=true);const sn=gpuStateNode(sourceButton);if(sn)sn.textContent="Резервируем GPU…";
     const {sourcePrompt,audioSubmission}=req,formData=new FormData();
     formData.set("prompt",sourcePrompt);formData.set("quality",state.draft.quality);formData.set("ratio",state.draft.ratio);formData.set("seconds",state.draft.seconds);formData.set("steps",state.draft.steps);formData.set("seed",state.draft.seed.trim());formData.set("gpu_target",gpuTarget);
+    formData.set("test_pause_step",testMode?String(testStepInput?.value||"1"):"0");
     formData.set("character_ids",JSON.stringify(Array.from(state.selectedCharacterIds)));formData.set("location_ids",JSON.stringify(Array.from(state.selectedLocationIds)));formData.set("misc_ids",JSON.stringify(Array.from(state.selectedMiscIds)));
     if(firstFrameInput?.files?.[0])formData.set("first_frame",firstFrameInput.files[0]);if(lastFrameInput?.files?.[0])formData.set("last_frame",lastFrameInput.files[0]);
     let endpoint="/api/v2/generate";
     if(audioSubmission.enabled){endpoint="/api/v2/audio";formData.set("track_id",audioSubmission.trackId||"");if(audioSubmission.uploadedAudio)formData.set("audio",audioSubmission.uploadedAudio);formData.set("audio_start",String(audioSubmission.audioStart??0));formData.set("embed_track",audioSubmission.embedTrack?"true":"false");formData.set("generate_scene_audio",audioSubmission.generateSceneAudio?"true":"false");}
     else{formData.set("generate_audio",state.draft.audio?"true":"false");formData.set("muted_character_ids",JSON.stringify(api.mutedCharacterIds?.()||[]));}
-    if(generateButton){generateButton.disabled=true;generateButton.classList.add("is-loading");}if(generateLabel)generateLabel.textContent="Добавляем в очередь…";
-    try{const result=await fetchJson(endpoint,{method:"POST",body:formData});const id=String(result?.job_id||"").slice(0,8),r=result?.v2,res=r?.width&&r?.height?" · "+r.width+"×"+r.height:"",name=gpuTarget==="rtx2080"?"RTX2080":"RTX3090";showToast("Задача запущена на "+name+(id?" · "+id:"")+res);closeGpuDialog();api.setView?.("queue");setTimeout(()=>api.refreshSystem?.(),500);}
+    if(generateButton){generateButton.disabled=true;generateButton.classList.add("is-loading");}if(testButton)testButton.disabled=true;if(generateLabel)generateLabel.textContent="Запускаем…";
+    try{const result=await fetchJson(endpoint,{method:"POST",body:formData});const id=String(result?.job_id||"").slice(0,8),r=result?.v2,res=r?.width&&r?.height?" · "+r.width+"×"+r.height:"",name=gpuTarget==="rtx2080"?"RTX2080":"RTX3090";showToast((testMode?"Тестовая задача":"Генерация")+" запущена на "+name+(id?" · "+id:"")+res);closeGpuDialog();api.setView?.("library");await window.AIVideoV2Workspaces?.refreshState?.({silent:true});}
     catch(error){showToast("Не удалось запустить генерацию: "+error.message,"error");}
-    finally{gpuSubmitting=false;generateButton?.classList.remove("is-loading");if(generateLabel)generateLabel.textContent="Сгенерировать видео";updateCreateCompatibility();if(gpuDialog?.open)await refreshGpuSlots();}
+    finally{gpuSubmitting=false;generateButton?.classList.remove("is-loading");if(testButton)testButton.disabled=false;if(generateLabel)generateLabel.textContent="Сгенерировать видео";updateCreateCompatibility();if(gpuDialog?.open)await refreshGpuSlots();}
   };
-  createForm?.addEventListener("submit",async e=>{e.preventDefault();const req=validateCreateRequest();if(req)await openGpuDialog();});
+  createForm?.addEventListener("submit",async e=>{e.preventDefault();const req=validateCreateRequest();if(req)await openGpuDialog(false);});
+  testButton?.addEventListener("click",async()=>{const req=validateCreateRequest();if(req)await openGpuDialog(true);});
   gpuButtons.forEach(b=>b.addEventListener("click",async()=>{if(b.disabled||gpuSubmitting)return;const req=validateCreateRequest();if(!req){closeGpuDialog();return;}await submitCreate(String(b.dataset.v2GpuTarget||""),req,b);}));
   gpuDialogClose?.addEventListener("click",closeGpuDialog);gpuDialog?.addEventListener("close",stopGpuPolling);gpuDialog?.addEventListener("cancel",()=>{if(!gpuSubmitting)stopGpuPolling();});
 

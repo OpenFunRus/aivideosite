@@ -108,6 +108,9 @@ def init_db() -> None:
                 preview_step INTEGER NOT NULL DEFAULT 0,
                 preview_mime TEXT,
                 preview_enabled INTEGER NOT NULL DEFAULT 0,
+                test_paused INTEGER NOT NULL DEFAULT 0,
+                test_paused_at TEXT,
+                test_paused_seconds REAL NOT NULL DEFAULT 0,
                 FOREIGN KEY(result_media_id) REFERENCES media(id) ON DELETE SET NULL
             );
 
@@ -161,6 +164,12 @@ def _ensure_jobs_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE jobs ADD COLUMN preview_mime TEXT")
     if "preview_enabled" not in columns:
         conn.execute("ALTER TABLE jobs ADD COLUMN preview_enabled INTEGER NOT NULL DEFAULT 0")
+    if "test_paused" not in columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN test_paused INTEGER NOT NULL DEFAULT 0")
+    if "test_paused_at" not in columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN test_paused_at TEXT")
+    if "test_paused_seconds" not in columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN test_paused_seconds REAL NOT NULL DEFAULT 0")
 
 
 def _ensure_owner_columns(conn: sqlite3.Connection) -> None:
@@ -200,6 +209,15 @@ def _ensure_reference_name_columns(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE characters ADD COLUMN voice_name TEXT")
 
 
+def interrupted_test_pauses() -> list[str]:
+    """Identify blocked samplers before startup resets their persisted state."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT id FROM jobs WHERE status='running' AND test_paused=1"
+        ).fetchall()
+    return [str(row["id"]) for row in rows]
+
+
 def recover_interrupted_jobs() -> int:
     with connect() as conn:
         cur = conn.execute(
@@ -214,6 +232,9 @@ def recover_interrupted_jobs() -> int:
                    preview_step=0,
                    preview_mime=NULL,
                    preview_enabled=0,
+                   test_paused=0,
+                   test_paused_at=NULL,
+                   test_paused_seconds=0,
                    error=NULL
              WHERE status='running'
             """
@@ -293,7 +314,8 @@ def claim_next_job(
         if row is None:conn.execute("COMMIT"); return None
         started_at=utcnow()
         conn.execute("""UPDATE jobs SET status='running',stage='Запуск',progress=1,started_at=?,external_id=NULL,
-                        cancel_requested=0,preview_step=0,preview_mime=NULL,preview_enabled=0,error=NULL WHERE id=?""",(started_at,row["id"]))
+                        cancel_requested=0,preview_step=0,preview_mime=NULL,preview_enabled=0,
+                        test_paused=0,test_paused_at=NULL,test_paused_seconds=0,error=NULL WHERE id=?""",(started_at,row["id"]))
         conn.execute("COMMIT")
     result=_decode_job(row); result["status"]="running"; result["started_at"]=started_at; result["cancel_requested"]=0
     return result
@@ -348,6 +370,36 @@ def set_preview_enabled(job_id: str, enabled: bool) -> None:
             "UPDATE jobs SET preview_enabled=? WHERE id=? AND status='running' AND cancel_requested=0",
             (int(enabled), job_id),
         )
+
+
+def set_test_paused(job_id: str, paused: bool, step: int = 0) -> bool:
+    """Change the pause flag atomically and account for time spent waiting."""
+    now = utcnow()
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT test_paused,test_paused_at FROM jobs WHERE id=? AND status='running' AND cancel_requested=0",
+            (job_id,),
+        ).fetchone()
+        if row is None or bool(row["test_paused"]) == bool(paused):
+            conn.execute("COMMIT")
+            return False
+        if paused:
+            conn.execute(
+                "UPDATE jobs SET test_paused=1,test_paused_at=?,stage=? WHERE id=?",
+                (now, f"Тест · пауза после шага {step}", job_id),
+            )
+        else:
+            waited = 0.0
+            if row["test_paused_at"]:
+                waited = max(0.0, (datetime.fromisoformat(now) - datetime.fromisoformat(row["test_paused_at"])).total_seconds())
+            conn.execute(
+                """UPDATE jobs SET test_paused=0,test_paused_at=NULL,
+                   test_paused_seconds=test_paused_seconds+?,stage='Тест · продолжение генерации' WHERE id=?""",
+                (waited, job_id),
+            )
+        conn.execute("COMMIT")
+    return True
 
 
 def request_cancel(

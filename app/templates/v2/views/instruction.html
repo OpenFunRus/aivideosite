@@ -4,7 +4,7 @@
       <div>
         <span class="v2-kicker">AI VIDEO SITE · АКТУАЛЬНАЯ ИНСТРУКЦИЯ</span>
         <h2>Как работать с сайтом и MiniMax H3</h2>
-        <p>Практическая инструкция для текущего сайта: единый генератор Видео с опциональной аудиодорожкой, библиотека, очередь, монтаж, чат, система и prompting guide для MiniMax H3 Video.</p>
+        <p>Практическая инструкция: обычная и тестовая генерация с паузой, Библиотека с загрузкой GPU и прогрессом, монтаж, чат, система и prompting guide для MiniMax H3 Video.</p>
         <div class="v2-instruction-tags">
           <span>Current</span><span>H3 Video</span><span>5 / 10 / 15 сек</span><span>Characters</span><span>Audio workflow</span>
         </div>
@@ -42,7 +42,7 @@
         <article><b>2</b><strong>Опишите сцену обычными словами</strong><p>Кто в кадре, что делает по порядку, как движется камера, нужен ли звук. Не обязательно вручную писать H3-разметку.</p></article>
         <article><b>3</b><strong>Нажмите волшебную палочку</strong><p>Gemma соберёт правильные три H3-поля, Shot-тайминг и сохранит точные реплики на исходном языке.</p></article>
         <article><b>4</b><strong>Проверьте настройки</strong><p>Качество, формат, 5/10/15 секунд, 8/12/16 шагов, Seed и звук. Палочка сама их не меняет.</p></article>
-        <article><b>5</b><strong>Сгенерируйте и следите в «Очереди»</strong><p>Задача уйдёт на одну из двух GPU. Готовый результат появится в «Библиотеке».</p></article>
+        <article><b>5</b><strong>Запустите и следите в «Библиотеке»</strong><p>Выберите RTX3090/RTX2080 и запустите обычный рендер или тест с остановкой на выбранном проходе. Весь процесс и итоговый ролик видны в «Библиотеке».</p></article>
       </div>
     </section>
 
@@ -52,16 +52,15 @@
         <div><h3>Что делает каждый раздел</h3><p>Описание соответствует текущему основному интерфейсу.</p></div>
       </div>
       <div class="v2-site-guide-grid">
-        <article><span>01</span><h4>Видео</h4><p>Единый генератор: обычный H3 Video или Digital Human с driving audio. Master track без visual input используется для финального mux; с First/Last или выбранным визуальным пресетом становится driving audio. В этом режиме First/Last остаются точными native Timeline Guides.</p><small>480 / 720 / 1080 · 1:1 / 16:9 / 9:16 · 5 / 10 / 15 сек · опциональный master track</small></article>
-        <article><span>02</span><h4>Библиотека</h4><p>Готовые ролики: открыть, скачать, извлечь стартовый или финальный кадр в PNG, удалить. Для продолжения экспортируйте финальный кадр и используйте его как First Frame в «Видео».</p><small>Стартовый кадр · Финальный кадр · поиск</small></article>
-        <article><span>03</span><h4>Очередь</h4><p>RTX 3090 / RTX 2080 Ti и rolling log последних 20 задач. Пагинации и ручного удаления строк нет.</p><small>Stop · Result · Retry · автоочистка старых записей</small></article>
-        <article><span>04</span><h4>Монтаж</h4><p>Библиотека, viewer, inspector, ruler/playhead и timeline. Реальный export: последовательная Video-дорожка + одна Music-дорожка.</p><small>Trim · split · drag · delete · fades · undo/redo · FFmpeg</small></article>
-        <article><span>05</span><h4>Чат с ИИ</h4><p>Локальная Gemma4 26B A4B Heretic для общения, идей, вопросов и советов. Он не меняет формы сам.</p><small>Streaming · Thinking · 128k</small></article>
-        <article><span>06</span><h4>Система</h4><p>GPU, VRAM, температура, Gemma, два ComfyUI, RAM/CPU, диск и графики.</p><small>Автообновление 5 / 10 / 15 / 30 сек</small></article>
-        <article><span>07</span><h4>Персонажи</h4><p>1–4 изображения внешности, описание и опциональный голос. Синий badge показывает число выбранных персонажей.</p><small>Identity refs · voice refs · mute voice</small></article>
-        <article><span>08</span><h4>Локации</h4><p>1–4 изображения окружения и собственный prompt. Красный badge показывает число выбранных локаций.</p><small>Setting refs · архитектура · свет · continuity</small></article>
-        <article><span>09</span><h4>Прочее</h4><p>Reusable semantic presets для предметов, экипировки, транспорта, существ, особенностей окружения, визуальных traits, поз/действий и стиля.</p><small>Misc semantic refs · category-aware role</small></article>
-        <article><span>10</span><h4>Инструкция</h4><p>Актуальное описание сайта и H3 guide с копированием контекста для другого ChatGPT.</p><small>Текущий рабочий контекст</small></article>
+        <article><span>01</span><h4>Видео</h4><p>Единый генератор: обычный H3 Video или Digital Human с driving audio. Для теста нажмите «Тестовая генерация», выберите GPU и проход остановки от 1 до максимума. Master track с First/Last или пресетом становится driving audio.</p><small>480 / 720 / 1080 · 1:1 / 16:9 / 9:16 · 5 / 10 / 15 сек · тестовый проход</small></article>
+        <article><span>02</span><h4>Библиотека</h4><p>Здесь показаны обе GPU, активные генерации и экспорт, проценты, время рендера и готовые ролики. Во время тестовой паузы можно посмотреть черновое видео, послушать звук, продолжить или отменить генерацию. Финальные ролики можно скачать и извлечь первый/последний кадр.</p><small>GPU · Пауза/Продолжить · Время генерации · Поиск</small></article>
+        <article><span>03</span><h4>Монтаж</h4><p>Библиотека, viewer, inspector, ruler/playhead и timeline. Реальный export: последовательная Video-дорожка + одна Music-дорожка.</p><small>Trim · split · drag · delete · fades · undo/redo · FFmpeg</small></article>
+        <article><span>04</span><h4>Чат с ИИ</h4><p>Локальная Gemma4 26B A4B Heretic для общения, идей, вопросов и советов. Он не меняет формы сам.</p><small>Streaming · Thinking · 128k</small></article>
+        <article><span>05</span><h4>Система</h4><p>GPU, VRAM, температура, Gemma, два ComfyUI, RAM/CPU, диск и графики.</p><small>Автообновление 5 / 10 / 15 / 30 сек</small></article>
+        <article><span>06</span><h4>Персонажи</h4><p>1–4 изображения внешности, описание и опциональный голос. Синий badge показывает число выбранных персонажей.</p><small>Identity refs · voice refs · mute voice</small></article>
+        <article><span>07</span><h4>Локации</h4><p>1–4 изображения окружения и собственный prompt. Красный badge показывает число выбранных локаций.</p><small>Setting refs · архитектура · свет · continuity</small></article>
+        <article><span>08</span><h4>Прочее</h4><p>Reusable semantic presets для предметов, экипировки, транспорта, существ, особенностей окружения, визуальных traits, поз/действий и стиля.</p><small>Misc semantic refs · category-aware role</small></article>
+        <article><span>09</span><h4>Инструкция</h4><p>Актуальное описание сайта и H3 guide с копированием контекста для другого ChatGPT.</p><small>Текущий рабочий контекст</small></article>
       </div>
     </section>
 

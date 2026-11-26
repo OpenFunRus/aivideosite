@@ -155,9 +155,9 @@
     if (button) button.disabled = true;
     try {
       const result = await fetchJson(url, { method: "POST", body: formData });
-      showToast("Задача добавлена в очередь · " + String(result.job_id || "").slice(0, 8));
+      showToast("Задача запущена · " + String(result.job_id || "").slice(0, 8));
       await W.refreshState({ silent: true });
-      api.setView?.("queue");
+      api.setView?.("library");
       return result;
     } catch (error) {
       showToast("Не удалось запустить: " + error.message, "error");

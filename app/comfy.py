@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import math
+import re
 import secrets
 import shutil
 import time
@@ -20,6 +22,8 @@ from .config import settings
 ProgressCallback = Callable[[float, str], None]
 PreviewCallback = Callable[[int, str, bytes], None]
 PreviewStatusCallback = Callable[[bool], None]
+PauseCallback = Callable[[int], None]
+AudioPreviewCallback = Callable[[bytes], None]
 logger = logging.getLogger(__name__)
 PromptIdCallback = Callable[[str], None]
 CancelCallback = Callable[[], bool]
@@ -54,6 +58,8 @@ class ComfyUIClient:
         progress: ProgressCallback,
         on_preview: PreviewCallback | None = None,
         on_preview_status: PreviewStatusCallback | None = None,
+        on_pause: PauseCallback | None = None,
+        on_test_audio: AudioPreviewCallback | None = None,
         on_prompt_id: PromptIdCallback | None = None,
         should_cancel: CancelCallback | None = None,
     ) -> dict[str, Any]:
@@ -149,7 +155,18 @@ class ComfyUIClient:
 
         try:
             client_id = uuid.uuid4().hex
-            enable_preview = on_preview is not None and self._h3_preview_ready()
+            test_step = int(payload.get("test_pause_step") or 0)
+            enable_preview = test_step > 0 and on_preview is not None and self._h3_preview_ready()
+            if test_step:
+                if not self._comfy_node_available("AIVideoTestPause"):
+                    raise ComfyUIError("Не установлен AIVideoTestPause. Запустите scripts/setup_h3_test_pause.sh на Ubuntu и перезапустите ComfyUI.")
+                if not enable_preview:
+                    raise ComfyUIError("Для тестового просмотра необходим MiniMaxH3PreviewOverride.")
+                if payload.get("generate_audio") and not self._comfy_node_available("MiniMaxH3AudioPreviewCS"):
+                    raise ComfyUIError("Не установлен MiniMaxH3AudioPreviewCS. Запустите scripts/setup_h3_test_pause.sh и перезапустите ComfyUI.")
+                self._test_control_dir().mkdir(parents=True, exist_ok=True)
+                for action in ("resume", "cancel"):
+                    (self._test_control_dir() / f"{job_id}.{action}").unlink(missing_ok=True)
             enable_run_nonce = self._h3_run_nonce_ready()
             if not enable_run_nonce:
                 logger.warning(
@@ -180,6 +197,8 @@ class ComfyUIClient:
                 )
             except Exception:
                 ws = None
+            if test_step and ws is None:
+                raise ComfyUIError("Тестовая пауза требует активного WebSocket-соединения с ComfyUI.")
 
             response = self.session.post(
                 f"{self.base_url}/prompt",
@@ -205,15 +224,33 @@ class ComfyUIClient:
                 raise ComfyUICancelled("Generation cancelled.")
 
             progress(10, "H3: подготовка модели")
+            pause_observed = False
+
+            def report_test_pause(step: int) -> None:
+                nonlocal pause_observed
+                if step != test_step:
+                    raise ComfyUIError(f"Неожиданный тестовый проход: {step} вместо {test_step}")
+                pause_observed = True
+                if on_pause is not None:
+                    on_pause(step)
+
             if ws is not None:
                 try:
                     self._wait_websocket(
                         ws, prompt_id, progress, should_cancel,
                         on_preview=on_preview if enable_preview else None,
+                        on_pause=report_test_pause if test_step else None,
+                        on_test_audio=on_test_audio if test_step else None,
+                        test_step=test_step,
+                        test_job_id=job_id,
                     )
                 except ComfyUICancelled:
                     raise
                 except Exception:
+                    if test_step:
+                        self.control_test_pause(job_id, "cancel")
+                        self.cancel_prompt(str(prompt_id))
+                        raise
                     # WebSocket is only for responsive progress. History polling
                     # remains the source of truth and keeps jobs robust.
                     pass
@@ -222,6 +259,11 @@ class ComfyUIClient:
                         ws.close()
                     except Exception:
                         pass
+
+            if test_step and not pause_observed:
+                self.control_test_pause(job_id, "cancel")
+                self.cancel_prompt(str(prompt_id))
+                raise ComfyUIError("ComfyUI завершил тестовый workflow, но не сообщил о запрошенной паузе.")
 
             history = self._wait_history(prompt_id, progress, should_cancel=should_cancel)
             output = self._find_video_output(history)
@@ -245,8 +287,22 @@ class ComfyUIClient:
                 shutil.rmtree(staging_dir, ignore_errors=True)
             return result
         finally:
+            if int(payload.get("test_pause_step") or 0):
+                for action in ("resume", "cancel"):
+                    (self._test_control_dir() / f"{job_id}.{action}").unlink(missing_ok=True)
             if staging_dir is not None:
                 shutil.rmtree(staging_dir, ignore_errors=True)
+
+    @staticmethod
+    def _test_control_dir() -> Path:
+        return settings.temp_dir / "h3_test_pauses"
+
+    def control_test_pause(self, job_id: str, action: str) -> None:
+        if action not in {"resume", "cancel"} or not re.fullmatch(r"[0-9a-f]{32}", job_id):
+            raise ValueError("Invalid test control request")
+        folder = self._test_control_dir()
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{job_id}.{action}").touch()
 
     def free_memory(self) -> bool:
         """Ask ComfyUI to unload all models and release cached GPU memory."""
@@ -726,6 +782,32 @@ class ComfyUIClient:
             }
             model_for_sampling = ["35", 0]
 
+        test_step = int(payload.get("test_pause_step") or 0)
+        if test_step:
+            if payload.get("generate_audio"):
+                workflow["38"] = {
+                    "class_type": "MiniMaxH3AudioPreviewCS",
+                    "inputs": {
+                        "model": model_for_sampling,
+                        "audio_vae": ["13", 3],
+                        "window_seconds": min(5.0, float(payload.get("seconds") or 5)),
+                        "start_at_percent": math.floor(test_step * 100 / steps),
+                        "every_n_steps": 1,
+                        "max_preview_overhead": 0,
+                    },
+                }
+                model_for_sampling = ["38", 0]
+            workflow["37"] = {
+                "class_type": "AIVideoTestPause",
+                "inputs": {
+                    "model": model_for_sampling,
+                    "job_id": job_id,
+                    "pause_step": test_step,
+                    "control_dir": str(self._test_control_dir().resolve()),
+                },
+            }
+            model_for_sampling = ["37", 0]
+
         workflow["5"]["inputs"]["model"] = model_for_sampling
         if staged_guides:
             workflow["32"]["inputs"]["model"] = model_for_sampling
@@ -741,6 +823,10 @@ class ComfyUIClient:
         progress: ProgressCallback,
         should_cancel: CancelCallback | None = None,
         on_preview: PreviewCallback | None = None,
+        on_pause: PauseCallback | None = None,
+        on_test_audio: AudioPreviewCallback | None = None,
+        test_step: int = 0,
+        test_job_id: str = "",
     ) -> None:
         ws.settimeout(2)
         while True:
@@ -763,13 +849,32 @@ class ComfyUIClient:
             event_type = data.get("type")
             event_data = data.get("data") or {}
 
+            if event_type == "aivideosite_test_pause" and on_pause:
+                if str(event_data.get("job_id") or "") == test_job_id:
+                    on_pause(int(event_data.get("step") or 0))
+                continue
+
+            if event_type == "minimax_h3_audio_preview" and on_test_audio:
+                if (str(event_data.get("node_id") or "") == "38"
+                        and int(event_data.get("step") or 0) == test_step):
+                    path = str(event_data.get("url") or "")
+                    parsed = urlparse(path)
+                    if parsed.path == "/minimax_h3/audio_preview" and not parsed.netloc and not parsed.scheme:
+                        try:
+                            response = self.session.get(self.base_url + path, timeout=20)
+                            if response.ok and len(response.content) <= 8 * 1024 * 1024:
+                                on_test_audio(response.content)
+                        except requests.RequestException as exc:
+                            logger.warning("H3 test audio preview unavailable: %s", exc)
+                continue
+
             if event_type == "minimax_h3_preview_override" and on_preview:
                 try:
                     step = int(event_data.get("step") or 0)
                     mime = str(event_data.get("mime") or "")
                     encoded = event_data.get("image")
                     if (
-                        step >= 2 and step % 2 == 0
+                        step >= 1 and (not test_step or step == test_step)
                         and mime in {"video/mp4", "image/webp", "image/jpeg"}
                         and isinstance(encoded, str) and len(encoded) <= 12_000_000
                     ):

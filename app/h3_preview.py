@@ -24,12 +24,13 @@ PREVIEW_MIME_EXTENSIONS = {
 PREVIEW_ROOT = settings.temp_dir / "h3_previews"
 MAX_PREVIEW_BYTES = 8 * 1024 * 1024
 MAX_POSTER_BYTES = 2 * 1024 * 1024
+MAX_AUDIO_BYTES = 8 * 1024 * 1024
 _JOB_ID_RE = re.compile(r"[0-9a-f]{32}\Z")
 logger = logging.getLogger(__name__)
 
 
 def _valid_step(step: int) -> bool:
-    return isinstance(step, int) and 2 <= step <= 24 and step % 2 == 0
+    return isinstance(step, int) and 1 <= step <= 24
 
 
 def preview_path(job_id: str, mime: str, step: int) -> Path | None:
@@ -45,6 +46,31 @@ def preview_poster_path(job_id: str, step: int) -> Path | None:
     return PREVIEW_ROOT / f"{job_id}.step{step}.poster.jpg"
 
 
+def test_audio_path(job_id: str) -> Path | None:
+    if not _JOB_ID_RE.fullmatch(job_id):
+        return None
+    return PREVIEW_ROOT / f"{job_id}.test.wav"
+
+
+def save_test_audio(job_id: str, content: bytes) -> bool:
+    target = test_audio_path(job_id)
+    if (target is None or len(content) < 44 or len(content) > MAX_AUDIO_BYTES
+            or content[:4] != b"RIFF" or content[8:12] != b"WAVE"):
+        return False
+    job = db.get_job(job_id)
+    if (not job or job.get("status") != "running" or job.get("cancel_requested")
+            or not job.get("payload", {}).get("test_pause_step")):
+        return False
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp = target.with_name(f"{target.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temp.write_bytes(content)
+        os.replace(temp, target)
+        return True
+    finally:
+        temp.unlink(missing_ok=True)
+
+
 def find_job_preview(job_id: str, step: int) -> tuple[Path, str] | None:
     for mime in PREVIEW_MIME_EXTENSIONS:
         path = preview_path(job_id, mime, step)
@@ -55,7 +81,7 @@ def find_job_preview(job_id: str, step: int) -> tuple[Path, str] | None:
 
 def list_job_previews(job_id: str, latest_step: int) -> list[dict[str, str | int]]:
     result: list[dict[str, str | int]] = []
-    for step in range(2, min(max(0, int(latest_step)), 24) + 1, 2):
+    for step in range(1, min(max(0, int(latest_step)), 24) + 1):
         item = find_job_preview(job_id, step)
         if item is not None:
             result.append({"step": step, "mime": item[1]})
@@ -108,7 +134,7 @@ def _make_preview_poster(mime: str, content: bytes) -> bytes | None:
 
 
 def save_job_preview(job_id: str, step: int, mime: str, content: bytes) -> bool:
-    """Store separate immutable even-step previews; never publish cancelled work."""
+    """Store immutable test-step previews; never publish cancelled work."""
     target = preview_path(job_id, mime, step)
     poster_target = preview_poster_path(job_id, step)
     if target is None or poster_target is None or not _valid_content(mime, content):
@@ -147,7 +173,7 @@ def save_job_preview(job_id: str, step: int, mime: str, content: bytes) -> bool:
 
 
 def cleanup_job_preview(job_id: str) -> None:
-    for step in range(2, 25, 2):
+    for step in range(1, 25):
         for mime in PREVIEW_MIME_EXTENSIONS:
             path = preview_path(job_id, mime, step)
             if path is not None:
@@ -155,6 +181,9 @@ def cleanup_job_preview(job_id: str) -> None:
         poster = preview_poster_path(job_id, step)
         if poster is not None:
             poster.unlink(missing_ok=True)
+    audio = test_audio_path(job_id)
+    if audio is not None:
+        audio.unlink(missing_ok=True)
 
 
 def cleanup_stale_previews() -> None:

@@ -205,11 +205,12 @@
         <div class="v2-generate-row"><button class="v2-primary-button" id="v2-generate" type="submit">
             <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
             <span class="v2-generate-label">Сгенерировать видео</span>
-          </button></div>
+          </button><button class="v2-secondary-button v2-test-generate-button" id="v2-test-generate" type="button"><svg class="icon"><use href="/static/icons.svg#icon-bolt"></use></svg>Тестовая генерация</button></div>
       </form>
       <dialog class="v2-gpu-dialog" id="v2-gpu-dialog">
         <div class="v2-gpu-dialog-card">
-          <div class="v2-gpu-dialog-head"><div><span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span><div><strong>Выберите видеокарту</strong><small>Кнопки обновляются автоматически. Занятая генерацией или ответом Gemma карта недоступна.</small></div></div><button class="v2-icon-button v2-gpu-dialog-close" type="button" data-v2-gpu-close aria-label="Закрыть"><svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button></div>
+          <div class="v2-gpu-dialog-head"><div><span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span><div><strong id="v2-gpu-dialog-title">Выберите видеокарту</strong><small>Кнопки обновляются автоматически. Занятая генерацией или ответом Gemma карта недоступна.</small></div></div><button class="v2-icon-button v2-gpu-dialog-close" type="button" data-v2-gpu-close aria-label="Закрыть"><svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button></div>
+          <div class="v2-test-step-choice" id="v2-test-step-choice" hidden><label for="v2-test-step">Остановиться после прохода <strong id="v2-test-step-value">4</strong> из <strong id="v2-test-step-max">8</strong></label><input id="v2-test-step" type="range" min="1" max="8" step="1" value="4"><small>На выбранном шаге генерация остановится. В Библиотеке можно посмотреть черновое видео и продолжить работу.</small></div>
           <div class="v2-gpu-choice-grid">
             <button class="v2-gpu-choice" type="button" data-v2-gpu-target="rtx3090" disabled><span class="v2-gpu-choice-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span><span class="v2-gpu-choice-copy"><strong>RTX3090</strong><small>24 GB · основная</small></span><span class="v2-gpu-choice-state" data-v2-gpu-state>Проверка…</span></button>
             <button class="v2-gpu-choice" type="button" data-v2-gpu-target="rtx2080" disabled><span class="v2-gpu-choice-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span><span class="v2-gpu-choice-copy"><strong>RTX2080</strong><small>22 GB · дополнительная</small></span><span class="v2-gpu-choice-state" data-v2-gpu-state>Проверка…</span></button>

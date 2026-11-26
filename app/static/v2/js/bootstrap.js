@@ -10,7 +10,9 @@
   const hashView = location.hash.replace(/^#/, "");
   const storedView = localStorage.getItem(api.keys.view) || "";
   const initialView =
+    hashView === "queue" ? "library" :
     api.titleMap?.[hashView] ? hashView :
+    storedView === "queue" ? "library" :
     api.titleMap?.[storedView] ? storedView :
     "create";
 
@@ -23,7 +25,7 @@
 
   window.addEventListener("v2:viewchange", (event) => {
     const view = event.detail?.view || "create";
-    if (["library", "queue", "editor", "system"].includes(view)) {
+    if (["library", "editor", "system"].includes(view)) {
       W.refreshState({ silent: true });
     }
   });
@@ -31,8 +33,8 @@
   setInterval(() => api.refreshSystem?.(), 8000);
   setInterval(() => {
     const view = api.state.view;
-    if (view === "queue" || view === "library") {
-      W.refreshState({ silent: true, includeMedia: view === "library" });
+    if (view === "library") {
+      W.refreshState({ silent: true, includeMedia: true });
     }
   }, 4000);
 
