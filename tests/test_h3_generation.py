@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 import uuid
+from datetime import datetime, timezone
 
 
 _test_data = tempfile.TemporaryDirectory(prefix="aivideosite-h3-generation-test-")
@@ -14,6 +15,7 @@ from fastapi import HTTPException  # noqa: E402
 from app import db  # noqa: E402
 from app.comfy import ComfyUIClient, ComfyUIError  # noqa: E402
 from app.main import _v2_validate_simple_settings, app  # noqa: E402
+from app.worker import _generation_elapsed_from_submission  # noqa: E402
 from comfyui_nodes.aivideosite_run_nonce import AIVideoRunNonce  # noqa: E402
 
 
@@ -155,6 +157,22 @@ class H3GenerationTests(unittest.TestCase):
             "/api/jobs/{job_id}/test-audio",
         ):
             self.assertNotIn(path, paths)
+
+    def test_saved_generation_time_starts_at_gpu_submission(self):
+        completed = datetime(2026, 11, 26, 12, 3, 4, tzinfo=timezone.utc)
+        # Job was created before ComfyUI loaded its model and sampled frames.
+        job = {
+            "created_at": "2026-11-26T12:00:00+00:00",
+            "started_at": "2026-11-26T12:00:30+00:00",
+            "sampling_started_at": "2026-11-26T12:02:00+00:00",
+        }
+        started, seconds = _generation_elapsed_from_submission(job, completed)
+        self.assertEqual(started, job["created_at"])
+        self.assertEqual(seconds, 184.0)
+        self.assertEqual(
+            _generation_elapsed_from_submission({"started_at": job["started_at"]}, completed),
+            (job["started_at"], 154.0),
+        )
 
 
 if __name__ == "__main__":

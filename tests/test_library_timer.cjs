@@ -31,17 +31,23 @@ W.snapshotReceivedAt = tickMs;
 
 const job = {
   kind: "generate",
-  status: "running",
-  created_at: "2026-11-26T11:50:00+00:00",
-  started_at: "2026-11-26T11:57:37+00:00",
-  sampling_started_at: "2026-11-26T12:00:00+00:00",
+  status: "queued",
+  created_at: "2026-11-26T12:00:00+00:00",
+  started_at: null,
+  sampling_started_at: null,
 };
-assert.equal(W.generationElapsedSeconds(job), 0, "new sampler must show zero");
+assert.equal(W.formatSeconds(W.generationElapsedSeconds(job)), "00:01", "timer must begin immediately when GPU job is submitted");
 tickMs += 60_000;
-assert.equal(W.generationElapsedSeconds(job), 60, "must use server time despite browser clock skew");
-assert.equal(W.generationElapsedSeconds({ ...job, sampling_started_at: null }), 0, "queued/loading time is not render time");
+job.status = "running";
+job.started_at = "2026-11-26T12:00:30+00:00";
+job.sampling_started_at = "2026-11-26T12:00:55+00:00";
+assert.equal(W.generationElapsedSeconds(job), 60, "count queue, loading and sampling time with server clock despite browser skew");
+assert.equal(W.generationElapsedSeconds({ ...job, started_at: null, sampling_started_at: null }), 60, "timer does not wait for sampler");
+assert.equal(W.generationElapsedSeconds({ ...job, kind: undefined }), 60, "Library cards omit kind; still count video jobs");
+assert.equal(W.generationElapsedSeconds({ ...job, kind: "editor_export", started_at: null }), 0, "export timer still starts with worker");
 
 tickMs += 30_000;
 assert.equal(W.generationElapsedSeconds(job), 90, "the timer continues during the final decode");
+assert.equal(W.generationElapsedSeconds({ ...job, status: "completed", finished_at: "2026-11-26T12:01:25+00:00" }), 85, "completed jobs use actual finish time");
 
 console.log("Library generation timer: OK");

@@ -26,6 +26,16 @@ class JobCancelled(RuntimeError):
 LLM_MANAGER_URL = os.getenv("LLM_MANAGER_URL", "http://127.0.0.1:8091")
 
 
+def _generation_elapsed_from_submission(job: dict[str, Any], completed_at: datetime) -> tuple[str, float]:
+    """Count the whole job from queue submission through video/audio finalization."""
+    started_at = str(job.get("created_at") or job.get("started_at") or "")
+    try:
+        elapsed = max(0.0, (completed_at - datetime.fromisoformat(started_at.replace("Z", "+00:00"))).total_seconds())
+    except (TypeError, ValueError):
+        elapsed = 0.0
+    return started_at, round(elapsed, 1)
+
+
 def _release_video_reservation(gpu_index:int,reservation_id:str)->None:
     payload=json.dumps({"gpu":int(gpu_index),"reservation_id":str(reservation_id)}).encode("utf-8")
     req=urllib.request.Request(f"{LLM_MANAGER_URL}/video/release",data=payload,headers={"Content-Type":"application/json"},method="POST")
@@ -342,14 +352,10 @@ class JobWorker(threading.Thread):
 
             duration = probe_duration(output_path)
             timing_job = db.get_job(job_id)
-            # Sampling starts on the first ComfyUI step-progress event, not when
-            # the worker claims a job or spends minutes loading its model.
-            started_at = str((timing_job or {}).get("sampling_started_at") or job.get("started_at") or "")
+            # Include queue wait, model loading, sampling, VAE decode and audio mixing.
+            # `created_at` is captured when the API enqueues the GPU job.
             completed_at = datetime.now(timezone.utc)
-            try:
-                elapsed = max(0.0, (completed_at - datetime.fromisoformat(started_at.replace("Z", "+00:00"))).total_seconds())
-            except (TypeError, ValueError):
-                elapsed = 0.0
+            started_at, elapsed = _generation_elapsed_from_submission(timing_job or job, completed_at)
             title = _prompt_title(
                 payload.get("user_prompt") or payload.get("prompt") or "H3 video"
             )
@@ -396,7 +402,7 @@ class JobWorker(threading.Thread):
                 "gpu_backend": gpu_label,
                 "generation_started_at": started_at,
                 "generation_finished_at": completed_at.isoformat(timespec="seconds"),
-                "generation_seconds": round(max(0.0, elapsed), 1),
+                "generation_seconds": elapsed,
                 "v2_context": payload.get("v2_context") or {},
                 "final_audio": {
                     "embed_track": bool(final_audio.get("embed_track")),

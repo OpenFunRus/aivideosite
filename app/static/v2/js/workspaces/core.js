@@ -55,13 +55,23 @@
   };
 
   W.generationElapsedSeconds = (job) => {
-    const startValue = job.kind === "editor_export" ? job.started_at : job.sampling_started_at;
+    // The user starts video generation when they submit a GPU job, not when
+    // ComfyUI finishes loading the model and reports its first sampler step.
+    // Library video jobs omit `kind`; only editor_export uses worker start.
+    const isVideo = job.kind !== "editor_export";
+    const startValue = isVideo
+      ? (job.created_at || job.started_at || job.sampling_started_at)
+      : job.started_at;
     const startMs = Date.parse(startValue || "");
-    if (!Number.isFinite(startMs)) return 0; // Queued/loading: no sampler time yet.
+    if (!Number.isFinite(startMs)) return 0;
     let endMs = W.serverNowMs();
     const finishedMs = Date.parse(job.finished_at || "");
     if (Number.isFinite(finishedMs)) endMs = Math.min(endMs, finishedMs);
-    return Math.max(0, (endMs - startMs) / 1000);
+    const elapsed = Math.max(0, (endMs - startMs) / 1000);
+    // The card appears at 00:01 immediately after successful submission.
+    return isVideo && ["queued", "running"].includes(job.status)
+      ? Math.max(1, Math.ceil(elapsed))
+      : elapsed;
   };
 
   W.formatBytes = (value) => {
