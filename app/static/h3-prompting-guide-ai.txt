@@ -288,7 +288,7 @@ Visible normal V2 choices:
 - Quality: 480p / 720p / 1080p
 - Ratio: 1:1 / 16:9 / 9:16
 - Duration: 5 / 10 / 15 sec
-- Steps: 8 / 12 / 16
+- Steps: 1 / 2 / 4 / 8 / 12 / 16
 - Seed
 - H3 generated sound on/off
 
@@ -604,7 +604,7 @@ Default visible options:
 Quality: 480 / 720 / 1080
 Ratio: 1:1 / 16:9 / 9:16
 Duration: 5 / 10 / 15 sec
-Steps: 8 / 12 / 16
+Steps: 1 / 2 / 4 / 8 / 12 / 16
 Seed: automatic when empty
 
 Prompt timing MUST follow the selected duration.

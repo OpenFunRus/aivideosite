@@ -41,12 +41,7 @@ tickMs += 60_000;
 assert.equal(W.generationElapsedSeconds(job), 60, "must use server time despite browser clock skew");
 assert.equal(W.generationElapsedSeconds({ ...job, sampling_started_at: null }), 0, "queued/loading time is not render time");
 
-job.test_paused = true;
-job.test_paused_at = "2026-11-26T12:00:40+00:00";
-assert.equal(W.generationElapsedSeconds(job), 40, "pause freezes elapsed render time");
-job.test_paused = false;
-job.test_paused_seconds = 20;
 tickMs += 30_000;
-assert.equal(W.generationElapsedSeconds(job), 70, "time paused is excluded after continuation");
+assert.equal(W.generationElapsedSeconds(job), 90, "the timer continues during the final decode");
 
 console.log("Library generation timer: OK");

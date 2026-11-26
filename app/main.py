@@ -36,22 +36,17 @@ from .config import settings
 from . import assistant as local_assistant
 from .comfy import ComfyUIClient
 from .h3_references import build_reference_prompt, validate_reference_items
-from .h3_preview import (
-    cleanup_job_preview, cleanup_stale_previews, find_job_preview,
-    list_job_previews, preview_poster_path, test_audio_path,
-)
 from .worker import JobWorker, probe_duration
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()
-    cleanup_stale_previews()
-    # A paused sampler is blocked inside ComfyUI, independently of this site's
-    # worker process. Release it before the interrupted job is requeued.
-    pause_controller = ComfyUIClient()
+    # Release blocked samplers left by the previous test-mode implementation.
     for interrupted_job_id in db.interrupted_test_pauses():
-        pause_controller.control_test_pause(interrupted_job_id, "cancel")
+        legacy_control = settings.temp_dir / "h3_test_pauses"
+        legacy_control.mkdir(parents=True, exist_ok=True)
+        (legacy_control / f"{interrupted_job_id}.cancel").touch()
     db.recover_interrupted_jobs()
     try:
         await asyncio.to_thread(local_assistant.sync_video_reservations, db.active_gpu_reservations())
@@ -1023,14 +1018,8 @@ V2_ASPECT_RATIOS = {
     "9:16": (9, 16),
 }
 V2_DURATIONS = {5, 10, 15}
-V2_STEPS = {8, 12, 16}
+V2_STEPS = {1, 2, 4, 8, 12, 16}
 V2_GPU_TARGETS = {"rtx3090", "rtx2080"}
-
-def _v2_test_step(raw: int, steps: int) -> int:
-    value = int(raw)
-    if value < 0 or value > steps:
-        raise HTTPException(400, f"Тестовый проход должен быть от 1 до {steps}.")
-    return value
 
 def _v2_gpu_target(raw: object) -> str:
     target=str(raw or "").strip().lower()
@@ -1133,7 +1122,6 @@ async def api_v2_generate(
     ratio: Annotated[str, Form()] = "16:9",
     seconds: Annotated[int, Form()] = 10,
     steps: Annotated[int, Form()] = 12,
-    test_pause_step: Annotated[int, Form()] = 0,
     seed: Annotated[str, Form()] = "",
     gpu_target: Annotated[str, Form()] = "",
     generate_audio: Annotated[bool, Form()] = True,
@@ -1146,7 +1134,6 @@ async def api_v2_generate(
     user_id: str = Depends(require_user),
 ):
     _v2_validate_simple_settings(seconds, steps)
-    test_pause_step = _v2_test_step(test_pause_step, steps)
 
     compact_prompt = " ".join(prompt.split()) if "\n" not in prompt else prompt.strip()
     if not compact_prompt:
@@ -1183,7 +1170,6 @@ async def api_v2_generate(
         "ratio": str(ratio),
         "seconds": int(seconds),
         "steps": int(steps),
-        "test_pause_step": test_pause_step,
         "has_first_frame": bool(has_first),
         "has_last_frame": bool(has_last),
         "generation_mode": generation_mode,
@@ -1275,7 +1261,6 @@ async def api_v2_generate(
                     "seconds": float(seconds),
                     "fps": 24,
                     "steps": int(steps),
-                    "test_pause_step": test_pause_step,
                     "seed": int(seed_value),
                     "generate_audio": bool(generate_audio),
                     "generation_mode": "frames",
@@ -1340,7 +1325,7 @@ def _v2_validate_simple_settings(seconds: int, steps: int) -> None:
     if seconds not in V2_DURATIONS:
         raise HTTPException(400, "V2 поддерживает длительность только 5, 10 или 15 секунд.")
     if steps not in V2_STEPS:
-        raise HTTPException(400, "V2 поддерживает только 8, 12 или 16 шагов.")
+        raise HTTPException(400, "V2 поддерживает только 1, 2, 4, 8, 12 или 16 шагов.")
 
 
 def _v2_character_references(
@@ -1539,7 +1524,6 @@ def _v2_enqueue_reference_job(
             "seconds": float(seconds),
             "fps": 24,
             "steps": int(steps),
-            "test_pause_step": int((v2_context or {}).get("test_pause_step") or 0),
             "seed": int(seed),
             "generate_audio": bool(generate_audio),
             "generation_mode": generation_mode,
@@ -1740,12 +1724,10 @@ async def api_v2_state(
     media_data = db.list_media_page(media_page, 40, owner_id=user_id)
     for old_job in db.prune_job_history(user_id, keep=20):
         _cleanup_job_uploads(old_job)
-        cleanup_job_preview(str(old_job["id"]))
     jobs = db.list_jobs(20, owner_id=user_id)
     library_jobs = []
     for job in db.list_active_generation_jobs(user_id):
         payload = job.get("payload") or {}
-        test_audio_file = test_audio_path(str(job["id"]))
         library_jobs.append({
             "id": job["id"],
             "title": str(payload.get("title") or payload.get("user_prompt") or payload.get("prompt") or "MiniMax H3")[:140],
@@ -1756,17 +1738,8 @@ async def api_v2_state(
             "created_at": job["created_at"],
             "started_at": job.get("started_at"),
             "sampling_started_at": job.get("sampling_started_at"),
-            "test_pause_step": int(payload.get("test_pause_step") or 0),
-            "test_paused": bool(job.get("test_paused")),
-            "test_paused_at": job.get("test_paused_at"),
-            "test_paused_seconds": float(job.get("test_paused_seconds") or 0),
             "steps": payload.get("steps") or 8,
             "seconds": payload.get("seconds") or 5,
-            "preview_step": job.get("preview_step") or 0,
-            "preview_mime": job.get("preview_mime"),
-            "preview_enabled": bool(job.get("preview_enabled")),
-            "preview_steps": list_job_previews(str(job["id"]), int(job.get("preview_step") or 0)),
-            "test_audio_ready": bool(job.get("test_paused") and test_audio_file and test_audio_file.is_file()),
         })
     active_global = []
     for job in db.list_jobs(200):
@@ -1786,9 +1759,6 @@ async def api_v2_state(
                 "created_at": job.get("created_at"),
                 "started_at": job.get("started_at"),
                 "sampling_started_at": job.get("sampling_started_at"),
-                "test_paused": bool(job.get("test_paused")),
-                "test_paused_at": job.get("test_paused_at"),
-                "test_paused_seconds": float(job.get("test_paused_seconds") or 0),
                 "prompt": str(payload.get("user_prompt") or payload.get("prompt") or "")[:180],
             }
         )
@@ -1845,7 +1815,6 @@ async def api_v2_audio(
     ratio: Annotated[str, Form()] = "16:9",
     seconds: Annotated[int, Form()] = 10,
     steps: Annotated[int, Form()] = 12,
-    test_pause_step: Annotated[int, Form()] = 0,
     seed: Annotated[str, Form()] = "",
     gpu_target: Annotated[str, Form()] = "",
     character_ids: Annotated[str, Form()] = "[]",
@@ -1861,7 +1830,6 @@ async def api_v2_audio(
     user_id: str = Depends(require_user),
 ):
     _v2_validate_simple_settings(seconds, steps)
-    test_pause_step = _v2_test_step(test_pause_step, steps)
     if not math.isfinite(audio_start) or audio_start < 0 or audio_start > 86400:
         raise HTTPException(400, "Начало аудиофрагмента должно быть неотрицательным.")
 
@@ -2040,7 +2008,6 @@ async def api_v2_audio(
             "has_first_frame": bool(has_first),
             "has_last_frame": bool(has_last),
             "generation_mode": generation_mode,
-            "test_pause_step": test_pause_step,
         }
         final_audio = {
             "path": str(segment),
@@ -2083,7 +2050,6 @@ async def api_v2_audio(
                     "seconds": float(seconds),
                     "fps": 24,
                     "steps": int(steps),
-                    "test_pause_step": test_pause_step,
                     "seed": int(_v2_seed(seed)),
                     "generate_audio": bool(generate_scene_audio),
                     "generation_mode": "frames",
@@ -2150,8 +2116,6 @@ async def api_cancel_job(
     if source is None:raise HTTPException(404,"Задача не найдена.")
     job = db.request_cancel(job_id, user_id)
     if job is None:raise HTTPException(404,"Задача не найдена.")
-    if source["kind"] == "generate":
-        cleanup_job_preview(job_id)
     if job["status"]=="canceled" and source.get("gpu_target") and source["kind"]=="generate":
         _v2_release_gpu(source["gpu_target"],job_id)
 
@@ -2162,72 +2126,6 @@ async def api_cancel_job(
         )
 
     return {"ok": True, "status": job["status"]}
-
-
-@app.post("/api/jobs/{job_id}/continue")
-async def api_continue_test_job(
-    job_id: str,
-    request: Request,
-    user_id: str = Depends(require_user),
-):
-    job = db.get_job(job_id, user_id)
-    if job is None:
-        raise HTTPException(404, "Задача не найдена.")
-    if (job.get("status") != "running" or not job.get("test_paused")
-            or job.get("cancel_requested") or not (job.get("payload") or {}).get("test_pause_step")):
-        raise HTTPException(409, "Тестовая генерация сейчас не на паузе.")
-    if not request.app.state.worker.resume_test(job_id):
-        raise HTTPException(409, "Запущенная задача ComfyUI уже недоступна.")
-    db.set_test_paused(job_id, False)
-    return {"ok": True}
-
-
-@app.get("/api/jobs/{job_id}/preview")
-async def api_job_preview(
-    job_id: str,
-    step: int | None = None,
-    poster: bool = False,
-    user_id: str = Depends(require_user),
-):
-    job = db.get_job(job_id, user_id)
-    if (
-        job is None or job["kind"] != "generate"
-        or job["status"] != "running" or job["cancel_requested"]
-        or int(job.get("preview_step") or 0) < 1
-    ):
-        raise HTTPException(404, "Предпросмотр недоступен.")
-    current_step = int(job.get("preview_step") or 0)
-    target_step = current_step if step is None else step
-    if target_step < 1 or target_step > current_step:
-        raise HTTPException(404, "Этот шаг предпросмотра недоступен.")
-    if poster:
-        path = preview_poster_path(job_id, target_step)
-        mime = "image/jpeg"
-        if path is None or not path.is_file():
-            raise HTTPException(404, "Кадр предпросмотра ещё не готов.")
-    else:
-        result = find_job_preview(job_id, target_step)
-        if result is None:
-            raise HTTPException(404, "Предпросмотр ещё не готов.")
-        path, mime = result
-    return FileResponse(
-        path,
-        media_type=mime,
-        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
-    )
-
-
-@app.get("/api/jobs/{job_id}/test-audio")
-async def api_job_test_audio(
-    job_id: str,
-    user_id: str = Depends(require_user),
-):
-    job = db.get_job(job_id, user_id)
-    target = test_audio_path(job_id)
-    if (not job or job.get("status") != "running" or not job.get("test_paused")
-            or job.get("cancel_requested") or target is None or not target.is_file()):
-        raise HTTPException(404, "Тестовая озвучка пока недоступна.")
-    return FileResponse(target, media_type="audio/wav", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @app.post("/api/jobs/{job_id}/retry")

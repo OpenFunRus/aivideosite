@@ -61,10 +61,7 @@
     let endMs = W.serverNowMs();
     const finishedMs = Date.parse(job.finished_at || "");
     if (Number.isFinite(finishedMs)) endMs = Math.min(endMs, finishedMs);
-    const pauseStartMs = job.test_paused ? Date.parse(job.test_paused_at || "") : NaN;
-    if (Number.isFinite(pauseStartMs)) endMs = Math.min(endMs, pauseStartMs);
-    const pausedSeconds = Math.max(0, Number(job.test_paused_seconds) || 0);
-    return Math.max(0, (endMs - startMs) / 1000 - pausedSeconds);
+    return Math.max(0, (endMs - startMs) / 1000);
   };
 
   W.formatBytes = (value) => {

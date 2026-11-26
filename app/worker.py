@@ -16,7 +16,6 @@ from typing import Any, Callable
 
 from . import db
 from .comfy import ComfyUIClient, ComfyUICancelled
-from .h3_preview import cleanup_job_preview, save_job_preview, save_test_audio
 from .config import settings
 
 
@@ -102,20 +101,7 @@ class JobWorker(threading.Thread):
             client = self._job_clients.get(job_id)
         if client is None:
             return False
-        # Interrupting ComfyUI does not wake a paused sampler callback: wake it
-        # with the cancellation flag before sending the interrupt request.
-        job = db.get_job(job_id)
-        if (job or {}).get("payload", {}).get("test_pause_step"):
-            client.control_test_pause(job_id, "cancel")
         return client.cancel_prompt(prompt_id) if prompt_id else True
-
-    def resume_test(self, job_id: str) -> bool:
-        with self._lock:
-            client = self._job_clients.get(job_id)
-        if client is None:
-            return False
-        client.control_test_pause(job_id, "resume")
-        return True
 
     def _available_gpu_lane(self, key: str) -> dict[str, Any] | None:
         with self._lock:
@@ -186,8 +172,6 @@ class JobWorker(threading.Thread):
             else:
                 db.fail_job(job["id"], _format_error(exc))
         finally:
-            if job["kind"] == "generate":
-                cleanup_job_preview(str(job["id"]))
             current = threading.current_thread()
             with self._lock:
                 self._active_threads.discard(current)
@@ -255,12 +239,6 @@ class JobWorker(threading.Thread):
                 payload=payload,
                 destination=output_path,
                 progress=progress,
-                on_preview=lambda step, mime, content: save_job_preview(
-                    str(job_id), step, mime, content
-                ),
-                on_preview_status=lambda enabled: db.set_preview_enabled(job_id, enabled),
-                on_pause=lambda step: db.set_test_paused(job_id, True, step),
-                on_test_audio=lambda content: save_test_audio(job_id, content),
                 on_sampling_start=lambda: db.mark_sampling_started(job_id),
                 on_prompt_id=lambda prompt_id: db.update_job(
                     job_id, external_id=prompt_id
@@ -372,7 +350,6 @@ class JobWorker(threading.Thread):
                 elapsed = max(0.0, (completed_at - datetime.fromisoformat(started_at.replace("Z", "+00:00"))).total_seconds())
             except (TypeError, ValueError):
                 elapsed = 0.0
-            paused_seconds = float((timing_job or {}).get("test_paused_seconds") or 0)
             title = _prompt_title(
                 payload.get("user_prompt") or payload.get("prompt") or "H3 video"
             )
@@ -419,8 +396,7 @@ class JobWorker(threading.Thread):
                 "gpu_backend": gpu_label,
                 "generation_started_at": started_at,
                 "generation_finished_at": completed_at.isoformat(timespec="seconds"),
-                "generation_seconds": round(max(0.0, elapsed - paused_seconds), 1),
-                "test_pause_step": int(payload.get("test_pause_step") or 0),
+                "generation_seconds": round(max(0.0, elapsed), 1),
                 "v2_context": payload.get("v2_context") or {},
                 "final_audio": {
                     "embed_track": bool(final_audio.get("embed_track")),

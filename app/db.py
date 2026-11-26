@@ -369,56 +369,6 @@ def update_job(
         )
 
 
-def set_job_preview(job_id: str, step: int, mime: str) -> bool:
-    """Publish a newer preview only while its generation is still active."""
-    with connect() as conn:
-        result = conn.execute(
-            """UPDATE jobs SET preview_step=?, preview_mime=?
-               WHERE id=? AND kind='generate' AND status='running'
-                 AND cancel_requested=0 AND preview_step<?""",
-            (step, mime, job_id, step),
-        )
-    return result.rowcount == 1
-
-
-def set_preview_enabled(job_id: str, enabled: bool) -> None:
-    with connect() as conn:
-        conn.execute(
-            "UPDATE jobs SET preview_enabled=? WHERE id=? AND status='running' AND cancel_requested=0",
-            (int(enabled), job_id),
-        )
-
-
-def set_test_paused(job_id: str, paused: bool, step: int = 0) -> bool:
-    """Change the pause flag atomically and account for time spent waiting."""
-    now = utcnow()
-    with connect() as conn:
-        conn.execute("BEGIN IMMEDIATE")
-        row = conn.execute(
-            "SELECT test_paused,test_paused_at FROM jobs WHERE id=? AND status='running' AND cancel_requested=0",
-            (job_id,),
-        ).fetchone()
-        if row is None or bool(row["test_paused"]) == bool(paused):
-            conn.execute("COMMIT")
-            return False
-        if paused:
-            conn.execute(
-                "UPDATE jobs SET test_paused=1,test_paused_at=?,stage=? WHERE id=?",
-                (now, f"Тест · пауза после шага {step}", job_id),
-            )
-        else:
-            waited = 0.0
-            if row["test_paused_at"]:
-                waited = max(0.0, (datetime.fromisoformat(now) - datetime.fromisoformat(row["test_paused_at"])).total_seconds())
-            conn.execute(
-                """UPDATE jobs SET test_paused=0,test_paused_at=NULL,
-                   test_paused_seconds=test_paused_seconds+?,stage='Тест · продолжение генерации' WHERE id=?""",
-                (waited, job_id),
-            )
-        conn.execute("COMMIT")
-    return True
-
-
 def request_cancel(
     job_id: str,
     owner_id: str | None = None,

@@ -365,7 +365,7 @@ Practical workflow:
 - move to the more stable base/higher-step path for a final difficult shot;
 - do not judge a complex character-reference failure solely from the fastest turbo run.
 
-This V2 exposes 8/12/16 steps rather than the full raw ComfyUI space.
+This V2 exposes 1/2/4/8/12/16 steps rather than the full raw ComfyUI space. Low-step runs use full VAE decoding but may have poor sound and imagery.
 Respect the site's buttons; do not invent a 25-step UI value.
 
 ===============================================================================
