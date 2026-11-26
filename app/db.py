@@ -105,6 +105,9 @@ def init_db() -> None:
                 finished_at TEXT,
                 external_id TEXT,
                 cancel_requested INTEGER NOT NULL DEFAULT 0,
+                preview_step INTEGER NOT NULL DEFAULT 0,
+                preview_mime TEXT,
+                preview_enabled INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(result_media_id) REFERENCES media(id) ON DELETE SET NULL
             );
 
@@ -152,6 +155,12 @@ def _ensure_jobs_columns(conn: sqlite3.Connection) -> None:
         )
     if "gpu_target" not in columns:
         conn.execute("ALTER TABLE jobs ADD COLUMN gpu_target TEXT")
+    if "preview_step" not in columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN preview_step INTEGER NOT NULL DEFAULT 0")
+    if "preview_mime" not in columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN preview_mime TEXT")
+    if "preview_enabled" not in columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN preview_enabled INTEGER NOT NULL DEFAULT 0")
 
 
 def _ensure_owner_columns(conn: sqlite3.Connection) -> None:
@@ -202,6 +211,9 @@ def recover_interrupted_jobs() -> int:
                    started_at=NULL,
                    external_id=NULL,
                    cancel_requested=0,
+                   preview_step=0,
+                   preview_mime=NULL,
+                   preview_enabled=0,
                    error=NULL
              WHERE status='running'
             """
@@ -281,7 +293,7 @@ def claim_next_job(
         if row is None:conn.execute("COMMIT"); return None
         started_at=utcnow()
         conn.execute("""UPDATE jobs SET status='running',stage='Запуск',progress=1,started_at=?,external_id=NULL,
-                        cancel_requested=0,error=NULL WHERE id=?""",(started_at,row["id"]))
+                        cancel_requested=0,preview_step=0,preview_mime=NULL,preview_enabled=0,error=NULL WHERE id=?""",(started_at,row["id"]))
         conn.execute("COMMIT")
     result=_decode_job(row); result["status"]="running"; result["started_at"]=started_at; result["cancel_requested"]=0
     return result
@@ -318,6 +330,26 @@ def update_job(
         )
 
 
+def set_job_preview(job_id: str, step: int, mime: str) -> bool:
+    """Publish a newer preview only while its generation is still active."""
+    with connect() as conn:
+        result = conn.execute(
+            """UPDATE jobs SET preview_step=?, preview_mime=?
+               WHERE id=? AND kind='generate' AND status='running'
+                 AND cancel_requested=0 AND preview_step<?""",
+            (step, mime, job_id, step),
+        )
+    return result.rowcount == 1
+
+
+def set_preview_enabled(job_id: str, enabled: bool) -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE jobs SET preview_enabled=? WHERE id=? AND status='running' AND cancel_requested=0",
+            (int(enabled), job_id),
+        )
+
+
 def request_cancel(
     job_id: str,
     owner_id: str | None = None,
@@ -343,6 +375,8 @@ def request_cancel(
                    SET status='canceled',
                        stage='Отменено',
                        cancel_requested=1,
+                       preview_step=0,
+                       preview_mime=NULL,
                        finished_at=?
                  WHERE id=?
                 """,
@@ -353,6 +387,8 @@ def request_cancel(
                 """
                 UPDATE jobs
                    SET cancel_requested=1,
+                       preview_step=0,
+                       preview_mime=NULL,
                        stage='Отмена...'
                  WHERE id=?
                 """,
@@ -380,6 +416,8 @@ def mark_cancelled(job_id: str) -> None:
                SET status='canceled',
                    stage='Отменено',
                    cancel_requested=1,
+                   preview_step=0,
+                   preview_mime=NULL,
                    finished_at=?,
                    error=NULL
              WHERE id=?
@@ -388,9 +426,9 @@ def mark_cancelled(job_id: str) -> None:
         )
 
 
-def complete_job(job_id: str, media_id: str | None = None) -> None:
+def complete_job(job_id: str, media_id: str | None = None) -> bool:
     with connect() as conn:
-        conn.execute(
+        result = conn.execute(
             """
             UPDATE jobs
                SET status='done',
@@ -398,11 +436,14 @@ def complete_job(job_id: str, media_id: str | None = None) -> None:
                    stage='Готово',
                    result_media_id=?,
                    finished_at=?,
-                   cancel_requested=0
-             WHERE id=?
+                   cancel_requested=0,
+                   preview_step=0,
+                   preview_mime=NULL
+             WHERE id=? AND status='running' AND cancel_requested=0
             """,
             (media_id, utcnow(), job_id),
         )
+    return result.rowcount == 1
 
 
 def fail_job(job_id: str, error: str) -> None:
@@ -416,6 +457,8 @@ def fail_job(job_id: str, error: str) -> None:
                SET status='failed',
                    stage='Ошибка',
                    error=?,
+                   preview_step=0,
+                   preview_mime=NULL,
                    finished_at=?
              WHERE id=?
             """,
@@ -569,6 +612,18 @@ def list_jobs(
                 """,
                 (owner_id, limit),
             ).fetchall()
+    return [_decode_job(row) for row in rows]
+
+
+def list_active_generation_jobs(owner_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM jobs
+               WHERE owner_id=? AND kind='generate'
+                 AND status IN ('queued', 'running') AND cancel_requested=0
+               ORDER BY created_at DESC LIMIT ?""",
+            (owner_id, max(1, min(100, limit))),
+        ).fetchall()
     return [_decode_job(row) for row in rows]
 
 

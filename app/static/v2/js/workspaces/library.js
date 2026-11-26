@@ -96,6 +96,7 @@
   let page = Math.max(1, Number(savedLibraryUi?.page) || 1);
   let searchText = String(savedLibraryUi?.search || "");
   let search = searchText.trim().toLocaleLowerCase("ru-RU");
+  let renderedMediaHtml = null;
   const saveLibraryUi = () => W.saveJson(LIBRARY_UI_KEY, { page, search: searchText });
   const searchInput = qs("#v2-library-search");
   if (searchInput) searchInput.value = searchText;
@@ -123,6 +124,55 @@
     buttons.innerHTML = html;
   };
 
+  const renderGeneratingCard = (job) => {
+    const step = Math.max(0, Number(job.preview_step) || 0);
+    const ready = step >= 2 && Boolean(job.preview_mime);
+    const progress = Math.max(0, Math.min(100, Math.round(Number(job.progress) || 0)));
+    const waiting = job.status === "queued";
+    const unavailable = !waiting && !job.preview_enabled && progress >= 10;
+    const statusLabel = waiting ? "В очереди" : ready ? "Предпросмотр готов" : unavailable ? "Без предпросмотра" : "Генерация";
+    const previewLabel = ready ? "Воспроизвести шаг " + step : unavailable ? "Превью не подключено" : "Ожидаем шаг 2";
+    const gpu = job.gpu_target === "rtx2080" ? "RTX 2080" : "RTX 3090";
+    return '<article class="v2-media-card v2-generation-card" data-preview-job-id="' + escapeHtml(job.id) + '">' +
+      '<div class="v2-media-cover v2-generation-cover">' +
+      '<div class="v2-generation-ambient" aria-hidden="true"></div>' +
+      '<div class="v2-generation-cover-content">' +
+      '<span class="v2-generation-kicker">' + icon("bolt") + 'MINIMAX H3 · LIVE</span>' +
+      '<span class="v2-generation-symbol">' + icon(waiting ? "clock" : "video") + '</span>' +
+      '<strong>' + escapeHtml(statusLabel) + '</strong>' +
+      '<span>' + escapeHtml(waiting ? "Ожидает свободную видеокарту" : ready ? "Промежуточное видео · шаг " + step : unavailable ? "Нужен Tiny VAE и Preview Override" : "Видео появится после шага 2") + '</span>' +
+      '</div><span class="v2-generation-gpu">' + escapeHtml(gpu) + '</span></div>' +
+      '<div class="v2-media-card-body">' +
+      '<h3 title="' + escapeHtml(job.title) + '">' + escapeHtml(job.title || "MiniMax H3") + '</h3>' +
+      '<div class="v2-media-meta"><span>' + escapeHtml(W.formatDate(job.created_at)) + '</span>' +
+      '<span>' + escapeHtml(String(job.seconds || 5)) + ' сек</span>' +
+      '<span>' + escapeHtml(statusLabel) + '</span></div>' +
+      '<div class="v2-generation-progress"><span style="width:' + progress + '%"></span></div>' +
+      '<div class="v2-generation-progress-label"><span>' + escapeHtml(job.stage || "Подготовка") + '</span><b>' + progress + '%</b></div>' +
+      '<div class="v2-generation-actions">' +
+      '<button class="v2-generation-play" type="button" data-library-action="preview" ' + (ready ? '' : 'disabled ') + '>' + icon("player-play") + escapeHtml(previewLabel) + '</button>' +
+      '<button class="v2-generation-cancel" type="button" data-library-action="cancel">' + icon("x") + 'Отменить генерацию</button>' +
+      '</div></div></article>';
+  };
+
+  const openPreviewDialog = (job) => {
+    const dialog = qs("#v2-media-dialog");
+    if (!dialog || !job || Number(job.preview_step) < 2) return;
+    const previewUrl = "/api/jobs/" + encodeURIComponent(job.id) + "/preview?step=" + Number(job.preview_step);
+    const player = job.preview_mime === "video/mp4"
+      ? '<video src="' + previewUrl + '" controls autoplay loop playsinline></video>'
+      : '<img class="v2-generation-preview-animation" src="' + previewUrl + '" alt="Анимированный предпросмотр видео">';
+    dialog.innerHTML = '<div class="v2-media-dialog-inner v2-generation-dialog">' +
+      '<div class="v2-media-dialog-head"><h3>Предпросмотр · шаг ' + Number(job.preview_step) +
+      ' из ' + escapeHtml(String(job.steps || 8)) + '</h3>' +
+      '<button class="v2-icon-button" type="button" data-media-dialog-close aria-label="Закрыть">' + icon("x") + '</button></div>' +
+      player +
+      '<p class="v2-generation-dialog-note">Это промежуточная версия: движение и детали могут измениться на следующих шагах. Готовый ролик появится здесь после генерации.</p>' +
+      '</div>';
+    qs("[data-media-dialog-close]", dialog)?.addEventListener("click", () => dialog.close());
+    dialog.showModal();
+  };
+
   const renderLibrary = () => {
     const grid = qs("#v2-library-grid");
     const empty = qs("#v2-library-empty");
@@ -132,10 +182,13 @@
     const filtered = W.allMedia.filter((item) =>
       String(item.title || item.filename || "Видео").toLocaleLowerCase("ru-RU").includes(search)
     );
+    const generating = (W.snapshot?.library_jobs || []).filter((job) =>
+      String(job.title || "MiniMax H3").toLocaleLowerCase("ru-RU").includes(search)
+    );
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     page = Math.min(page, totalPages);
-    if (count) count.textContent = (search ? filtered.length + " из " + W.allMedia.length : W.allMedia.length) + " роликов";
-    if (empty) empty.hidden = filtered.length > 0;
+    if (count) count.textContent = (search ? filtered.length + " из " + W.allMedia.length : W.allMedia.length) + " видео" + (generating.length ? " · " + generating.length + " в работе" : "");
+    if (empty) empty.hidden = filtered.length + generating.length > 0;
     const emptyTitle = qs("#v2-library-empty-title");
     const emptyDescription = qs("#v2-library-empty-description");
     if (emptyTitle) emptyTitle.textContent = search ? "Ничего не найдено" : "Библиотека пока пуста";
@@ -143,7 +196,7 @@
     const visibleMedia = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     renderPagination(totalPages);
 
-    grid.innerHTML = visibleMedia.map((item) => {
+    const mediaHtml = visibleMedia.map((item) => {
       const meta = item.meta || {};
       const duration = Number(item.duration || meta.seconds || 0);
       const kind = meta.v2_context?.workspace || meta.operation || item.kind || "video";
@@ -166,6 +219,16 @@
         "</div></div></article>"
       );
     }).join("");
+    const generatingHtml = generating.map(renderGeneratingCard).join("");
+    if (renderedMediaHtml !== mediaHtml) {
+      grid.innerHTML = generatingHtml + mediaHtml;
+      renderedMediaHtml = mediaHtml;
+    } else {
+      // Poll live progress without rebuilding finished video elements: that
+      // would repeatedly restart their metadata loading every four seconds.
+      grid.querySelectorAll(":scope > .v2-generation-card").forEach((card) => card.remove());
+      if (generatingHtml) grid.insertAdjacentHTML("afterbegin", generatingHtml);
+    }
   };
 
   qs("#v2-library-refresh")?.addEventListener("click", () => {
@@ -192,6 +255,26 @@
   qs("#v2-library-grid")?.addEventListener("click", async (event) => {
     const actionButton = event.target.closest("[data-library-action]");
     if (!actionButton) return;
+    const jobCard = actionButton.closest("[data-preview-job-id]");
+    if (jobCard) {
+      const job = (W.snapshot?.library_jobs || []).find((item) => String(item.id) === jobCard.dataset.previewJobId);
+      if (!job) return;
+      if (actionButton.dataset.libraryAction === "preview") {
+        openPreviewDialog(job);
+      } else if (actionButton.dataset.libraryAction === "cancel") {
+        if (!confirm("Отменить генерацию? Карточка и предпросмотр исчезнут из Библиотеки.")) return;
+        actionButton.disabled = true;
+        try {
+          await fetchJson("/api/jobs/" + encodeURIComponent(job.id) + "/cancel", { method: "POST" });
+          showToast("Генерация отменяется.");
+          await W.refreshState({ silent: true });
+        } catch (error) {
+          showToast("Не удалось отменить: " + error.message, "error");
+          actionButton.disabled = false;
+        }
+      }
+      return;
+    }
     const card = actionButton.closest("[data-media-id]");
     const item = W.mediaById(card?.dataset.mediaId);
     if (!item) return;

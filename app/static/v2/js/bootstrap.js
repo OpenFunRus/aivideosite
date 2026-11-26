@@ -31,8 +31,8 @@
   setInterval(() => api.refreshSystem?.(), 8000);
   setInterval(() => {
     const view = api.state.view;
-    if (view === "queue") {
-      W.refreshState({ silent: true, includeMedia: false });
+    if (view === "queue" || view === "library") {
+      W.refreshState({ silent: true, includeMedia: view === "library" });
     }
   }, 4000);
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+import logging
 import secrets
 import shutil
 import time
@@ -16,6 +18,9 @@ from .config import settings
 
 
 ProgressCallback = Callable[[float, str], None]
+PreviewCallback = Callable[[int, str, bytes], None]
+PreviewStatusCallback = Callable[[bool], None]
+logger = logging.getLogger(__name__)
 PromptIdCallback = Callable[[str], None]
 CancelCallback = Callable[[], bool]
 
@@ -47,6 +52,8 @@ class ComfyUIClient:
         payload: dict[str, Any],
         destination: Path,
         progress: ProgressCallback,
+        on_preview: PreviewCallback | None = None,
+        on_preview_status: PreviewStatusCallback | None = None,
         on_prompt_id: PromptIdCallback | None = None,
         should_cancel: CancelCallback | None = None,
     ) -> dict[str, Any]:
@@ -142,6 +149,9 @@ class ComfyUIClient:
 
         try:
             client_id = uuid.uuid4().hex
+            enable_preview = on_preview is not None and self._h3_preview_ready()
+            if on_preview_status is not None:
+                on_preview_status(enable_preview)
             workflow = self._build_h3_workflow(
                 job_id=job_id,
                 payload=payload,
@@ -149,6 +159,7 @@ class ComfyUIClient:
                 staged_references=staged_references,
                 staged_guides=staged_guides,
                 staged_control=staged_control,
+                enable_preview=enable_preview,
             )
 
             progress(8, "Передача H3-задачи в ComfyUI")
@@ -189,7 +200,10 @@ class ComfyUIClient:
             progress(10, "H3: подготовка модели")
             if ws is not None:
                 try:
-                    self._wait_websocket(ws, prompt_id, progress, should_cancel)
+                    self._wait_websocket(
+                        ws, prompt_id, progress, should_cancel,
+                        on_preview=on_preview if enable_preview else None,
+                    )
                 except ComfyUICancelled:
                     raise
                 except Exception:
@@ -237,6 +251,20 @@ class ComfyUIClient:
             )
             return response.ok
         except requests.RequestException:
+            return False
+
+    def _h3_preview_ready(self) -> bool:
+        """Enable the optional node only when its tiny H3 decoder is installed."""
+        try:
+            response = self.session.get(
+                f"{self.base_url}/object_info/MiniMaxH3PreviewOverride", timeout=5
+            )
+            response.raise_for_status()
+            node = response.json().get("MiniMaxH3PreviewOverride") or {}
+            required = (node.get("input") or {}).get("required") or {}
+            choices = (required.get("vae_name") or [[]])[0]
+            return isinstance(choices, list) and "taeh3_decoder.safetensors" in choices
+        except (requests.RequestException, ValueError, TypeError, KeyError, IndexError):
             return False
 
     def cancel_prompt(self, prompt_id: str) -> bool:
@@ -296,6 +324,7 @@ class ComfyUIClient:
         staged_references: list[dict[str, str]] | None = None,
         staged_guides: list[dict[str, Any]] | None = None,
         staged_control: dict[str, Any] | None = None,
+        enable_preview: bool = False,
     ) -> dict[str, Any]:
         direct_steps = payload.get("steps")
         profile_config: dict[str, Any] | None = None
@@ -659,6 +688,26 @@ class ComfyUIClient:
                 },
             }
 
+        if enable_preview:
+            workflow["35"] = {
+                "class_type": "MiniMaxH3PreviewOverride",
+                "inputs": {
+                    "model": ["34", 0],
+                    "vae_name": "taeh3_decoder.safetensors",
+                    "preview_frames": 8,
+                    # Spread eight samples across the clip's duration.
+                    "preview_fps": max(1, min(24, round(8 / max(1.0, seconds)))),
+                    "max_resolution": 512,
+                    "jpeg_quality": 75,
+                    "suppress_default_preview": True,
+                },
+            }
+            workflow["5"]["inputs"]["model"] = ["35", 0]
+            if staged_guides:
+                workflow["32"]["inputs"]["model"] = ["35", 0]
+            else:
+                workflow["30"]["inputs"]["model"] = ["35", 0]
+
         return workflow
 
     def _wait_websocket(
@@ -667,6 +716,7 @@ class ComfyUIClient:
         prompt_id: str,
         progress: ProgressCallback,
         should_cancel: CancelCallback | None = None,
+        on_preview: PreviewCallback | None = None,
     ) -> None:
         ws.settimeout(2)
         while True:
@@ -688,6 +738,23 @@ class ComfyUIClient:
 
             event_type = data.get("type")
             event_data = data.get("data") or {}
+
+            if event_type == "minimax_h3_preview_override" and on_preview:
+                try:
+                    step = int(event_data.get("step") or 0)
+                    mime = str(event_data.get("mime") or "")
+                    encoded = event_data.get("image")
+                    if (
+                        step >= 2 and step % 2 == 0
+                        and mime in {"video/mp4", "image/webp", "image/jpeg"}
+                        and isinstance(encoded, str) and len(encoded) <= 12_000_000
+                    ):
+                        on_preview(step, mime, base64.b64decode(encoded, validate=True))
+                except Exception as exc:
+                    # Preview is optional: a malformed frame or full temp disk
+                    # must never interrupt video sampling or progress updates.
+                    logger.warning("H3 preview frame ignored: %s", exc)
+                continue
 
             if event_type == "progress":
                 value = float(event_data.get("value") or 0)

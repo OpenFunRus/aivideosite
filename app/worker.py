@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from . import db
 from .comfy import ComfyUIClient, ComfyUICancelled
+from .h3_preview import cleanup_job_preview, save_job_preview
 from .config import settings
 
 
@@ -159,10 +160,10 @@ class JobWorker(threading.Thread):
                     stage=f"H3 · {gpu_label}: запуск",
                 )
             media_id = self._process(job, comfy=comfy, gpu_label=gpu_label)
-            if db.is_cancel_requested(job["id"]):
+            if db.is_cancel_requested(job["id"]) or not db.complete_job(job["id"], media_id):
+                if media_id:
+                    _discard_cancelled_result(str(media_id), str(job.get("owner_id") or "user1"))
                 db.mark_cancelled(job["id"])
-            else:
-                db.complete_job(job["id"], media_id)
         except (JobCancelled, ComfyUICancelled):
             db.mark_cancelled(job["id"])
         except Exception as exc:
@@ -171,6 +172,8 @@ class JobWorker(threading.Thread):
             else:
                 db.fail_job(job["id"], _format_error(exc))
         finally:
+            if job["kind"] == "generate":
+                cleanup_job_preview(str(job["id"]))
             current = threading.current_thread()
             with self._lock:
                 self._active_threads.discard(current)
@@ -238,6 +241,10 @@ class JobWorker(threading.Thread):
                 payload=payload,
                 destination=output_path,
                 progress=progress,
+                on_preview=lambda step, mime, content: save_job_preview(
+                    str(job_id), step, mime, content
+                ),
+                on_preview_status=lambda enabled: db.set_preview_enabled(job_id, enabled),
                 on_prompt_id=lambda prompt_id: db.update_job(
                     job_id, external_id=prompt_id
                 ),
@@ -694,6 +701,18 @@ class JobWorker(threading.Thread):
         except Exception:
             output_path.unlink(missing_ok=True)
             raise
+
+
+def _discard_cancelled_result(media_id: str, owner_id: str) -> None:
+    """A cancellation arriving during final save must not leave a Library item."""
+    media = db.get_media(media_id, owner_id)
+    if media is None:
+        return
+    db.delete_media_row(media_id, owner_id)
+    root = settings.library_dir.resolve()
+    path = (root / str(media["filename"])).resolve()
+    if path.parent == root:
+        path.unlink(missing_ok=True)
 
 
 def _require_media(

@@ -36,12 +36,14 @@ from .config import settings
 from . import assistant as local_assistant
 from .comfy import ComfyUIClient
 from .h3_references import build_reference_prompt, validate_reference_items
+from .h3_preview import cleanup_job_preview, cleanup_stale_previews, preview_path
 from .worker import JobWorker, probe_duration
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()
+    cleanup_stale_previews()
     db.recover_interrupted_jobs()
     try:
         await asyncio.to_thread(local_assistant.sync_video_reservations, db.active_gpu_reservations())
@@ -1719,7 +1721,25 @@ async def api_v2_state(
     media_data = db.list_media_page(media_page, 40, owner_id=user_id)
     for old_job in db.prune_job_history(user_id, keep=20):
         _cleanup_job_uploads(old_job)
+        cleanup_job_preview(str(old_job["id"]))
     jobs = db.list_jobs(20, owner_id=user_id)
+    library_jobs = []
+    for job in db.list_active_generation_jobs(user_id):
+        payload = job.get("payload") or {}
+        library_jobs.append({
+            "id": job["id"],
+            "title": str(payload.get("title") or payload.get("user_prompt") or payload.get("prompt") or "MiniMax H3")[:140],
+            "status": job["status"],
+            "progress": job["progress"],
+            "stage": job["stage"],
+            "gpu_target": job.get("gpu_target"),
+            "created_at": job["created_at"],
+            "steps": payload.get("steps") or 8,
+            "seconds": payload.get("seconds") or 5,
+            "preview_step": job.get("preview_step") or 0,
+            "preview_mime": job.get("preview_mime"),
+            "preview_enabled": bool(job.get("preview_enabled")),
+        })
     active_global = []
     for job in db.list_jobs(200):
         if job.get("status") not in {"queued", "running"}:
@@ -1753,6 +1773,7 @@ async def api_v2_state(
             key: media_data[key] for key in ("page", "page_size", "total", "pages")
         },
         "jobs": jobs,
+        "library_jobs": library_jobs,
         "active_global": active_global,
         "counts": db.state_counts(user_id),
         "global_counts": db.state_counts(),
@@ -2093,6 +2114,8 @@ async def api_cancel_job(
     if source is None:raise HTTPException(404,"Задача не найдена.")
     job = db.request_cancel(job_id, user_id)
     if job is None:raise HTTPException(404,"Задача не найдена.")
+    if source["kind"] == "generate":
+        cleanup_job_preview(job_id)
     if job["status"]=="canceled" and source.get("gpu_target") and source["kind"]=="generate":
         _v2_release_gpu(source["gpu_target"],job_id)
 
@@ -2103,6 +2126,29 @@ async def api_cancel_job(
         )
 
     return {"ok": True, "status": job["status"]}
+
+
+@app.get("/api/jobs/{job_id}/preview")
+async def api_job_preview(
+    job_id: str,
+    user_id: str = Depends(require_user),
+):
+    job = db.get_job(job_id, user_id)
+    if (
+        job is None or job["kind"] != "generate"
+        or job["status"] != "running" or job["cancel_requested"]
+        or int(job.get("preview_step") or 0) < 2
+    ):
+        raise HTTPException(404, "Предпросмотр недоступен.")
+    mime = str(job.get("preview_mime") or "")
+    path = preview_path(job_id, mime)
+    if path is None or not path.is_file():
+        raise HTTPException(404, "Предпросмотр ещё не готов.")
+    return FileResponse(
+        path,
+        media_type=mime,
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @app.post("/api/jobs/{job_id}/retry")
