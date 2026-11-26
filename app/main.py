@@ -1018,7 +1018,7 @@ V2_ASPECT_RATIOS = {
     "9:16": (9, 16),
 }
 V2_DURATIONS = {5, 10, 15}
-V2_STEPS = {1, 4, 8, 12, 16}
+V2_STEPS = {8, 12, 16}
 V2_GPU_TARGETS = {"rtx3090", "rtx2080"}
 
 def _v2_gpu_target(raw: object) -> str:
@@ -1325,7 +1325,7 @@ def _v2_validate_simple_settings(seconds: int, steps: int) -> None:
     if seconds not in V2_DURATIONS:
         raise HTTPException(400, "V2 поддерживает длительность только 5, 10 или 15 секунд.")
     if steps not in V2_STEPS:
-        raise HTTPException(400, "V2 поддерживает только 1, 4, 8, 12 или 16 шагов.")
+        raise HTTPException(400, "V2 поддерживает только 8, 12 или 16 шагов.")
 
 
 def _v2_character_references(

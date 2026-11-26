@@ -38,7 +38,7 @@ Visible generation settings are intentionally constrained:
 - quality: 480 / 720 / 1080;
 - ratio: 1:1 / 16:9 / 9:16;
 - duration: 5 / 10 / 15 sec;
-- steps: 1 / 4 / 8 / 12 / 16;
+- steps: 8 / 12 / 16;
 - FPS: fixed 24;
 - seed: Auto (-1) or 0..4294967295;
 - H3 generated sound on/off.

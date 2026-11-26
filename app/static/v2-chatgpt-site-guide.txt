@@ -29,7 +29,7 @@ Visible shared controls:
 - Quality: 480p / 720p / 1080p
 - Format: 1:1 / 16:9 / 9:16
 - Duration: 5 / 10 / 15 sec
-- Steps: 1 / 4 / 8 / 12 / 16
+- Steps: 8 / 12 / 16
 - Seed
 
 NORMAL VIDEO MODE
@@ -119,10 +119,10 @@ LIBRARY
 -------
 GPU status, currently generating videos, and completed videos:
 - RTX3090 primary and RTX2080 secondary live GPU status;
-- all generations: select GPU and choose 1, 4, 8, 12 or 16 sampling steps;
+- all generations: select GPU and choose 8, 12 or 16 sampling steps;
 - animated progress only during generation; no per-step preview or pause;
 - each run decodes a final MP4 with full video VAE and optional audio VAE;
-- for a quick trial use 4 steps, then re-run with the same seed and more steps (not a resumed sampler);
+- a rerun with a different step count can change video and audio, even with the same seed;
 - overlay render elapsed time; player shows start time and render duration;
 - Open
 - Download

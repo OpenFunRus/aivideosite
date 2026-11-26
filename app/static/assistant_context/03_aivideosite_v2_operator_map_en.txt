@@ -66,7 +66,7 @@ Visible shared settings:
 - Quality: 480p / 720p / 1080p
 - Format: 1:1 / 16:9 / 9:16
 - Duration: 5 / 10 / 15 sec
-- Steps: 1 / 4 / 8 / 12 / 16
+- Steps: 8 / 12 / 16
 - Seed
 
 Normal Video mode:
@@ -222,8 +222,8 @@ GPU lanes:
 
 Jobs:
 - generation shows animated progress and actual elapsed time, with no intermediate images;
-- select 1, 4, 8, 12 or 16 steps; every job produces final MP4 via full Video VAE and optional Audio VAE;
-- a quick 4-step trial and a later 12/16-step job with the same seed are separate complete generations, not paused/resumed passes;
+- select 8, 12 or 16 steps; every job produces final MP4 via full Video VAE and optional Audio VAE;
+- changing the step count changes video and sound even with an identical seed; each run is separate;
 - completed videos show start date and generation duration;
 - queued/running jobs are preserved in the backend database.
 

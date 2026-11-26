@@ -44,7 +44,6 @@
 .v2-segmented button{border:0;border-radius:8px;background:transparent;min-height:34px;color:#c5cad8;cursor:pointer;font-size:12px}
 .v2-segmented button:hover{background:#252a3a}
 .v2-segmented button.active{color:white;background:linear-gradient(145deg,#7657ff,#5d3cd9);box-shadow:0 4px 14px rgba(105,70,232,.28)}
-.v2-segmented[data-setting="steps"]{grid-template-columns:repeat(5,minmax(0,1fr))}
 .v2-settings-bottom{grid-column:1/-1;border-top:1px solid #2b3042;margin-top:18px;padding-top:16px;display:flex;align-items:flex-end;gap:28px}
 .v2-seed-field{display:flex;flex-direction:column;gap:7px;min-width:250px}
 .v2-seed-field span{font-size:12px;font-weight:700}

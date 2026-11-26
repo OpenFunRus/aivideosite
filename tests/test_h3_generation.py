@@ -40,7 +40,7 @@ class H3GenerationTests(unittest.TestCase):
 
     def test_every_step_is_full_video_and_audio_decode(self):
         client = ComfyUIClient()
-        for steps in (1, 4, 8, 12, 16):
+        for steps in (8, 12, 16):
             with self.subTest(steps=steps):
                 _v2_validate_simple_settings(5, steps)
                 workflow = client._build_h3_workflow(
@@ -72,20 +72,22 @@ class H3GenerationTests(unittest.TestCase):
                         uploaded_images=[],
                     )
 
-        with self.assertRaises(HTTPException):
-            _v2_validate_simple_settings(5, 2)
-        # Existing 2-step jobs queued before this UI change must still finish.
-        old_job = client._build_h3_workflow(
-            job_id=self.job_id,
-            payload={"prompt": "Old scene", "steps": 2},
-            uploaded_images=[],
-        )
-        self.assertEqual(old_job["5"]["inputs"]["steps"], 2)
+        # Existing short-step jobs queued before this UI change must still finish.
+        for steps in (1, 2, 4):
+            with self.subTest(legacy_steps=steps):
+                with self.assertRaises(HTTPException):
+                    _v2_validate_simple_settings(5, steps)
+                old_job = client._build_h3_workflow(
+                    job_id=self.job_id,
+                    payload={"prompt": "Old scene", "steps": steps},
+                    uploaded_images=[],
+                )
+                self.assertEqual(old_job["5"]["inputs"]["steps"], steps)
 
     def test_audio_off_omits_decoder_but_keeps_video(self):
         workflow = ComfyUIClient()._build_h3_workflow(
             job_id=self.job_id,
-            payload={"prompt": "Scene", "steps": 2, "generate_audio": False},
+            payload={"prompt": "Scene", "steps": 8, "generate_audio": False},
             uploaded_images=[],
         )
         self.assertNotIn("10", workflow)
@@ -94,7 +96,7 @@ class H3GenerationTests(unittest.TestCase):
 
     def test_repeated_seed_is_not_reused_from_comfy_cache(self):
         client = ComfyUIClient()
-        payload = {"prompt": "Same prompt", "steps": 2, "seed": 12345}
+        payload = {"prompt": "Same prompt", "steps": 8, "seed": 12345}
         first = client._build_h3_workflow(
             job_id=self.job_id, payload=payload.copy(), uploaded_images=[], enable_run_nonce=True,
         )
@@ -111,7 +113,7 @@ class H3GenerationTests(unittest.TestCase):
     def test_guided_sampling_uses_nonce_and_full_decoder(self):
         workflow = ComfyUIClient()._build_h3_workflow(
             job_id=self.job_id,
-            payload={"prompt": "Scene", "steps": 4, "seed": 15, "generate_audio": True},
+            payload={"prompt": "Scene", "steps": 8, "seed": 15, "generate_audio": True},
             uploaded_images=[], staged_guides=[{"name": "guide.png", "frame_idx": 0}],
             enable_run_nonce=True,
         )
