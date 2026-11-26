@@ -828,6 +828,10 @@ def active_media_ids(owner_id: str | None = None) -> set[str]:
         second_media_id = payload.get("second_media_id")
         if second_media_id:
             protected.add(str(second_media_id))
+        repair = payload.get("repair") if isinstance(payload.get("repair"), dict) else {}
+        for key in ("media_id", "second_media_id"):
+            if repair.get(key):
+                protected.add(str(repair[key]))
         for clip in payload.get("clips") or []:
             if isinstance(clip, dict) and clip.get("media_id"):
                 protected.add(str(clip["media_id"]))

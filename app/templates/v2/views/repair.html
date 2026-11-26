@@ -9,19 +9,16 @@
 
     <div class="v2-repair-modes" role="group" aria-label="Режим исправления">
       <button class="active" type="button" data-repair-mode="fragment" aria-pressed="true">
-        <svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg><strong>Фрагмент</strong><small>Убрать участок</small>
+        <svg class="icon"><use href="/static/icons.svg#icon-scissors"></use></svg><strong>Фрагмент</strong><small>AI-перегенерация</small>
       </button>
       <button type="button" data-repair-mode="object" aria-pressed="false">
-        <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg><strong>Объект</strong><small>AI · эксперимент</small>
-      </button>
-      <button type="button" data-repair-mode="motion" aria-pressed="false">
-        <svg class="icon"><use href="/static/icons.svg#icon-activity"></use></svg><strong>Движение</strong><small>AI · эксперимент</small>
+        <svg class="icon"><use href="/static/icons.svg#icon-photo"></use></svg><strong>Объект</strong><small>AI-инпейнт · маска</small>
       </button>
       <button type="button" data-repair-mode="sound" aria-pressed="false">
-        <svg class="icon"><use href="/static/icons.svg#icon-volume"></use></svg><strong>Звук</strong><small>На участке</small>
+        <svg class="icon"><use href="/static/icons.svg#icon-volume"></use></svg><strong>Речь и звук</strong><small>AI-замена аудио</small>
       </button>
       <button type="button" data-repair-mode="splice" aria-pressed="false">
-        <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><strong>Склейка</strong><small>Два видео · 1 сек</small>
+        <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><strong>Склейка</strong><small>AI-переход · 1 сек</small>
       </button>
     </div>
 
@@ -30,6 +27,7 @@
         <div class="v2-repair-panel-title"><strong>Предпросмотр</strong><span id="v2-repair-frame-label">24 кадра/сек · точная позиция</span></div>
         <div class="v2-repair-monitor">
           <video id="v2-repair-preview" controls playsinline preload="metadata"></video>
+          <canvas id="v2-repair-mask" aria-label="Белая маска области для замены объекта" hidden></canvas>
           <div class="v2-repair-monitor-empty" id="v2-repair-monitor-empty">
             <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg>
             <strong>Выберите видео</strong>
@@ -45,6 +43,11 @@
           </div>
           <button type="button" class="v2-repair-mark" id="v2-repair-mark-start" title="Поставить начало выделения на текущем кадре">Начало</button>
           <button type="button" class="v2-repair-mark" id="v2-repair-mark-end" title="Поставить конец выделения на текущем кадре">Конец</button>
+        </div>
+        <div class="v2-repair-mask-tools" id="v2-repair-mask-tools" hidden>
+          <span>Нарисуйте маску поверх объекта — белая область будет перегенерирована H3.</span>
+          <label>Размер кисти <input id="v2-repair-brush" type="range" min="8" max="120" value="36"></label>
+          <button id="v2-repair-mask-clear" type="button">Очистить</button>
         </div>
       </div>
 
@@ -63,11 +66,11 @@
         <input id="v2-repair-file-a" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm,.m4v" hidden>
         <input id="v2-repair-file-b" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm,.m4v" hidden>
         <div class="v2-repair-settings" id="v2-repair-splice-settings" hidden>
-          <label><span>Переход</span><select id="v2-repair-transition"><option value="fade">Плавное растворение</option><option value="wipeleft">Шторка влево</option><option value="slideleft">Сдвиг влево</option></select></label>
-          <div class="v2-repair-transition-length"><span>Длительность перехода</span><strong>1,0 сек</strong></div>
+          <div class="v2-repair-transition-length"><span>AI-переход</span><strong>1,0 сек</strong></div>
+          <div class="v2-repair-transition-length"><span>H3 вычисляет</span><strong>5 сек · опорные кадры</strong></div>
         </div>
         <div class="v2-repair-settings" id="v2-repair-sound-settings" hidden>
-          <label><span>Звук на выделении</span><select id="v2-repair-volume"><option value="0">Выключить (0%)</option><option value="0.3">Приглушить (30%)</option><option value="0.6">Тише (60%)</option><option value="1.5">Громче (150%)</option></select></label>
+          <label><span>Что перегенерировать</span><select id="v2-repair-sound-type"><option value="words">Отдельные слова / фразу</option><option value="voice">Голос персонажа</option><option value="all">Все звуки и голоса</option></select></label>
         </div>
         <div class="v2-repair-context" id="v2-repair-context">Выбранный отрезок будет удалён. Остальная часть ролика сохранится.</div>
       </aside>
@@ -93,6 +96,11 @@
 
     <div class="v2-repair-footer">
       <label class="v2-repair-prompt" id="v2-repair-prompt-field"><span>Промпт исправления</span><textarea id="v2-repair-prompt" rows="2" maxlength="8000" placeholder="Опишите, что должно измениться на выбранном участке…"></textarea></label>
+      <div class="v2-repair-ai-options">
+        <label>Проходы <select id="v2-repair-steps"><option value="8">8</option><option value="12">12</option><option value="16">16</option></select></label>
+        <label>Seed <input id="v2-repair-seed" type="number" min="-1" max="4294967295" step="1" placeholder="Auto"></label>
+        <span>MiniMax H3 · Ref2VA</span>
+      </div>
       <div class="v2-repair-submit-row"><div class="v2-repair-note" id="v2-repair-note">Оригинал останется в Библиотеке. Результат появится как новый ролик.</div><button class="v2-primary-button" id="v2-repair-submit" type="button" disabled>Исправить</button></div>
     </div>
   </div>
@@ -101,5 +109,15 @@
     <div class="v2-repair-picker-head"><div><strong>Выбрать видео из Библиотеки</strong><span>Нажмите на нужный ролик</span></div><button id="v2-repair-picker-close" type="button" aria-label="Закрыть">✕</button></div>
     <input id="v2-repair-picker-search" type="search" placeholder="Поиск по названию…" aria-label="Поиск видео">
     <div class="v2-repair-picker-grid" id="v2-repair-picker-grid"></div>
+  </dialog>
+  <dialog class="v2-gpu-dialog" id="v2-repair-gpu-dialog">
+    <div class="v2-gpu-dialog-card">
+      <div class="v2-gpu-dialog-head"><div><span class="v2-heading-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span><div><strong>Запустить AI-исправление</strong><small>MiniMax H3 будет генерировать новый участок на выбранной GPU.</small></div></div><button class="v2-icon-button v2-gpu-dialog-close" id="v2-repair-gpu-close" type="button" aria-label="Закрыть"><svg class="icon"><use href="/static/icons.svg#icon-x"></use></svg></button></div>
+      <div class="v2-gpu-choice-grid">
+        <button class="v2-gpu-choice" type="button" data-repair-gpu="rtx3090" disabled><span class="v2-gpu-choice-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span><span class="v2-gpu-choice-copy"><strong>RTX3090</strong><small>24 GB · основная</small></span><span class="v2-gpu-choice-state" data-repair-gpu-state>Проверка…</span></button>
+        <button class="v2-gpu-choice" type="button" data-repair-gpu="rtx2080" disabled><span class="v2-gpu-choice-icon"><svg class="icon"><use href="/static/icons.svg#icon-gpu"></use></svg></span><span class="v2-gpu-choice-copy"><strong>RTX2080</strong><small>22 GB · дополнительная</small></span><span class="v2-gpu-choice-state" data-repair-gpu-state>Проверка…</span></button>
+      </div>
+      <p class="v2-gpu-dialog-note">AI-правки экспериментальны: сохранение идентичности и точность произнесённых слов H3 не гарантирует.</p>
+    </div>
   </dialog>
 </section>

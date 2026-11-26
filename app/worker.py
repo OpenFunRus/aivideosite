@@ -16,6 +16,7 @@ from typing import Any, Callable
 
 from . import db
 from .comfy import ComfyUIClient, ComfyUICancelled
+from .ai_repair import assembly_command
 from .config import settings
 
 
@@ -259,6 +260,46 @@ class JobWorker(threading.Thread):
             )
             self._check_cancel(job_id)
 
+            repair = payload.get("repair") if isinstance(payload.get("repair"), dict) else None
+            if repair:
+                source = _require_media(str(repair["media_id"]), owner_id=str(job.get("owner_id") or "user1"))
+                source_path = settings.library_dir / source["filename"]
+                second_path = None
+                second_duration = 0.0
+                second_audio = False
+                if repair.get("second_media_id"):
+                    second = _require_media(str(repair["second_media_id"]), owner_id=str(job.get("owner_id") or "user1"))
+                    second_path = settings.library_dir / second["filename"]
+                    second_duration = probe_duration(second_path) or 0.0
+                    second_audio = probe_has_audio(second_path)
+                generated_path = output_path.with_name(f"{media_id}_h3_raw.mp4")
+                os.replace(output_path, generated_path)
+                try:
+                    if repair.get("mode") == "sound" and not probe_has_audio(generated_path):
+                        raise RuntimeError("H3 не создал звуковую дорожку для замены.")
+                    original_size = probe_video_size(source_path)
+                    original_duration = probe_duration(source_path)
+                    generated_duration = probe_duration(generated_path)
+                    if original_size is None or not original_duration or not generated_duration:
+                        raise RuntimeError("Не удалось прочитать видео для сборки AI-исправления.")
+                    db.update_job(job_id, progress=98, stage="AI-исправление: сохраняем оригинальные участки")
+                    command = assembly_command(
+                        mode=str(repair["mode"]), source=source_path,
+                        generated=generated_path, destination=output_path,
+                        start=float(repair.get("start") or 0),
+                        end=float(repair.get("end") or 0),
+                        source_duration=original_duration,
+                        size=original_size, generated_duration=generated_duration,
+                        source_has_audio=probe_has_audio(source_path),
+                        generated_has_audio=probe_has_audio(generated_path),
+                        second=second_path, second_duration=second_duration,
+                        second_has_audio=second_audio,
+                    )
+                    run_command(command, timeout=7200, should_cancel=should_cancel)
+                    self._check_cancel(job_id)
+                finally:
+                    generated_path.unlink(missing_ok=True)
+
             final_audio = (
                 payload.get("final_audio")
                 if isinstance(payload.get("final_audio"), dict)
@@ -358,11 +399,11 @@ class JobWorker(threading.Thread):
             # `created_at` is captured when the API enqueues the GPU job.
             completed_at = datetime.now(timezone.utc)
             started_at, elapsed = _generation_elapsed_from_submission(timing_job or job, completed_at)
-            title = _prompt_title(
+            title = str(payload.get("title") or "").strip()[:120] if repair else _prompt_title(
                 payload.get("user_prompt") or payload.get("prompt") or "H3 video"
             )
             metadata = {
-                "operation": "generate",
+                "operation": "ai_repair" if repair else "generate",
                 "prompt": payload.get("prompt", ""),
                 "width": payload.get("width"),
                 "height": payload.get("height"),
@@ -413,14 +454,16 @@ class JobWorker(threading.Thread):
                     "scene_volume": final_audio.get("scene_volume"),
                 },
             }
+            if repair:
+                metadata["repair"] = repair
 
             db.insert_media(
                 media_id=media_id,
                 owner_id=str(job.get("owner_id") or "user1"),
                 filename=output_path.name,
-                kind="generated",
+                kind="edited" if repair else "generated",
                 title=title,
-                parent_id=None,
+                parent_id=str(repair["media_id"]) if repair else None,
                 metadata=metadata,
                 size_bytes=output_path.stat().st_size,
                 duration=duration,

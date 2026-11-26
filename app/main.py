@@ -36,6 +36,7 @@ from .config import settings
 from . import assistant as local_assistant
 from .comfy import ComfyUIClient
 from .h3_references import build_reference_prompt, validate_reference_items
+from .ai_repair import prepare_ai_inputs
 from .worker import JobWorker, probe_duration, probe_video_size, probe_has_audio, run_command
 
 
@@ -1740,6 +1741,7 @@ async def api_v2_state(
             "sampling_started_at": job.get("sampling_started_at"),
             "steps": payload.get("steps") or 8,
             "seconds": payload.get("seconds") or 5,
+            "repair_mode": (payload.get("repair") or {}).get("mode") if isinstance(payload.get("repair"), dict) else None,
         })
     active_global = []
     for job in db.list_jobs(200):
@@ -2170,11 +2172,13 @@ async def api_retry_job(
         media = db.get_media(str(clip["media_id"]), user_id)
         if media is None or not (settings.library_dir / media["filename"]).is_file():
             missing.append(f"media:{clip['media_id']}")
-    for key in ("media_id", "second_media_id"):
-        if payload.get(key):
-            media = db.get_media(str(payload[key]), user_id)
+    repair = payload.get("repair") if isinstance(payload.get("repair"), dict) else {}
+    for candidate in (payload.get("media_id"), payload.get("second_media_id"),
+                      repair.get("media_id"), repair.get("second_media_id")):
+        if candidate:
+            media = db.get_media(str(candidate), user_id)
             if media is None or not (settings.library_dir / media["filename"]).is_file():
-                missing.append(f"media:{payload[key]}")
+                missing.append(f"media:{candidate}")
     if missing:
         raise HTTPException(
             409,
@@ -2285,22 +2289,45 @@ async def api_repair_export(
     payload: dict,
     user_id: str = Depends(require_user),
 ):
-    """Queue precisely scoped FFmpeg operations; AI inpainting is intentionally unavailable."""
+    """Queue an actual MiniMax H3 pass for each of the four repair workflows."""
     mode = str(payload.get("mode") or "").strip()
-    if mode not in {"fragment", "sound", "splice"}:
-        raise HTTPException(422, "Точное AI-исправление объекта и движения пока не поддерживается.")
+    if mode not in {"fragment", "object", "sound", "splice"}:
+        raise HTTPException(422, "Выберите режим: фрагмент, объект, звук или AI-склейка.")
+
+    raw_prompt = str(payload.get("prompt") or "").strip()
+    if not raw_prompt:
+        raise HTTPException(400, "Введите промпт для MiniMax H3.")
+    if len(raw_prompt) > 8000:
+        raise HTTPException(400, "Промпт слишком длинный (максимум 8000 символов).")
+    gpu_target = _v2_gpu_target(payload.get("gpu_target"))
+    try:
+        steps = int(payload.get("steps") or 8)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, "Проходы должны быть числом: 8, 12 или 16.") from exc
+    if steps not in V2_STEPS:
+        raise HTTPException(400, "Доступны только 8, 12 или 16 проходов.")
+    seed = _v2_seed(payload.get("seed"))
+    if mode == "object" and str(settings.h3_controlnet_model_patch).strip().lower() in {"", "none"}:
+        raise HTTPException(409, "Для замены объекта нужен H3 Fun ControlNet Union patch.")
 
     source_id = str(payload.get("media_id") or "").strip()
     source = _ensure_media(source_id, user_id)
     source_path = settings.library_dir / source["filename"]
     if not source_path.is_file():
         raise HTTPException(404, "Файл исходного видео отсутствует.")
-    source_length = await asyncio.to_thread(probe_duration, source_path)
-    if not source_length or source_length <= 0:
+    source_length, source_size = await asyncio.gather(
+        asyncio.to_thread(probe_duration, source_path),
+        asyncio.to_thread(probe_video_size, source_path),
+    )
+    if not source_length or source_length <= 0 or source_size is None:
         raise HTTPException(400, "Невозможно определить длительность видео.")
 
-    operation: dict = {"mode": mode, "media_id": source_id}
-    title_prefix = {"fragment": "Без фрагмента", "sound": "Исправлен звук", "splice": "Склейка"}[mode]
+    second_id = None
+    second_path = None
+    start, end = 0.0, 0.0
+    sound_type = str(payload.get("sound_type") or "words")
+    if sound_type not in {"words", "voice", "all"}:
+        raise HTTPException(400, "Неизвестный режим замены звука.")
     if mode == "splice":
         second_id = str(payload.get("second_media_id") or "").strip()
         second = _ensure_media(second_id, user_id)
@@ -2309,31 +2336,68 @@ async def api_repair_export(
             raise HTTPException(404, "Файл второго видео отсутствует.")
         second_length = await asyncio.to_thread(probe_duration, second_path)
         if not second_length or source_length <= 1.05 or second_length <= 1.05:
-            raise HTTPException(400, "Для перехода нужны два видео продолжительностью более 1 секунды.")
-        transition = str(payload.get("transition") or "fade")
-        if transition not in {"fade", "wipeleft", "slideleft"}:
-            raise HTTPException(400, "Неизвестный тип перехода.")
-        operation.update(second_media_id=second_id, transition=transition, transition_seconds=1.0)
-        title = f"{title_prefix} · {source['title']} + {second['title']}"[:120]
+            raise HTTPException(400, "Для AI-перехода нужны два видео длиннее 1 секунды.")
+        title = f"AI-переход · {source['title']} + {second['title']}"[:120]
     else:
         start = _editor_float(payload.get("start", 0), "Начало", 0, source_length)
         end = _editor_float(payload.get("end", 0), "Конец", 0, source_length)
-        if end - start < 0.04:
-            raise HTTPException(400, "Выберите участок длиной хотя бы один кадр.")
-        if mode == "fragment" and end - start >= source_length - 0.04:
-            raise HTTPException(400, "Нельзя удалить весь ролик.")
-        operation.update(start=start, end=end)
-        if mode == "sound":
-            if not await asyncio.to_thread(probe_has_audio, source_path):
-                raise HTTPException(400, "У выбранного ролика нет звуковой дорожки.")
-            factor = _editor_float(payload.get("volume", 0), "Громкость", 0, 1.5)
-            operation["volume"] = factor
-        title = f"{title_prefix} · {source['title']}"[:120]
+        if end - start < 0.2 or end - start > 15:
+            raise HTTPException(400, "Для MiniMax H3 выделите от 0,2 до 15 секунд.")
+        mode_label = {"fragment": "фрагмент", "object": "объект", "sound": "звук"}[mode]
+        title = f"AI-{mode_label} · {source['title']}"[:120]
 
-    operation["title"] = title
+    if mode == "sound":
+        directive = {
+            "words": "Speech edit: regenerate only the selected spoken words as specified, keeping a natural, consistent voice and clean synchronization.",
+            "voice": "Voice edit: regenerate the selected speech with the requested voice characteristics and consistent timing.",
+            "all": "Full audio edit: regenerate all dialogue, ambience, sound effects and music for the selected interval.",
+        }[sound_type]
+        raw_prompt = directive + "\n" + raw_prompt
+
+    repair = {"mode": mode, "media_id": source_id, "second_media_id": second_id,
+              "start": start, "end": end, "sound_type": sound_type, "bridge_seconds": 1.0}
     job_id = uuid.uuid4().hex
-    db.enqueue_job(job_id, "repair_export", operation, owner_id=user_id)
-    return {"ok": True, "job_id": job_id}
+    _v2_reserve_gpu(gpu_target, job_id)
+    prepared: dict = {}
+    try:
+        prepared = await asyncio.to_thread(
+            prepare_ai_inputs, job_id=job_id, mode=mode,
+            first_video=source_path, first_duration=float(source_length),
+            start=start, end=end, size=source_size, second_video=second_path,
+            mask_png=str(payload.get("mask_png") or ""),
+        )
+        items = prepared["references"]
+        actual_prompt, reference_map = build_reference_prompt(
+            raw_prompt, task="timeline_guides", items=items,
+        )
+        db.enqueue_job(
+            job_id, "generate", {
+                "title": title, "prompt": actual_prompt, "user_prompt": raw_prompt,
+                "width": prepared["width"], "height": prepared["height"],
+                "seconds": float(prepared["seconds"]), "fps": 24,
+                "steps": steps, "seed": seed, "generate_audio": True,
+                "generation_mode": "reference", "keyframe_role": "first",
+                "reference_task": "timeline_guides", "ref_image_size": "match",
+                "images": [], "references": items, "reference_map": reference_map,
+                "guides": prepared["guides"], "control": prepared["control"],
+                "repair": repair, "v2_context": {"workspace": "repair", "repair_mode": mode},
+                "final_audio": {},
+            }, owner_id=user_id, gpu_target=gpu_target,
+        )
+        return {"ok": True, "job_id": job_id, "gpu_target": gpu_target,
+                "h3_seconds": prepared["seconds"], "bridge_seconds": 1 if mode == "splice" else None}
+    except Exception as exc:
+        for item in (prepared.get("references") or []) + (prepared.get("guides") or []):
+            if isinstance(item, dict) and item.get("path"):
+                Path(item["path"]).unlink(missing_ok=True)
+        for key in ("mask_video_path", "control_video_path", "source_video_path"):
+            value = (prepared.get("control") or {}).get(key)
+            if value:
+                Path(value).unlink(missing_ok=True)
+        _v2_release_gpu(gpu_target, job_id)
+        if isinstance(exc, ValueError):
+            raise HTTPException(400, str(exc)) from exc
+        raise
 
 
 @app.post("/api/editor/export")
