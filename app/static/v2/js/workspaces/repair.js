@@ -12,15 +12,14 @@
     fragment: { action: "AI-перегенерация", help: "MiniMax H3 заново создаст выделенный участок с опорными начальным и конечным кадрами. Вне выделения исходное видео сохранится.", placeholder: "Опишите, что H3 должен изменить в этом фрагменте…" },
     object: { action: "Заменить объект через H3", help: "Белой кистью закрасьте объект на кадре. MiniMax H3 Fun ControlNet перегенерирует эту область на выбранном временном участке. Маска одинаковая для всего отрезка.", placeholder: "Что должно появиться вместо закрашенного объекта?" },
     sound: { action: "Перегенерировать звук H3", help: "MiniMax H3 создаст новую звуковую дорожку по промпту. Изображение исходника останется прежним. Точные слова и тембр голоса не гарантируются.", placeholder: "Укажите точные новые слова в кавычках, говорящего и особенности голоса…" },
-    splice: { action: "Сгенерировать склейку", help: "Выберите конец A и начало B. H3 создаст пролёт камеры между двумя разными сценами, используя только их пограничные кадры. Звук — whoosh без музыки и речи. При 0 сек — монтаж на CPU.", placeholder: "Опишите полёт камеры между двумя сценами…" },
+    splice: { action: "Сгенерировать склейку", help: "Выберите конец A и начало B. H3 создаст переход по выбранному пресету между двумя сценами, используя только пограничные кадры. Без речи и музыки. При 0 сек — монтаж на CPU.", placeholder: "Опишите переход между двумя сценами…" },
   };
-  const defaultSplicePrompt = [
-    "integrated_multimodal_description: [Shot 1] CINEMATIC FLY-THROUGH SCENE-TO-SCENE TRANSITION, NOT A CONTINUATION OF EITHER SCENE. This is a FIRST/LAST FRAME transition between TWO POTENTIALLY UNRELATED LOCATIONS AND MOMENTS. The FIRST supplied image is exactly the last retained frame of video A; the SECOND supplied image is exactly the first retained frame of video B. Treat them as fixed visual endpoints, not consecutive frames from one static location. At the beginning, briefly match the FIRST image, then IMMEDIATELY launch the virtual camera into a deliberate, fast, fluid traveling move away from that scene: a dynamic push-through, sweeping whip pan, dramatic forward dolly, or flight past a close foreground obstruction, chosen to suit the two images. Through the middle, the camera visibly leaves environment A; scenery rushes past with directional motion blur, parallax, airflow and a natural full-frame occlusion or speed-ramped visual bridge. The camera TRAVELS BETWEEN SCENES instead of holding on characters, continuing their actions, or inventing dialogue. It is allowed and expected that environment B is a completely different place, time, interior or exterior: do NOT pretend both pictures belong to one room, do NOT morph one person's face into another, and do NOT merge incompatible backgrounds. In the final portion, smoothly reveal environment B, decelerate the camera, stabilize its perspective and LAND PRECISELY on the SECOND supplied image's framing, subjects, clothing, geometry, lighting and composition. Use one readable camera-travel transition from A to B, with clean visual direction and convincing cinematic motion; preserve the two endpoint images exactly. No static image slideshow, no prolonged character acting, no sudden hard cut, no black screen, no unrelated third scene, no rubbery morphing, no melting textures. Absolutely no speaking, no moving lips to form words, no narration, singing, laughter, shouts or any vocal performance; characters remain silent.",
-    "overall_soundscape: A SINGLE CINEMATIC CAMERA-FLIGHT SOUND EFFECT, NOT MUSIC: an airy rising WHOOSH as the camera launches away from the first scene, a smooth rushing wind and subtle low-frequency pass-by sweep during the fast fly-through, then a soft descending airy WHOOSH as the camera slows into the second scene. Match the sound envelope to the actual camera speed and finish with a natural soft decay. Non-vocal atmospheric sound design only. ABSOLUTELY NO guitar, strumming, piano, strings, drums, instruments, melodies, notes, beats, songs, soundtrack, radio or background music. NO speech, voices, whispering, singing, cheering or animal vocalizations. No random sound events unrelated to camera flight.",
-    "non_diegetic_music: N/A",
-    "speech_policy: silent",
-  ].join("\n\n");
-  const splicePromptKey = "aivideosite.repair.splice.prompt.v4";
+  const splicePresetGroups = window.AIVideoSplicePresets?.groups || [];
+  const splicePresets = new Map(splicePresetGroups.flatMap(group => group.items.map(item => [item.id, item])));
+  const defaultSplicePresetId = window.AIVideoSplicePresets?.defaultId || "cinema-flight";
+  const selectedSplicePresetKey = "aivideosite.repair.splice.selected-preset.v1";
+  const customSplicePromptKey = "aivideosite.repair.splice.custom-prompt.v1";
+  const oldSplicePromptKey = "aivideosite.repair.splice.prompt.v4";
   const FPS = 24;
   const state = { mode: "fragment", a: null, b: null, pickerSlot: "a", start: 0, end: 0, cutA: 0, cutB: 0, previewSlot: "a", dragging: null, uploading: false, submitting: false, maskDrawn: false, splice: { quality: "480", ratio: "auto", steps: "8", seconds: 1 } };
   const mask = qs("#v2-repair-mask");
@@ -570,15 +569,59 @@
     if (event.code === "ArrowRight") step(1);
   });
   qs("#v2-repair-prompt").addEventListener("input", renderControls);
-  try { qs("#v2-repair-splice-prompt").value = localStorage.getItem(splicePromptKey) || defaultSplicePrompt; }
-  catch { qs("#v2-repair-splice-prompt").value = defaultSplicePrompt; }
-  qs("#v2-repair-splice-prompt").addEventListener("input", () => {
-    try { localStorage.setItem(splicePromptKey, qs("#v2-repair-splice-prompt").value); } catch { /* storage can be blocked */ }
+  const presetSelect = qs("#v2-repair-splice-preset");
+  const spliceTextarea = qs("#v2-repair-splice-prompt");
+  const presetDescription = qs("#v2-repair-splice-preset-description");
+  const stored = (key) => { try { return localStorage.getItem(key) || ""; } catch { return ""; } };
+  const save = (key, value) => { try { localStorage.setItem(key, value); } catch { /* Storage is optional. */ } };
+  presetSelect.innerHTML = splicePresetGroups.map(group =>
+    '<optgroup label="' + escapeHtml(group.name) + '">' +
+    group.items.map(item => '<option value="' + escapeHtml(item.id) + '">' + escapeHtml(item.name) + '</option>').join("") +
+    '</optgroup>'
+  ).join("") + '<optgroup label="✏️ Свой вариант"><option value="custom">Мой промпт</option></optgroup>';
+
+  let customDraft = stored(customSplicePromptKey) || stored(oldSplicePromptKey);
+  let activePreset = stored(selectedSplicePresetKey);
+  if (!activePreset) activePreset = customDraft ? "custom" : defaultSplicePresetId;
+  if (activePreset !== "custom" && !splicePresets.has(activePreset)) activePreset = defaultSplicePresetId;
+  if (!splicePresets.has(activePreset) && activePreset !== "custom") activePreset = "custom";
+  const fallbackPreset = splicePresets.get(defaultSplicePresetId) || splicePresets.values().next().value;
+
+  function explainPreset() {
+    const item = splicePresets.get(activePreset);
+    presetDescription.textContent = item
+      ? item.description + " · Текст ниже можно изменить — он сохранится как свой."
+      : "Ваш текст: редактируйте свободно. При выборе другого пресета он сохранится.";
+  }
+
+  spliceTextarea.value = activePreset === "custom"
+    ? (customDraft || fallbackPreset?.prompt || "")
+    : (splicePresets.get(activePreset)?.prompt || fallbackPreset?.prompt || "");
+  presetSelect.value = activePreset;
+  explainPreset();
+  presetSelect.addEventListener("change", () => {
+    const selected = presetSelect.value;
+    if (selected === "custom") {
+      if (!customDraft) customDraft = spliceTextarea.value;
+      spliceTextarea.value = customDraft;
+      save(customSplicePromptKey, customDraft);
+    } else {
+      const preset = splicePresets.get(selected);
+      if (!preset) return;
+      spliceTextarea.value = preset.prompt;
+    }
+    activePreset = selected;
+    save(selectedSplicePresetKey, activePreset);
+    explainPreset();
     renderControls();
   });
-  qs("#v2-repair-splice-prompt-reset").addEventListener("click", () => {
-    qs("#v2-repair-splice-prompt").value = defaultSplicePrompt;
-    try { localStorage.removeItem(splicePromptKey); } catch { /* storage can be blocked */ }
+  spliceTextarea.addEventListener("input", () => {
+    customDraft = spliceTextarea.value;
+    activePreset = "custom";
+    presetSelect.value = "custom";
+    save(customSplicePromptKey, customDraft);
+    save(selectedSplicePresetKey, "custom");
+    explainPreset();
     renderControls();
   });
   qsa("[data-repair-splice-setting] button", root).forEach((button) => button.addEventListener("click", () => {

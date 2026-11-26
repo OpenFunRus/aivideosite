@@ -117,8 +117,11 @@
           <span class="v2-repair-splice-arrow">→</span>
           <span class="v2-repair-splice-tag">Видео B · первый кадр</span>
         </div>
-        <div class="v2-repair-splice-description">Оставляем видео A до выбранной границы и видео B после второй границы. MiniMax H3 получает только последний кадр A и первый кадр B — без звуковых или видеореференсов — и генерирует кинематографичный пролёт камеры между двумя разными сценами со звуком whoosh (без музыки и речи). При 0 сек — прямая склейка FFmpeg на CPU, без нейросети.</div>
-        <div class="v2-repair-splice-prompt-head"><label for="v2-repair-splice-prompt">Универсальный промпт MiniMax H3 <small>Можно редактировать под конкретную сцену</small></label><button type="button" id="v2-repair-splice-prompt-reset">Вернуть стандартный</button></div>
+        <div class="v2-repair-splice-description">Оставляем видео A до выбранной границы и видео B после второй границы. MiniMax H3 получает только последний кадр A и первый кадр B — без звуковых или видеореференсов — и создаёт выбранный переход между сценами с подходящими эффектами без музыки и речи. При 0 сек — прямая склейка FFmpeg на CPU, без нейросети.</div>
+        <div class="v2-repair-splice-prompt-head">
+          <label for="v2-repair-splice-prompt">Промпт перехода MiniMax H3 <small id="v2-repair-splice-preset-description">Выберите стиль — промпт изменится автоматически. Текст можно редактировать.</small></label>
+          <label class="v2-repair-splice-preset-field" for="v2-repair-splice-preset"><span>Пресет перехода</span><select id="v2-repair-splice-preset" aria-label="Выбрать пресет перехода"><option>Загрузка пресетов…</option></select></label>
+        </div>
         <textarea id="v2-repair-splice-prompt" rows="8" maxlength="8000" spellcheck="false" aria-label="Промпт AI-перехода"></textarea>
         <div class="v2-repair-splice-quality">
           <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Качество</span><div class="v2-segmented" data-repair-splice-setting="quality"><button type="button" class="active" data-value="480" aria-pressed="true">480p</button><button type="button" data-value="720" aria-pressed="false">720p</button><button type="button" data-value="1080" aria-pressed="false">1080p</button></div></div>
