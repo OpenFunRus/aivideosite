@@ -150,6 +150,12 @@ class ComfyUIClient:
         try:
             client_id = uuid.uuid4().hex
             enable_preview = on_preview is not None and self._h3_preview_ready()
+            enable_run_nonce = self._h3_run_nonce_ready()
+            if not enable_run_nonce:
+                logger.warning(
+                    "AIVideoRunNonce is missing from %s; identical ComfyUI jobs may use cached sampler output",
+                    self.base_url,
+                )
             if on_preview_status is not None:
                 on_preview_status(enable_preview)
             workflow = self._build_h3_workflow(
@@ -160,6 +166,7 @@ class ComfyUIClient:
                 staged_guides=staged_guides,
                 staged_control=staged_control,
                 enable_preview=enable_preview,
+                enable_run_nonce=enable_run_nonce,
             )
 
             progress(8, "Передача H3-задачи в ComfyUI")
@@ -253,22 +260,25 @@ class ComfyUIClient:
         except requests.RequestException:
             return False
 
-    def _h3_preview_ready(self) -> bool:
-        """Use the preview node when ComfyUI actually exposes it.
-
-        The node itself loads Tiny VAE and falls back to Latent2RGB if needed.
-        Its object_info input schema is not a reliable decoder-presence check.
-        """
+    def _comfy_node_available(self, name: str) -> bool:
         try:
             response = self.session.get(
-                f"{self.base_url}/object_info/MiniMaxH3PreviewOverride", timeout=5
+                f"{self.base_url}/object_info/{name}", timeout=5
             )
             response.raise_for_status()
             body = response.json()
-            node = body.get("MiniMaxH3PreviewOverride") if isinstance(body, dict) else None
+            node = body.get(name) if isinstance(body, dict) else None
             return isinstance(node, dict) and bool(node)
         except (requests.RequestException, ValueError, TypeError):
             return False
+
+    def _h3_preview_ready(self) -> bool:
+        """The preview node handles Tiny VAE load/fallback itself."""
+        return self._comfy_node_available("MiniMaxH3PreviewOverride")
+
+    def _h3_run_nonce_ready(self) -> bool:
+        """Per-job cache invalidation is optional for older ComfyUI installs."""
+        return self._comfy_node_available("AIVideoRunNonce")
 
     def cancel_prompt(self, prompt_id: str) -> bool:
         try:
@@ -328,6 +338,7 @@ class ComfyUIClient:
         staged_guides: list[dict[str, Any]] | None = None,
         staged_control: dict[str, Any] | None = None,
         enable_preview: bool = False,
+        enable_run_nonce: bool = False,
     ) -> dict[str, Any]:
         direct_steps = payload.get("steps")
         profile_config: dict[str, Any] | None = None
@@ -691,11 +702,19 @@ class ComfyUIClient:
                 },
             }
 
+        model_for_sampling: list[Any] = ["34", 0]
+        if enable_run_nonce:
+            workflow["36"] = {
+                "class_type": "AIVideoRunNonce",
+                "inputs": {"model": model_for_sampling, "run_id": job_id},
+            }
+            model_for_sampling = ["36", 0]
+
         if enable_preview:
             workflow["35"] = {
                 "class_type": "MiniMaxH3PreviewOverride",
                 "inputs": {
-                    "model": ["34", 0],
+                    "model": model_for_sampling,
                     "vae_name": "taeh3_decoder.safetensors",
                     "preview_frames": 8,
                     # Spread eight samples across the clip's duration.
@@ -705,11 +724,13 @@ class ComfyUIClient:
                     "suppress_default_preview": True,
                 },
             }
-            workflow["5"]["inputs"]["model"] = ["35", 0]
-            if staged_guides:
-                workflow["32"]["inputs"]["model"] = ["35", 0]
-            else:
-                workflow["30"]["inputs"]["model"] = ["35", 0]
+            model_for_sampling = ["35", 0]
+
+        workflow["5"]["inputs"]["model"] = model_for_sampling
+        if staged_guides:
+            workflow["32"]["inputs"]["model"] = model_for_sampling
+        else:
+            workflow["30"]["inputs"]["model"] = model_for_sampling
 
         return workflow
 
