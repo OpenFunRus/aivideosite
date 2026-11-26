@@ -2324,8 +2324,10 @@ async def api_repair_export(
 
     second_id = None
     second_path = None
+    second_length = 0.0
     requested_size = None
     generate_audio = True
+    transition_seconds = 1.0
     start, end = 0.0, 0.0
     sound_type = str(payload.get("sound_type") or "words")
     if sound_type not in {"words", "voice", "all"}:
@@ -2345,8 +2347,11 @@ async def api_repair_export(
         if not second_path.is_file():
             raise HTTPException(404, "Файл второго видео отсутствует.")
         second_length = await asyncio.to_thread(probe_duration, second_path)
-        if not second_length or source_length <= 1.05 or second_length <= 1.05:
-            raise HTTPException(400, "Для AI-перехода нужны два видео длиннее 1 секунды.")
+        if not second_length or source_length < 0.1 or second_length < 0.1:
+            raise HTTPException(400, "Для AI-перехода нужны два видео не короче 0,1 секунды.")
+        start = _editor_float(payload.get("start", source_length), "Конец видео A", .1, source_length)
+        end = _editor_float(payload.get("end", 0), "Начало видео B", 0, second_length - .1)
+        transition_seconds = _editor_float(payload.get("transition_seconds", 1), "Длина перехода", .1, 15)
         title = f"AI-переход · {source['title']} + {second['title']}"[:120]
     else:
         start = _editor_float(payload.get("start", 0), "Начало", 0, source_length)
@@ -2365,7 +2370,7 @@ async def api_repair_export(
         raw_prompt = directive + "\n" + raw_prompt
 
     repair = {"mode": mode, "media_id": source_id, "second_media_id": second_id,
-              "start": start, "end": end, "sound_type": sound_type, "bridge_seconds": 1.0,
+              "start": start, "end": end, "sound_type": sound_type, "bridge_seconds": transition_seconds,
               "context_seconds": SPLICE_CONTEXT_SECONDS if mode == "splice" else None}
     job_id = uuid.uuid4().hex
     _v2_reserve_gpu(gpu_target, job_id)
@@ -2375,6 +2380,7 @@ async def api_repair_export(
             prepare_ai_inputs, job_id=job_id, mode=mode,
             first_video=source_path, first_duration=float(source_length),
             start=start, end=end, size=source_size, second_video=second_path,
+            second_duration=second_length, transition_seconds=transition_seconds,
             mask_png=str(payload.get("mask_png") or ""),
             splice_size=requested_size,
         )
@@ -2382,7 +2388,17 @@ async def api_repair_export(
         if mode == "splice":
             # Native H3 AddGuide video clips are the temporal references here;
             # they don't need Ref2VA media tags or its separate checkpoint.
-            actual_prompt, reference_map = raw_prompt, []
+            actual_prompt = (raw_prompt + "\n\n"
+                             "speech_policy: silent\n"
+                             "Mandatory silence rule: absolutely NO spoken words, dialogue, narration, "
+                             "singing, voices, whispers or intelligible vocalizations during the "
+                             "generated bridge. Do not animate speech or lip movement. "
+                             "Use only environmental ambience and non-vocal sound effects.")
+            reference_map = []
+            window = prepared["splice_window"]
+            repair.update(bridge_start_seconds=window["bridge_start_seconds"],
+                          bridge_native_seconds=window["bridge_native_seconds"],
+                          bridge_frames=window["bridge_frames"])
         else:
             actual_prompt, reference_map = build_reference_prompt(
                 raw_prompt, task="timeline_guides", items=items,
@@ -2402,7 +2418,8 @@ async def api_repair_export(
             }, owner_id=user_id, gpu_target=gpu_target,
         )
         return {"ok": True, "job_id": job_id, "gpu_target": gpu_target,
-                "h3_seconds": prepared["seconds"], "bridge_seconds": 1 if mode == "splice" else None}
+                "h3_seconds": prepared["seconds"],
+                "bridge_seconds": transition_seconds if mode == "splice" else None}
     except Exception as exc:
         for item in (prepared.get("references") or []) + (prepared.get("guides") or []):
             if isinstance(item, dict) and item.get("path"):

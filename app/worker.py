@@ -288,7 +288,9 @@ class JobWorker(threading.Thread):
                     command = assembly_command(
                         mode=str(repair["mode"]), source=source_path,
                         generated=generated_path, destination=output_path,
-                        start=float(repair.get("start") or 0),
+                        start=(original_duration if repair.get("mode") == "splice"
+                               and "bridge_start_seconds" not in repair
+                               else float(repair.get("start") or 0)),
                         end=float(repair.get("end") or 0),
                         source_duration=original_duration,
                         size=output_size, generated_duration=generated_duration,
@@ -296,6 +298,9 @@ class JobWorker(threading.Thread):
                         generated_has_audio=probe_has_audio(generated_path),
                         second=second_path, second_duration=second_duration,
                         second_has_audio=second_audio,
+                        splice_bridge_start=float(repair.get("bridge_start_seconds") or 2.416667),
+                        splice_bridge_native_seconds=float(repair.get("bridge_native_seconds") or 1),
+                        splice_bridge_seconds=float(repair.get("bridge_seconds") or 1),
                     )
                     run_command(command, timeout=7200, should_cancel=should_cancel)
                     self._check_cancel(job_id)

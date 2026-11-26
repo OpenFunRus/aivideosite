@@ -56,18 +56,18 @@
         <div class="v2-repair-source" data-repair-source="a">
           <div class="v2-repair-source-preview"><img id="v2-repair-thumb-a" alt="Кадр выбранного видео A" hidden><svg class="icon" id="v2-repair-empty-a"><use href="/static/icons.svg#icon-video"></use></svg></div>
           <div class="v2-repair-source-details"><span>ВИДЕО A</span><strong id="v2-repair-name-a">Не выбрано</strong><small id="v2-repair-duration-a">Начальный ролик</small></div>
-          <div class="v2-repair-source-actions"><button type="button" data-repair-select="a">Из Библиотеки</button><button type="button" data-repair-upload="a">Загрузить своё</button></div>
+          <div class="v2-repair-source-actions"><button type="button" data-repair-select="a">Из Библиотеки</button><button type="button" data-repair-upload="a">Загрузить своё</button><button type="button" data-repair-preview="a">▶ Смотреть A</button></div>
         </div>
         <div class="v2-repair-source" id="v2-repair-source-b" data-repair-source="b" hidden>
           <div class="v2-repair-source-preview"><img id="v2-repair-thumb-b" alt="Кадр выбранного видео B" hidden><svg class="icon" id="v2-repair-empty-b"><use href="/static/icons.svg#icon-video"></use></svg></div>
           <div class="v2-repair-source-details"><span>ВИДЕО B</span><strong id="v2-repair-name-b">Не выбрано</strong><small id="v2-repair-duration-b">Второй ролик</small></div>
-          <div class="v2-repair-source-actions"><button type="button" data-repair-select="b">Из Библиотеки</button><button type="button" data-repair-upload="b">Загрузить своё</button></div>
+          <div class="v2-repair-source-actions"><button type="button" data-repair-select="b">Из Библиотеки</button><button type="button" data-repair-upload="b">Загрузить своё</button><button type="button" data-repair-preview="b">▶ Смотреть B</button></div>
         </div>
         <input id="v2-repair-file-a" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm,.m4v" hidden>
         <input id="v2-repair-file-b" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm,.m4v" hidden>
         <div class="v2-repair-settings" id="v2-repair-splice-settings" hidden>
-          <div class="v2-repair-transition-length"><span>Контекст A / B</span><strong>0,5 + 0,5 сек</strong></div>
-          <div class="v2-repair-transition-length"><span>Новый AI-переход</span><strong>1 сек · 24 кадра</strong></div>
+          <div class="v2-repair-transition-length"><span>Видео A до</span><strong id="v2-repair-splice-cut-a-label">Конец ролика</strong></div>
+          <div class="v2-repair-transition-length"><span>Видео B с</span><strong id="v2-repair-splice-cut-b-label">Начало ролика</strong></div>
         </div>
         <div class="v2-repair-settings" id="v2-repair-sound-settings" hidden>
           <label><span>Что перегенерировать</span><select id="v2-repair-sound-type"><option value="words">Отдельные слова / фразу</option><option value="voice">Голос персонажа</option><option value="all">Все звуки и голоса</option></select></label>
@@ -92,6 +92,12 @@
         <span class="v2-repair-range-duration">Выделено: <strong id="v2-repair-selected-length">00:00.000</strong></span>
         <span class="v2-repair-timeline-key">Пробел — пуск/пауза · ← / → — по кадрам</span>
       </div>
+      <div class="v2-repair-splice-range-row" id="v2-repair-splice-range-row" hidden>
+        <label>Начало перехода · A <input id="v2-repair-splice-cut-a" type="number" step="0.001" min="0.1" value="0" aria-label="Конец сохраняемого участка видео A"><span>сек</span></label>
+        <label>Конец перехода · B <input id="v2-repair-splice-cut-b" type="number" step="0.001" min="0" value="0" aria-label="Начало сохраняемого участка видео B"><span>сек</span></label>
+        <span>Серые части удаляются. Перетаскивайте фиолетовые границы или ставьте их кнопками под видео.</span>
+        <strong id="v2-repair-splice-output-duration">Итог: —</strong>
+      </div>
     </section>
 
     <div class="v2-repair-footer">
@@ -107,25 +113,25 @@
         <div class="v2-repair-splice-explanation">
           <span class="v2-repair-splice-tag">Видео A · последние 0,5 сек</span>
           <span class="v2-repair-splice-arrow">→</span>
-          <span class="v2-repair-splice-tag accent">MiniMax H3 · 1 сек</span>
+          <span class="v2-repair-splice-tag accent" id="v2-repair-bridge-duration-label">MiniMax H3 · 1 сек</span>
           <span class="v2-repair-splice-arrow">→</span>
           <span class="v2-repair-splice-tag">Видео B · первые 0,5 сек</span>
         </div>
-        <div class="v2-repair-splice-description">Нейросеть получает оба фрагмента с движением и доступной звуковой дорожкой, самостоятельно придумывает переход и возвращает новую секунду между оригинальными видео. Участки контекста не дублируются в результате.</div>
+        <div class="v2-repair-splice-description">Оставляем видео A до выбранной границы и видео B после второй границы. Нейросеть получает по 0,5 секунды контекста около этих точек, сама придумывает переход. Всё за пределами выбранных частей отрезается, контекст не дублируется.</div>
         <div class="v2-repair-splice-prompt-head"><label for="v2-repair-splice-prompt">Универсальный промпт MiniMax H3 <small>Можно редактировать под конкретную сцену</small></label><button type="button" id="v2-repair-splice-prompt-reset">Вернуть стандартный</button></div>
         <textarea id="v2-repair-splice-prompt" rows="8" maxlength="8000" spellcheck="false" aria-label="Промпт AI-перехода"></textarea>
         <div class="v2-repair-splice-quality">
           <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Качество</span><div class="v2-segmented" data-repair-splice-setting="quality"><button type="button" class="active" data-value="480" aria-pressed="true">480p</button><button type="button" data-value="720" aria-pressed="false">720p</button><button type="button" data-value="1080" aria-pressed="false">1080p</button></div></div>
           <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Формат</span><div class="v2-segmented v2-repair-splice-format" data-repair-splice-setting="ratio"><button type="button" class="active" data-value="auto" aria-pressed="true">Авто</button><button type="button" data-value="1:1" aria-pressed="false">1:1</button><button type="button" data-value="16:9" aria-pressed="false">16:9</button><button type="button" data-value="9:16" aria-pressed="false">9:16</button></div></div>
           <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Шаги</span><div class="v2-segmented" data-repair-splice-setting="steps"><button type="button" class="active" data-value="8" aria-pressed="true">8</button><button type="button" data-value="12" aria-pressed="false">12</button><button type="button" data-value="16" aria-pressed="false">16</button></div></div>
-          <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Длительность AI</span><div class="v2-repair-splice-readonly"><strong>5 сек</strong><small>1 сек войдёт в итог</small></div></div>
+          <div class="v2-repair-splice-group"><label class="v2-repair-splice-label" for="v2-repair-transition-seconds">Длительность перехода</label><input id="v2-repair-transition-seconds" class="v2-repair-splice-duration-input" type="number" inputmode="decimal" min="0.1" max="15" step="0.1" value="1"><small id="v2-repair-h3-duration">H3 генерирует ~5 сек</small></div>
         </div>
         <div class="v2-repair-splice-bottom">
           <label class="v2-repair-splice-seed"># Seed <input id="v2-repair-splice-seed" type="number" inputmode="numeric" min="-1" max="4294967295" step="1" placeholder="Авто (-1)"></label>
           <label class="v2-repair-splice-sound"><input id="v2-repair-splice-audio" type="checkbox" checked><span>Генерировать звук перехода</span></label>
           <span class="v2-repair-splice-resolution" id="v2-repair-splice-resolution">Формат исходника · 480p</span>
         </div>
-        <p class="v2-repair-splice-caution">720p и особенно 1080p могут потребовать больше 24 ГБ VRAM. Для первой проверки рекомендуется 480p / 8 шагов.</p>
+        <p class="v2-repair-splice-caution" id="v2-repair-splice-caution">Для первой проверки рекомендуется 480p / 8 шагов. H3 округляет время по кадрам (24 кадра/сек); длинные переходы расходуют больше VRAM.</p>
       </div>
       <div class="v2-repair-submit-row"><div class="v2-repair-note" id="v2-repair-note">Оригинал останется в Библиотеке. Результат появится как новый ролик.</div><button class="v2-primary-button" id="v2-repair-submit" type="button" disabled>Исправить</button></div>
     </div>
