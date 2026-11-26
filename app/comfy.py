@@ -254,17 +254,20 @@ class ComfyUIClient:
             return False
 
     def _h3_preview_ready(self) -> bool:
-        """Enable the optional node only when its tiny H3 decoder is installed."""
+        """Use the preview node when ComfyUI actually exposes it.
+
+        The node itself loads Tiny VAE and falls back to Latent2RGB if needed.
+        Its object_info input schema is not a reliable decoder-presence check.
+        """
         try:
             response = self.session.get(
                 f"{self.base_url}/object_info/MiniMaxH3PreviewOverride", timeout=5
             )
             response.raise_for_status()
-            node = response.json().get("MiniMaxH3PreviewOverride") or {}
-            required = (node.get("input") or {}).get("required") or {}
-            choices = (required.get("vae_name") or [[]])[0]
-            return isinstance(choices, list) and "taeh3_decoder.safetensors" in choices
-        except (requests.RequestException, ValueError, TypeError, KeyError, IndexError):
+            body = response.json()
+            node = body.get("MiniMaxH3PreviewOverride") if isinstance(body, dict) else None
+            return isinstance(node, dict) and bool(node)
+        except (requests.RequestException, ValueError, TypeError):
             return False
 
     def cancel_prompt(self, prompt_id: str) -> bool:

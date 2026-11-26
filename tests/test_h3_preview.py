@@ -112,20 +112,28 @@ class H3PreviewTests(unittest.TestCase):
         self.assertEqual([event[0] for event in image_events], [2, 4])
         self.assertEqual(image_events[0][2], WEBP_BYTES)
 
-    def test_preview_only_enabled_when_tiny_decoder_is_advertised(self):
+    def test_preview_enabled_when_node_is_available_even_if_schema_differs(self):
         client = ComfyUIClient()
 
         class FakeResponse:
+            data = {}
+
             def raise_for_status(self):
                 pass
 
             def json(self):
-                return {"MiniMaxH3PreviewOverride": {"input": {"required": {
-                    "vae_name": [["taeh3_decoder.safetensors"], {}],
-                }}}}
+                return self.data
 
-        client.session.get = lambda *_args, **_kwargs: FakeResponse()
+        response = FakeResponse()
+        client.session.get = lambda *_args, **_kwargs: response
+        response.data = {"MiniMaxH3PreviewOverride": {"input": {"optional": {
+            "vae_name": ["COMBO", {"options": ["taeh3_decoder.safetensors"]}],
+        }}}}
         self.assertTrue(client._h3_preview_ready())
+        response.data = {"MiniMaxH3PreviewOverride": {"display_name": "MiniMax H3 Preview Override"}}
+        self.assertTrue(client._h3_preview_ready())
+        response.data = {}
+        self.assertFalse(client._h3_preview_ready())
 
 
 if __name__ == "__main__":

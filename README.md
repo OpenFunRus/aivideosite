@@ -371,7 +371,7 @@ bash scripts/setup_h3_preview.sh
 sudo systemctl restart comfyui.service comfyui-secondary.service
 ```
 
-Скрипт устанавливает [MiniMax H3 Preview Override](https://github.com/simsim9-stack/ComfyUI-MiniMaxH3-PreviewOverride) и `taeh3_decoder.safetensors` в `models/vae_approx/`. Уже установленную версию узла он не обновляет. Дополнение используется только при наличии узла и Tiny VAE на выбранном ComfyUI backend: при отсутствии обоих генерация продолжает работать как прежде, без промежуточного видео.
+Скрипт устанавливает [MiniMax H3 Preview Override](https://github.com/simsim9-stack/ComfyUI-MiniMaxH3-PreviewOverride) и `taeh3_decoder.safetensors` в `models/vae_approx/`. Уже установленную версию узла он не обновляет. Сайт активирует предпросмотр, когда ComfyUI сообщает о наличии узла `MiniMaxH3PreviewOverride`. Наличие Tiny VAE проверяется самим узлом, при проблеме с декодером используется менее точный Latent2RGB. Если узел недоступен, генерация продолжается без предпросмотра.
 
 Превью использует 8 разреженных кадров, 512px, адаптивный FPS под длительность ролика и Tiny VAE; это **черновая анимация, не точное финальное видео**. При отсутствии NVENC/PyAV приходит анимированный WebP, иначе может приходить MP4. Предпросмотры доступны только автору задачи и удаляются при завершении, отмене, ошибке или перезапуске сайта. Полный 5.2 GB Video VAE ради предпросмотра не загружается. Реальную нагрузку на RTX 3090 / 2080 нужно проверить отдельно.
 
