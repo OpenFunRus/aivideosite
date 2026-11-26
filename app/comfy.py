@@ -332,8 +332,10 @@ class ComfyUIClient:
         profile_config: dict[str, Any] | None = None
         if direct_steps is not None:
             steps = int(direct_steps)
+            # Keep 2-step execution for previously queued jobs; the current UI/API
+            # accept only 1, 4, 8, 12, 16.
             if steps not in {1, 2, 4, 8, 12, 16}:
-                raise ComfyUIError("Steps must be one of 1, 2, 4, 8, 12, 16.")
+                raise ComfyUIError("Unsupported steps count; use 1, 4, 8, 12 or 16.")
         else:
             # Compatibility for jobs created before the free steps slider.
             profile = str(payload.get("profile") or "steps8").lower()

@@ -23,7 +23,9 @@
     const group = qs('[data-setting="' + setting + '"]');
     if (!group) return;
     const buttons = qsa("[data-value]", group);
-    const target = buttons.find((button) => button.dataset.value === String(value)) || buttons[0];
+    // Drafts saved with the removed 2-step choice migrate to the new 4-step test preset.
+    const target = buttons.find((button) => button.dataset.value === String(value)) ||
+      (setting === "steps" ? buttons.find((button) => button.dataset.value === "4") : null) || buttons[0];
     buttons.forEach((button) => button.classList.toggle("active", button === target));
     if (target) state.draft[setting] = target.dataset.value;
     if (setting === "seconds") window.AIVideoV2Workspaces?.updateAudioRange?.();

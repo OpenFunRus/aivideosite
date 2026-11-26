@@ -40,7 +40,7 @@ class H3GenerationTests(unittest.TestCase):
 
     def test_every_step_is_full_video_and_audio_decode(self):
         client = ComfyUIClient()
-        for steps in (1, 2, 4, 8, 12, 16):
+        for steps in (1, 4, 8, 12, 16):
             with self.subTest(steps=steps):
                 _v2_validate_simple_settings(5, steps)
                 workflow = client._build_h3_workflow(
@@ -71,6 +71,16 @@ class H3GenerationTests(unittest.TestCase):
                         job_id=self.job_id, payload={"prompt": "Scene", "steps": steps},
                         uploaded_images=[],
                     )
+
+        with self.assertRaises(HTTPException):
+            _v2_validate_simple_settings(5, 2)
+        # Existing 2-step jobs queued before this UI change must still finish.
+        old_job = client._build_h3_workflow(
+            job_id=self.job_id,
+            payload={"prompt": "Old scene", "steps": 2},
+            uploaded_images=[],
+        )
+        self.assertEqual(old_job["5"]["inputs"]["steps"], 2)
 
     def test_audio_off_omits_decoder_but_keeps_video(self):
         workflow = ComfyUIClient()._build_h3_workflow(

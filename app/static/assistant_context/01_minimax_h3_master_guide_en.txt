@@ -713,7 +713,7 @@ This site's simplified V2 exposes:
 - quality presets 480 / 720 / 1080;
 - aspect ratios 1:1 / 16:9 / 9:16;
 - 5 / 10 / 15 seconds;
-- 1 / 2 / 4 / 8 / 12 / 16 steps;
+- 1 / 4 / 8 / 12 / 16 steps;
 - 24 fps internally for H3 timing.
 The site backend maps those simplified controls to its installed workflows.
 

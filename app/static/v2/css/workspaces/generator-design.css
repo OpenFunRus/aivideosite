@@ -50,6 +50,7 @@
 .v2-generator-form .v2-settings-card .v2-setting-label{display:flex;align-items:center;gap:7px;min-height:18px;margin:0 0 10px;color:#d7dae6;font-size:12px;font-weight:700;letter-spacing:0;text-transform:none}
 .v2-generator-form .v2-setting-label .icon{width:16px;height:16px;flex:0 0 16px;color:#aa94ff}
 .v2-generator-form .v2-generator-settings .v2-segmented{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));height:auto;gap:5px;padding:4px;border:1px solid #2b3040;border-radius:11px;background:#11141e}
+.v2-generator-form .v2-generator-settings .v2-segmented[data-setting="steps"]{grid-template-columns:repeat(5,minmax(0,1fr))}
 .v2-generator-form .v2-generator-settings .v2-segmented button{height:auto;min-height:34px;border:0;border-radius:8px;background:transparent;box-shadow:none;color:#c5cad8;font-size:12px}
 .v2-generator-form .v2-generator-settings .v2-segmented button:hover{background:#252a3a}
 .v2-generator-form .v2-generator-settings .v2-segmented button.active{color:#fff;background:linear-gradient(145deg,#7657ff,#5d3cd9);box-shadow:0 4px 14px rgba(105,70,232,.28)}

@@ -112,7 +112,7 @@ Visible controls:
 - quality 480/720/1080;
 - ratio 1:1/16:9/9:16;
 - 5/10/15 sec;
-- 1/2/4/8/12/16 steps;
+- 1/4/8/12/16 steps;
 - 24 FPS fixed;
 - Seed;
 - H3 Audio;
