@@ -110,9 +110,14 @@ class ComfyUIClient:
                 for index, item in enumerate(guides, start=1):
                     if should_cancel and should_cancel():
                         raise ComfyUICancelled("Generation cancelled.")
+                    guide_type = str(item.get("type") or "image")
+                    if guide_type not in {"image", "video"}:
+                        raise ComfyUIError("Guide must be an image or a video clip.")
                     staged_guides.append(
                         {
                             "name": stage_file(str(item.get("path") or ""), f"guide_{index:02d}"),
+                            "type": guide_type,
+                            "with_audio": bool(item.get("with_audio")) if guide_type == "video" else False,
                             "time_seconds": float(item.get("time_seconds") or 0.0),
                             "frame_idx": (
                                 int(item["frame_idx"])
@@ -650,25 +655,34 @@ class ComfyUIClient:
             for index, guide in enumerate(staged_guides, start=1):
                 load_id = str(400 + index)
                 guide_id = str(500 + index)
+                video_guide = str(guide.get("type") or "image") == "video"
                 workflow[load_id] = {
-                    "class_type": "LoadImage",
-                    "inputs": {"image": guide["name"]},
+                    "class_type": "LoadVideo" if video_guide else "LoadImage",
+                    "inputs": {"file" if video_guide else "image": guide["name"]},
                 }
-                workflow[guide_id] = {
-                    "class_type": "MiniMaxH3AddGuide",
-                    "inputs": {
-                        "positive": positive_ref,
-                        "latent": ["13", 1],
-                        "vae": ["13", 2],
-                        "audio_vae": ["13", 3],
-                        "image": [load_id, 0],
-                        "frame_idx": (
-                            int(guide["frame_idx"])
-                            if guide.get("frame_idx") is not None
-                            else int(round(float(guide.get("time_seconds") or 0.0) * fps))
-                        ),
-                    },
+                image_ref: list[Any] = [load_id, 0]
+                if video_guide:
+                    components_id = str(450 + index)
+                    workflow[components_id] = {
+                        "class_type": "GetVideoComponents",
+                        "inputs": {"video": [load_id, 0]},
+                    }
+                    image_ref = [components_id, 0]
+                guide_inputs: dict[str, Any] = {
+                    "positive": positive_ref,
+                    "latent": ["13", 1],
+                    "vae": ["13", 2],
+                    "audio_vae": ["13", 3],
+                    "image": image_ref,
+                    "frame_idx": (
+                        int(guide["frame_idx"])
+                        if guide.get("frame_idx") is not None
+                        else int(round(float(guide.get("time_seconds") or 0.0) * fps))
+                    ),
                 }
+                if video_guide and guide.get("with_audio"):
+                    guide_inputs["audio"] = [components_id, 1]
+                workflow[guide_id] = {"class_type": "MiniMaxH3AddGuide", "inputs": guide_inputs}
                 positive_ref = [guide_id, 0]
 
             workflow["31"] = {

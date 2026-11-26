@@ -36,7 +36,7 @@ from .config import settings
 from . import assistant as local_assistant
 from .comfy import ComfyUIClient
 from .h3_references import build_reference_prompt, validate_reference_items
-from .ai_repair import prepare_ai_inputs
+from .ai_repair import prepare_ai_inputs, splice_canvas_size, SPLICE_CONTEXT_SECONDS
 from .worker import JobWorker, probe_duration, probe_video_size, probe_has_audio, run_command
 
 
@@ -2324,11 +2324,21 @@ async def api_repair_export(
 
     second_id = None
     second_path = None
+    requested_size = None
+    generate_audio = True
     start, end = 0.0, 0.0
     sound_type = str(payload.get("sound_type") or "words")
     if sound_type not in {"words", "voice", "all"}:
         raise HTTPException(400, "Неизвестный режим замены звука.")
     if mode == "splice":
+        try:
+            requested_size = splice_canvas_size(
+                source_size, str(payload.get("quality") or "480"),
+                str(payload.get("ratio") or "auto"),
+            )
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        generate_audio = bool(payload.get("generate_audio", True))
         second_id = str(payload.get("second_media_id") or "").strip()
         second = _ensure_media(second_id, user_id)
         second_path = settings.library_dir / second["filename"]
@@ -2355,7 +2365,8 @@ async def api_repair_export(
         raw_prompt = directive + "\n" + raw_prompt
 
     repair = {"mode": mode, "media_id": source_id, "second_media_id": second_id,
-              "start": start, "end": end, "sound_type": sound_type, "bridge_seconds": 1.0}
+              "start": start, "end": end, "sound_type": sound_type, "bridge_seconds": 1.0,
+              "context_seconds": SPLICE_CONTEXT_SECONDS if mode == "splice" else None}
     job_id = uuid.uuid4().hex
     _v2_reserve_gpu(gpu_target, job_id)
     prepared: dict = {}
@@ -2365,18 +2376,24 @@ async def api_repair_export(
             first_video=source_path, first_duration=float(source_length),
             start=start, end=end, size=source_size, second_video=second_path,
             mask_png=str(payload.get("mask_png") or ""),
+            splice_size=requested_size,
         )
         items = prepared["references"]
-        actual_prompt, reference_map = build_reference_prompt(
-            raw_prompt, task="timeline_guides", items=items,
-        )
+        if mode == "splice":
+            # Native H3 AddGuide video clips are the temporal references here;
+            # they don't need Ref2VA media tags or its separate checkpoint.
+            actual_prompt, reference_map = raw_prompt, []
+        else:
+            actual_prompt, reference_map = build_reference_prompt(
+                raw_prompt, task="timeline_guides", items=items,
+            )
         db.enqueue_job(
             job_id, "generate", {
                 "title": title, "prompt": actual_prompt, "user_prompt": raw_prompt,
                 "width": prepared["width"], "height": prepared["height"],
                 "seconds": float(prepared["seconds"]), "fps": 24,
-                "steps": steps, "seed": seed, "generate_audio": True,
-                "generation_mode": "reference", "keyframe_role": "first",
+                "steps": steps, "seed": seed, "generate_audio": generate_audio,
+                "generation_mode": "frames" if mode == "splice" else "reference", "keyframe_role": "first",
                 "reference_task": "timeline_guides", "ref_image_size": "match",
                 "images": [], "references": items, "reference_map": reference_map,
                 "guides": prepared["guides"], "control": prepared["control"],

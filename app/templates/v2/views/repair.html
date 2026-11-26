@@ -18,7 +18,7 @@
         <svg class="icon"><use href="/static/icons.svg#icon-volume"></use></svg><strong>Речь и звук</strong><small>AI-замена аудио</small>
       </button>
       <button type="button" data-repair-mode="splice" aria-pressed="false">
-        <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><strong>Склейка</strong><small>AI-переход · 1 сек</small>
+        <svg class="icon"><use href="/static/icons.svg#icon-video"></use></svg><strong>Склейка</strong><small>0,5 сек + AI + 0,5 сек</small>
       </button>
     </div>
 
@@ -66,8 +66,8 @@
         <input id="v2-repair-file-a" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm,.m4v" hidden>
         <input id="v2-repair-file-b" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm,.m4v" hidden>
         <div class="v2-repair-settings" id="v2-repair-splice-settings" hidden>
-          <div class="v2-repair-transition-length"><span>AI-переход</span><strong>1,0 сек</strong></div>
-          <div class="v2-repair-transition-length"><span>H3 вычисляет</span><strong>5 сек · опорные кадры</strong></div>
+          <div class="v2-repair-transition-length"><span>Контекст A / B</span><strong>0,5 + 0,5 сек</strong></div>
+          <div class="v2-repair-transition-length"><span>Новый AI-переход</span><strong>1 сек · 24 кадра</strong></div>
         </div>
         <div class="v2-repair-settings" id="v2-repair-sound-settings" hidden>
           <label><span>Что перегенерировать</span><select id="v2-repair-sound-type"><option value="words">Отдельные слова / фразу</option><option value="voice">Голос персонажа</option><option value="all">Все звуки и голоса</option></select></label>
@@ -95,11 +95,37 @@
     </section>
 
     <div class="v2-repair-footer">
-      <label class="v2-repair-prompt" id="v2-repair-prompt-field"><span>Промпт исправления</span><textarea id="v2-repair-prompt" rows="2" maxlength="8000" placeholder="Опишите, что должно измениться на выбранном участке…"></textarea></label>
-      <div class="v2-repair-ai-options">
-        <label>Проходы <select id="v2-repair-steps"><option value="8">8</option><option value="12">12</option><option value="16">16</option></select></label>
-        <label>Seed <input id="v2-repair-seed" type="number" min="-1" max="4294967295" step="1" placeholder="Auto"></label>
-        <span>MiniMax H3 · Ref2VA</span>
+      <div id="v2-repair-generic-config">
+        <label class="v2-repair-prompt" id="v2-repair-prompt-field"><span>Промпт исправления</span><textarea id="v2-repair-prompt" rows="2" maxlength="8000" placeholder="Опишите, что должно измениться на выбранном участке…"></textarea></label>
+        <div class="v2-repair-ai-options">
+          <label>Проходы <select id="v2-repair-steps"><option value="8">8</option><option value="12">12</option><option value="16">16</option></select></label>
+          <label>Seed <input id="v2-repair-seed" type="number" min="-1" max="4294967295" step="1" placeholder="Auto"></label>
+          <span>MiniMax H3 · Ref2VA</span>
+        </div>
+      </div>
+      <div class="v2-repair-splice-config" id="v2-repair-splice-config" hidden>
+        <div class="v2-repair-splice-explanation">
+          <span class="v2-repair-splice-tag">Видео A · последние 0,5 сек</span>
+          <span class="v2-repair-splice-arrow">→</span>
+          <span class="v2-repair-splice-tag accent">MiniMax H3 · 1 сек</span>
+          <span class="v2-repair-splice-arrow">→</span>
+          <span class="v2-repair-splice-tag">Видео B · первые 0,5 сек</span>
+        </div>
+        <div class="v2-repair-splice-description">Нейросеть получает оба фрагмента с движением и доступной звуковой дорожкой, самостоятельно придумывает переход и возвращает новую секунду между оригинальными видео. Участки контекста не дублируются в результате.</div>
+        <div class="v2-repair-splice-prompt-head"><label for="v2-repair-splice-prompt">Универсальный промпт MiniMax H3 <small>Можно редактировать под конкретную сцену</small></label><button type="button" id="v2-repair-splice-prompt-reset">Вернуть стандартный</button></div>
+        <textarea id="v2-repair-splice-prompt" rows="8" maxlength="8000" spellcheck="false" aria-label="Промпт AI-перехода"></textarea>
+        <div class="v2-repair-splice-quality">
+          <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Качество</span><div class="v2-segmented" data-repair-splice-setting="quality"><button type="button" class="active" data-value="480" aria-pressed="true">480p</button><button type="button" data-value="720" aria-pressed="false">720p</button><button type="button" data-value="1080" aria-pressed="false">1080p</button></div></div>
+          <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Формат</span><div class="v2-segmented v2-repair-splice-format" data-repair-splice-setting="ratio"><button type="button" class="active" data-value="auto" aria-pressed="true">Авто</button><button type="button" data-value="1:1" aria-pressed="false">1:1</button><button type="button" data-value="16:9" aria-pressed="false">16:9</button><button type="button" data-value="9:16" aria-pressed="false">9:16</button></div></div>
+          <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Шаги</span><div class="v2-segmented" data-repair-splice-setting="steps"><button type="button" class="active" data-value="8" aria-pressed="true">8</button><button type="button" data-value="12" aria-pressed="false">12</button><button type="button" data-value="16" aria-pressed="false">16</button></div></div>
+          <div class="v2-repair-splice-group"><span class="v2-repair-splice-label">Длительность AI</span><div class="v2-repair-splice-readonly"><strong>5 сек</strong><small>1 сек войдёт в итог</small></div></div>
+        </div>
+        <div class="v2-repair-splice-bottom">
+          <label class="v2-repair-splice-seed"># Seed <input id="v2-repair-splice-seed" type="number" inputmode="numeric" min="-1" max="4294967295" step="1" placeholder="Авто (-1)"></label>
+          <label class="v2-repair-splice-sound"><input id="v2-repair-splice-audio" type="checkbox" checked><span>Генерировать звук перехода</span></label>
+          <span class="v2-repair-splice-resolution" id="v2-repair-splice-resolution">Формат исходника · 480p</span>
+        </div>
+        <p class="v2-repair-splice-caution">720p и особенно 1080p могут потребовать больше 24 ГБ VRAM. Для первой проверки рекомендуется 480p / 8 шагов.</p>
       </div>
       <div class="v2-repair-submit-row"><div class="v2-repair-note" id="v2-repair-note">Оригинал останется в Библиотеке. Результат появится как новый ролик.</div><button class="v2-primary-button" id="v2-repair-submit" type="button" disabled>Исправить</button></div>
     </div>

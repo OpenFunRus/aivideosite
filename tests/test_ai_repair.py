@@ -4,7 +4,9 @@ import base64
 import io
 import os
 import subprocess
+import sys
 import tempfile
+import types
 import unittest
 import uuid
 from pathlib import Path
@@ -15,7 +17,11 @@ from PIL import Image, ImageDraw
 _temporary_data = tempfile.TemporaryDirectory(prefix="aivideosite-ai-repair-")
 os.environ["DATA_DIR"] = _temporary_data.name
 
-from app.ai_repair import assembly_command, decode_mask, prepare_ai_inputs  # noqa: E402
+from app.ai_repair import (  # noqa: E402
+    SPLICE_A_GUIDE_FRAME, SPLICE_B_GUIDE_FRAME, SPLICE_BRIDGE_SECONDS,
+    SPLICE_GUIDE_FRAMES, assembly_command, decode_mask, prepare_ai_inputs,
+    splice_canvas_size,
+)
 from app.config import settings  # noqa: E402
 
 
@@ -45,6 +51,49 @@ class AIRepairTests(unittest.TestCase):
         data = subprocess.check_output(["ffprobe", "-v", "error", "-select_streams",
                                         "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)])
         return bool(data.strip())
+
+    @staticmethod
+    def probe_frames(path):
+        data = subprocess.check_output(["ffprobe", "-v", "error", "-count_frames",
+                                        "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames",
+                                        "-of", "default=nw=1:nk=1", str(path)])
+        return int(data.strip())
+
+    def test_splice_sizes(self):
+        self.assertEqual(splice_canvas_size((160, 96), "480", "16:9"), (864, 480))
+        self.assertEqual(splice_canvas_size((160, 96), "720", "9:16"), (736, 1312))
+        self.assertEqual(splice_canvas_size((160, 96), "480", "auto"), (800, 480))
+        with self.assertRaises(ValueError):
+            splice_canvas_size((160, 96), "4K", "16:9")
+
+    def test_native_video_and_audio_guides(self):
+        # ComfyUI itself is not running in offline tests. Inspect the exact
+        # workflow shape submitted to the server, including both frame batches.
+        sys.modules.setdefault("requests", types.ModuleType("requests"))
+        sys.modules.setdefault("websocket", types.ModuleType("websocket"))
+        from app.comfy import ComfyUIClient
+
+        workflow = ComfyUIClient._build_h3_workflow(
+            object.__new__(ComfyUIClient), job_id="test-bridge",
+            payload={"generation_mode": "frames", "steps": 8, "seed": 123,
+                     "prompt": "Smooth transition", "width": 480, "height": 480,
+                     "seconds": 5, "fps": 24, "generate_audio": True},
+            uploaded_images=[], staged_references=[],
+            staged_guides=[
+                {"type": "video", "name": "a.mp4", "with_audio": True,
+                 "frame_idx": SPLICE_A_GUIDE_FRAME},
+                {"type": "video", "name": "b.mp4", "with_audio": False,
+                 "frame_idx": SPLICE_B_GUIDE_FRAME},
+            ],
+            staged_control={},
+        )
+        self.assertNotEqual(workflow["1"]["inputs"]["fl2va_model"], "none")
+        self.assertEqual(workflow["401"]["class_type"], "LoadVideo")
+        self.assertEqual(workflow["451"]["class_type"], "GetVideoComponents")
+        self.assertEqual(workflow["501"]["inputs"]["image"], ["451", 0])
+        self.assertEqual(workflow["501"]["inputs"]["audio"], ["451", 1])
+        self.assertEqual(workflow["502"]["inputs"]["image"], ["452", 0])
+        self.assertNotIn("audio", workflow["502"]["inputs"])
 
     def mask_data(self):
         mask = Image.new("RGB", (160, 96), "black")
@@ -78,7 +127,14 @@ class AIRepairTests(unittest.TestCase):
                     self.assertEqual(result["control"]["mode"], "inpaint")
                     self.assertTrue(Path(result["control"]["mask_video_path"]).is_file())
                 if mode == "splice":
-                    self.assertEqual([g["frame_idx"] for g in result["guides"]], [48, 72])
+                    self.assertEqual(result["references"], [])
+                    self.assertEqual([g["frame_idx"] for g in result["guides"]],
+                                     [SPLICE_A_GUIDE_FRAME, SPLICE_B_GUIDE_FRAME])
+                    self.assertEqual([g["type"] for g in result["guides"]], ["video", "video"])
+                    self.assertEqual([g["with_audio"] for g in result["guides"]], [True, False])
+                    for guide in result["guides"]:
+                        self.assertEqual(self.probe_frames(Path(guide["path"])), SPLICE_GUIDE_FRAMES)
+                    self.assertEqual(SPLICE_BRIDGE_SECONDS, 1)
                 if mode == "fragment":
                     self.assertAlmostEqual(self.probe_seconds(Path(result["references"][0]["path"])), 5, delta=.12)
 

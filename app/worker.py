@@ -282,6 +282,8 @@ class JobWorker(threading.Thread):
                     generated_duration = probe_duration(generated_path)
                     if original_size is None or not original_duration or not generated_duration:
                         raise RuntimeError("Не удалось прочитать видео для сборки AI-исправления.")
+                    output_size = ((int(payload["width"]), int(payload["height"]))
+                                   if repair.get("mode") == "splice" else original_size)
                     db.update_job(job_id, progress=98, stage="AI-исправление: сохраняем оригинальные участки")
                     command = assembly_command(
                         mode=str(repair["mode"]), source=source_path,
@@ -289,7 +291,7 @@ class JobWorker(threading.Thread):
                         start=float(repair.get("start") or 0),
                         end=float(repair.get("end") or 0),
                         source_duration=original_duration,
-                        size=original_size, generated_duration=generated_duration,
+                        size=output_size, generated_duration=generated_duration,
                         source_has_audio=probe_has_audio(source_path),
                         generated_has_audio=probe_has_audio(generated_path),
                         second=second_path, second_duration=second_duration,

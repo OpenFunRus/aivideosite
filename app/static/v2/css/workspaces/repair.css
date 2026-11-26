@@ -84,6 +84,32 @@
 .v2-repair-range-duration{font-size:11px;color:#cbd3e6}
 .v2-repair-timeline-key{margin-left:auto;color:#76829c;font-size:10px}
 .v2-repair-footer{padding:13px 15px}
+.v2-repair-splice-config{display:flex;flex-direction:column;gap:12px}
+.v2-repair-splice-explanation{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:10px 8px;border:1px solid #363c5c;border-radius:11px;background:linear-gradient(90deg,#141826,#1e1b35,#141826)}
+.v2-repair-splice-tag{padding:8px 11px;border:1px solid #3d4661;border-radius:8px;background:#1b2231;color:#bfc9e8;font-size:11px;font-weight:700}
+.v2-repair-splice-tag.accent{border-color:#7d60ed;background:#423184;color:#fff;box-shadow:0 0 18px rgba(116,84,228,.15)}
+.v2-repair-splice-arrow{color:#a39aff;font-size:17px}
+.v2-repair-splice-description{color:#97a6c1;font-size:11px;line-height:1.55}
+.v2-repair-splice-prompt-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.v2-repair-splice-prompt-head label{font-size:12px;font-weight:750;color:#e2defd}
+.v2-repair-splice-prompt-head small{display:block;margin-top:3px;color:#919bb6;font-size:10px;font-weight:400}
+.v2-repair-splice-prompt-head button{padding:7px 10px;border:1px solid #48416d;border-radius:8px;background:#25223b;color:#c7b8ff;font-size:10px;white-space:nowrap;cursor:pointer}
+#v2-repair-splice-prompt{display:block;width:100%;min-height:160px;padding:12px 13px;border:1px solid #504d74;border-radius:10px;background:#0f1421;color:#e9e9ff;font-family:inherit;font-size:12px;line-height:1.5;resize:vertical;outline:none}
+#v2-repair-splice-prompt:focus{border-color:#8a6dff;box-shadow:0 0 0 2px rgba(120,92,220,.15)}
+.v2-repair-splice-quality{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:12px;border:1px solid #343a52;border-radius:12px;background:#141826}
+.v2-repair-splice-group{display:flex;flex-direction:column;gap:8px;min-width:0}
+.v2-repair-splice-label{font-weight:750;font-size:11px;color:#aaa8d9}
+.v2-repair-splice-quality .v2-segmented{min-width:0}
+.v2-repair-splice-quality .v2-segmented button{min-width:0;padding:5px 2px;white-space:nowrap;font-size:11px}
+.v2-repair-splice-quality .v2-repair-splice-format{grid-template-columns:repeat(4,minmax(0,1fr))}
+.v2-repair-splice-readonly{display:flex;flex-direction:column;justify-content:center;min-height:44px;padding:4px 12px;border:1px solid #32394d;border-radius:9px;background:#111521}
+.v2-repair-splice-readonly strong{font-size:13px;color:#e6e9fd}.v2-repair-splice-readonly small{margin-top:2px;font-size:10px;color:#8492ad}
+.v2-repair-splice-bottom{display:flex;align-items:center;gap:15px;flex-wrap:wrap}
+.v2-repair-splice-seed{display:flex;align-items:center;gap:8px;color:#9ca9c6;font-size:11px}
+.v2-repair-splice-seed input{height:35px;width:135px;padding:0 10px;border:1px solid #3a4560;border-radius:8px;background:#111726;color:#f0f2ff;font-size:11px}
+.v2-repair-splice-sound{display:flex;align-items:center;gap:8px;color:#c5ccdf;font-size:11px;cursor:pointer}.v2-repair-splice-sound input{accent-color:#8f74f7;width:17px;height:17px}
+.v2-repair-splice-resolution{margin-left:auto;color:#b9acff;font-size:11px;font-variant-numeric:tabular-nums}
+.v2-repair-splice-caution{margin:0;color:#a69b87;font-size:10px;line-height:1.5}
 .v2-repair-prompt{display:flex;flex-direction:column;gap:7px}
 .v2-repair-prompt span{font-size:11px;font-weight:700;color:#b6bfe0}
 .v2-repair-prompt textarea{width:100%;min-height:70px;resize:vertical;padding:10px 12px;border:1px solid #39415a;border-radius:9px;background:#111521;color:#eff1fa;font-size:12px;line-height:1.5;outline:none}
@@ -111,4 +137,5 @@
 .v2-repair-picker-empty{grid-column:1/-1;padding:30px;color:#99a5be;text-align:center;font-size:12px}
 @media(max-width:1450px){.v2-repair-stage{grid-template-columns:minmax(0,1.45fr) minmax(240px,1fr)}.v2-repair-transport{justify-content:center}.v2-repair-time{min-width:100%;text-align:center}}
 @media(max-width:1150px){.v2-repair-stage{grid-template-columns:1fr}.v2-repair-inspector{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.v2-repair-inspector .v2-repair-panel-title,.v2-repair-inspector .v2-repair-context,.v2-repair-inspector .v2-repair-settings{grid-column:1/-1}.v2-repair-modes{gap:6px}.v2-repair-modes button{padding:9px}}
-@media(max-width:700px){.v2-repair-heading-badge{display:none}.v2-repair-modes{grid-template-columns:repeat(2,minmax(0,1fr))}.v2-repair-inspector{display:flex}.v2-repair-transport{gap:7px}.v2-repair-timeline-key{display:none}.v2-repair-submit-row{align-items:stretch;flex-direction:column}.v2-repair-submit-row .v2-primary-button{width:100%}.v2-repair-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1150px){.v2-repair-splice-quality{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.v2-repair-heading-badge{display:none}.v2-repair-modes{grid-template-columns:repeat(2,minmax(0,1fr))}.v2-repair-inspector{display:flex}.v2-repair-transport{gap:7px}.v2-repair-timeline-key{display:none}.v2-repair-submit-row{align-items:stretch;flex-direction:column}.v2-repair-submit-row .v2-primary-button{width:100%}.v2-repair-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v2-repair-splice-quality{grid-template-columns:1fr}.v2-repair-splice-explanation{gap:5px}.v2-repair-splice-tag{padding:6px;font-size:10px}.v2-repair-splice-prompt-head{flex-wrap:wrap}.v2-repair-splice-resolution{margin-left:0}}

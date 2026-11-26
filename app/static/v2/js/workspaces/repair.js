@@ -12,10 +12,16 @@
     fragment: { action: "AI-перегенерация", help: "MiniMax H3 заново создаст выделенный участок с опорными начальным и конечным кадрами. Вне выделения исходное видео сохранится.", placeholder: "Опишите, что H3 должен изменить в этом фрагменте…" },
     object: { action: "Заменить объект через H3", help: "Белой кистью закрасьте объект на кадре. MiniMax H3 Fun ControlNet перегенерирует эту область на выбранном временном участке. Маска одинаковая для всего отрезка.", placeholder: "Что должно появиться вместо закрашенного объекта?" },
     sound: { action: "Перегенерировать звук H3", help: "MiniMax H3 создаст новую звуковую дорожку по промпту. Изображение исходника останется прежним. Точные слова и тембр голоса не гарантируются.", placeholder: "Укажите точные новые слова в кавычках, говорящего и особенности голоса…" },
-    splice: { action: "Создать AI-переход", help: "H3 генерирует 5-секундный мост с кадрами-опорами в точках 2 и 3 секунды. Между оригинальными роликами вставляется созданный нейросетью участок длительностью 1 секунду.", placeholder: "Опишите плавное движение камеры и естественный переход от видео A к видео B…" },
+    splice: { action: "Сгенерировать склейку", help: "H3 получает последние 0,5 секунды видео A и первые 0,5 секунды видео B с движением и звуком. Генерирует между ними новый секундный переход. Оригинальные ролики сохраняются.", placeholder: "Опишите естественный переход между видео…" },
   };
+  const defaultSplicePrompt = [
+    "integrated_multimodal_description: [Shot 1] Create one seamless, cinematic transition between two supplied video takes, using the anchored motion clips as exact visual and temporal references. The first guided clip is the end of video A; continue its real subject motion, camera trajectory, perspective and lighting. The second guided clip is the beginning of video B; naturally reach its initial composition, subjects and camera trajectory. During the one-second unanchored interval, independently choose the most convincing transition for these specific scenes: a continuous camera move, match on action, natural foreground occlusion or a motivated whip pan when appropriate. Preserve character identity, clothing, proportions, object continuity, spatial geometry, exposure, textures and motion direction. Invent only the minimum needed to connect the existing scenes. Avoid a hard cut, fade to black, unrelated subjects, sudden camera jumps or synthetic distortions. The bridge must flow smoothly into the start of B.",
+    "overall_soundscape: Continue existing environmental sound naturally through the transition. Smoothly connect the ambience, motion sound and room tone of the anchored audio clips, without sudden volume jumps or newly invented dialogue.",
+    "non_diegetic_music: N/A",
+  ].join("\n\n");
+  const splicePromptKey = "aivideosite.repair.splice.prompt.v1";
   const FPS = 24;
-  const state = { mode: "fragment", a: null, b: null, pickerSlot: "a", start: 0, end: 0, previewSlot: "a", dragging: null, uploading: false, submitting: false, maskDrawn: false };
+  const state = { mode: "fragment", a: null, b: null, pickerSlot: "a", start: 0, end: 0, previewSlot: "a", dragging: null, uploading: false, submitting: false, maskDrawn: false, splice: { quality: "480", ratio: "auto", steps: "8" } };
   const mask = qs("#v2-repair-mask");
   const gpuDialog = qs("#v2-repair-gpu-dialog");
   const gpuButtons = Array.from(gpuDialog.querySelectorAll("[data-repair-gpu]"));
@@ -32,6 +38,21 @@
   };
   const roundFrame = (time) => Math.round(time * FPS) / FPS;
   const isSplice = () => state.mode === "splice";
+  const currentPrompt = () => (isSplice() ? qs("#v2-repair-splice-prompt") : qs("#v2-repair-prompt")).value.trim();
+  const spliceSize = () => {
+    const mediaSize = W.mediaResolution(state.a || {}) || "";
+    const match = mediaSize.match(/(\d+)\s*[x×]\s*(\d+)/i);
+    const w = Number(state.a?.meta?.width || match?.[1] || 16);
+    const h = Number(state.a?.meta?.height || match?.[2] || 9);
+    const ratio = { "1:1": 1, "16:9": 16 / 9, "9:16": 9 / 16 }[state.splice.ratio] || w / Math.max(h, 1);
+    const short = { "480": 480, "720": 736, "1080": 1088 }[state.splice.quality];
+    const grid = (n) => Math.ceil(n / 32) * 32;
+    return [grid(short * Math.max(1, ratio)), grid(short * Math.max(1, 1 / ratio))];
+  };
+  function renderSpliceResolution() {
+    const [width, height] = spliceSize();
+    qs("#v2-repair-splice-resolution").textContent = width + " × " + height + " · " + (state.splice.ratio === "auto" ? "формат A" : state.splice.ratio);
+  }
   const total = () => isSplice() && state.a && state.b
     ? Math.max(.01, duration(state.a) + duration(state.b) + 1)
     : Math.max(.01, duration(state.a));
@@ -128,6 +149,7 @@
     empty.hidden = !!item;
     if (item) thumb.src = thumbnailUrl(item);
     else thumb.removeAttribute("src");
+    if (slot === "a") renderSpliceResolution();
   }
 
   function setPreview(slot, seconds = 0) {
@@ -185,7 +207,8 @@
     qs("#v2-repair-source-b").hidden = !isSplice();
     qs("#v2-repair-splice-settings").hidden = !isSplice();
     qs("#v2-repair-sound-settings").hidden = mode !== "sound";
-    qs("#v2-repair-prompt-field").hidden = false;
+    qs("#v2-repair-generic-config").hidden = isSplice();
+    qs("#v2-repair-splice-config").hidden = !isSplice();
     qs("#v2-repair-prompt").placeholder = modes[mode].placeholder;
     qs("#v2-repair-mask-tools").hidden = mode !== "object";
     mask.hidden = mode !== "object" || !state.a;
@@ -207,12 +230,12 @@
   function renderControls() {
     const action = qs("#v2-repair-submit");
     action.textContent = modes[state.mode].action;
-    action.disabled = state.submitting || state.uploading || !state.a || !qs("#v2-repair-prompt").value.trim() ||
+    action.disabled = state.submitting || state.uploading || !state.a || !currentPrompt() ||
       (state.mode === "object" && !state.maskDrawn) ||
       (isSplice() ? (!state.b || duration(state.a) <= 1.05 || duration(state.b) <= 1.05)
         : !(state.end >= state.start + .2 && state.end - state.start <= 15 && state.end <= duration(state.a) + .001));
     qs("#v2-repair-note").textContent = isSplice()
-      ? "5-секундная AI-генерация H3 даст 1-секундный переход между исходниками. Качество и точность стыка проверяются после генерации."
+      ? "H3 изучит движение и звук по 0,5 сек с обеих сторон и создаст новую секунду. Результат будет готовым роликом в Библиотеке."
       : "MiniMax H3 создаст новую версию только выбранного участка. Оригинальный ролик сохраняется.";
     qs("#v2-repair-start").value = state.start.toFixed(3);
     qs("#v2-repair-end").value = state.end.toFixed(3);
@@ -368,9 +391,12 @@
         body: JSON.stringify({
           mode: state.mode, media_id: state.a.id, second_media_id: state.b?.id || null,
           start: state.start, end: state.end,
-          prompt: qs("#v2-repair-prompt").value.trim(),
-          steps: Number(qs("#v2-repair-steps").value),
-          seed: qs("#v2-repair-seed").value,
+          prompt: currentPrompt(),
+          steps: Number(isSplice() ? state.splice.steps : qs("#v2-repair-steps").value),
+          seed: isSplice() ? qs("#v2-repair-splice-seed").value : qs("#v2-repair-seed").value,
+          quality: state.splice.quality,
+          ratio: state.splice.ratio,
+          generate_audio: qs("#v2-repair-splice-audio").checked,
           sound_type: qs("#v2-repair-sound-type").value,
           gpu_target: gpuTarget,
           mask_png: state.mode === "object" ? exportMask() : "",
@@ -457,6 +483,27 @@
     if (event.code === "ArrowRight") step(1);
   });
   qs("#v2-repair-prompt").addEventListener("input", renderControls);
+  try { qs("#v2-repair-splice-prompt").value = localStorage.getItem(splicePromptKey) || defaultSplicePrompt; }
+  catch { qs("#v2-repair-splice-prompt").value = defaultSplicePrompt; }
+  qs("#v2-repair-splice-prompt").addEventListener("input", () => {
+    try { localStorage.setItem(splicePromptKey, qs("#v2-repair-splice-prompt").value); } catch { /* storage can be blocked */ }
+    renderControls();
+  });
+  qs("#v2-repair-splice-prompt-reset").addEventListener("click", () => {
+    qs("#v2-repair-splice-prompt").value = defaultSplicePrompt;
+    try { localStorage.removeItem(splicePromptKey); } catch { /* storage can be blocked */ }
+    renderControls();
+  });
+  qsa("[data-repair-splice-setting] button", root).forEach((button) => button.addEventListener("click", () => {
+    const group = button.closest("[data-repair-splice-setting]");
+    state.splice[group.dataset.repairSpliceSetting] = button.dataset.value;
+    qsa("button", group).forEach((option) => {
+      const active = option === button;
+      option.classList.toggle("active", active);
+      option.setAttribute("aria-pressed", String(active));
+    });
+    renderSpliceResolution();
+  }));
   qs("#v2-repair-submit").addEventListener("click", async () => {
     if (qs("#v2-repair-submit").disabled) return;
     renderGpuSlots([]);

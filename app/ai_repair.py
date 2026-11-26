@@ -19,6 +19,41 @@ from PIL import Image
 from .config import settings
 
 
+# H3 AddGuide accepts native 17k+5 frame batches. 22 frames is its shortest
+# useful motion+audio clip longer than five frames, so each real 0.5-second
+# context is gently retimed to 22/24 sec before conditioning.
+SPLICE_CONTEXT_SECONDS = 0.5
+SPLICE_GUIDE_FRAMES = 22
+SPLICE_A_GUIDE_FRAME = 36
+SPLICE_B_GUIDE_FRAME = 82
+SPLICE_BRIDGE_START_FRAME = SPLICE_A_GUIDE_FRAME + SPLICE_GUIDE_FRAMES
+SPLICE_BRIDGE_FRAMES = SPLICE_B_GUIDE_FRAME - SPLICE_BRIDGE_START_FRAME
+SPLICE_BRIDGE_SECONDS = SPLICE_BRIDGE_FRAMES / 24
+
+
+def splice_canvas_size(size: tuple[int, int], quality: str, ratio: str) -> tuple[int, int]:
+    """Match the Video tab's presets; 'auto' follows source A's aspect ratio."""
+    if quality not in {"480", "720", "1080"}:
+        raise ValueError("Качество склейки: 480p, 720p или 1080p.")
+    if ratio not in {"auto", "1:1", "16:9", "9:16"}:
+        raise ValueError("Неизвестный формат кадра.")
+    short = {"480": 480, "720": 736, "1080": 1088}[quality]
+    aspect = {"1:1": 1.0, "16:9": 16 / 9, "9:16": 9 / 16}.get(ratio, size[0] / max(1, size[1]))
+    if not math.isfinite(aspect) or aspect <= 0:
+        raise ValueError("Неверное соотношение сторон исходного видео.")
+    grid_up = lambda value: max(32, int(math.ceil(value / 32)) * 32)
+    return (grid_up(short * max(1.0, aspect)), grid_up(short * max(1.0, 1 / aspect)))
+
+
+def _has_audio(path: Path) -> bool:
+    result = subprocess.run(
+        [str(settings.ffprobe_bin), "-v", "error", "-select_streams", "a:0",
+         "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True, timeout=30, check=False,
+    )
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
 def h3_duration(selected_seconds: float) -> int:
     if selected_seconds <= 0 or selected_seconds > 15:
         raise ValueError("Выберите от 1 до 15 секунд для исправления H3.")
@@ -72,13 +107,15 @@ def prepare_ai_inputs(
     *, job_id: str, mode: str, first_video: Path, first_duration: float,
     start: float, end: float, size: tuple[int, int],
     second_video: Path | None = None, mask_png: str = "",
+    splice_size: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """Stage H3-compatible video references and still-frame guides.
 
-    In splice mode a native five-second sample has anchors at 2 and 3 seconds.
-    The one-second portion between those anchors is used as an AI bridge.
+    For a splice, H3 receives two native 22-frame guided motion clips,
+    derived from 0.5 seconds of each input; only the unanchored 24 frames
+    between them are taken from the H3 output.
     """
-    width, height = ai_canvas_size(*size)
+    width, height = splice_size if mode == "splice" and splice_size else ai_canvas_size(*size)
     segment_duration = 1.0 if mode == "splice" else end - start
     seconds = h3_duration(segment_duration)
     created: list[Path] = []
@@ -105,7 +142,7 @@ def prepare_ai_inputs(
         _run([str(settings.ffmpeg_bin), "-y", "-ss", f"{max(0, moment):.6f}",
               "-t", f"{length:.6f}", "-i", str(source),
               "-map", "0:v:0", "-map", "0:a:0?",
-              "-vf", f"setpts=(PTS-STARTPTS)*{rate:.8f},fps=24,scale={width}:{height},format=yuv420p",
+              "-vf", f"setpts=(PTS-STARTPTS)*{rate:.8f},fps=24,tpad=stop_mode=clone:stop_duration=0.5,trim=end_frame={round(target * 24)},scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
               "-af", _tempo_filters(length / target),
               "-c:v", "libx264", "-preset", "fast", "-crf", "21",
               "-c:a", "aac", "-b:a", "128k", "-t", f"{target:.6f}", str(destination)])
@@ -115,18 +152,19 @@ def prepare_ai_inputs(
         if mode == "splice":
             if second_video is None:
                 raise ValueError("Для перехода выберите два видео.")
-            first_frame = frame(first_video, max(0, first_duration - 1 / 24), "bridge_first")
-            second_frame = frame(second_video, 0, "bridge_last")
-            first_ref = clip(first_video, max(0, first_duration - 1.0), 1.0, 1.0, "video_a_end")
-            second_ref = clip(second_video, 0, 1.0, 1.0, "video_b_start")
+            guide_seconds = SPLICE_GUIDE_FRAMES / 24
+            before = clip(first_video, max(0, first_duration - SPLICE_CONTEXT_SECONDS),
+                          SPLICE_CONTEXT_SECONDS, guide_seconds, "transition_context_a")
+            after = clip(second_video, 0, SPLICE_CONTEXT_SECONDS, guide_seconds, "transition_context_b")
             guides = [
-                {"path": str(first_frame), "temporary": True, "frame_idx": 48, "source_name": "Video A final frame"},
-                {"path": str(second_frame), "temporary": True, "frame_idx": 72, "source_name": "Video B first frame"},
+                {"type": "video", "path": str(before), "temporary": True,
+                 "frame_idx": SPLICE_A_GUIDE_FRAME, "with_audio": _has_audio(before),
+                 "source_name": "Final 0.5 seconds of video A"},
+                {"type": "video", "path": str(after), "temporary": True,
+                 "frame_idx": SPLICE_B_GUIDE_FRAME, "with_audio": _has_audio(after),
+                 "source_name": "First 0.5 seconds of video B"},
             ]
-            references = [
-                {"type": "video", "path": str(first_ref), "temporary": True, "source_name": "Video A final second"},
-                {"type": "video", "path": str(second_ref), "temporary": True, "source_name": "Video B first second"},
-            ]
+            references = []
             control = {"mode": "none"}
         else:
             reference = clip(first_video, start, segment_duration, seconds, "source_segment")
@@ -177,7 +215,7 @@ def assembly_command(
         if second is None:
             raise ValueError("Second clip missing")
         sources = [(source, 0, source_duration, source_has_audio, False),
-                   (generated, 2, 1, generated_has_audio, True),
+                   (generated, SPLICE_BRIDGE_START_FRAME / 24, SPLICE_BRIDGE_SECONDS, generated_has_audio, True),
                    (second, 0, second_duration, second_has_audio, False)]
     elif mode == "sound":
         sources = [(source, 0, start, source_has_audio, False),
