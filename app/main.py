@@ -36,7 +36,10 @@ from .config import settings
 from . import assistant as local_assistant
 from .comfy import ComfyUIClient
 from .h3_references import build_reference_prompt, validate_reference_items
-from .h3_preview import cleanup_job_preview, cleanup_stale_previews, preview_path
+from .h3_preview import (
+    cleanup_job_preview, cleanup_stale_previews, find_job_preview,
+    list_job_previews, preview_poster_path,
+)
 from .worker import JobWorker, probe_duration
 
 
@@ -1739,6 +1742,7 @@ async def api_v2_state(
             "preview_step": job.get("preview_step") or 0,
             "preview_mime": job.get("preview_mime"),
             "preview_enabled": bool(job.get("preview_enabled")),
+            "preview_steps": list_job_previews(str(job["id"]), int(job.get("preview_step") or 0)),
         })
     active_global = []
     for job in db.list_jobs(200):
@@ -2131,6 +2135,8 @@ async def api_cancel_job(
 @app.get("/api/jobs/{job_id}/preview")
 async def api_job_preview(
     job_id: str,
+    step: int | None = None,
+    poster: bool = False,
     user_id: str = Depends(require_user),
 ):
     job = db.get_job(job_id, user_id)
@@ -2140,10 +2146,20 @@ async def api_job_preview(
         or int(job.get("preview_step") or 0) < 2
     ):
         raise HTTPException(404, "Предпросмотр недоступен.")
-    mime = str(job.get("preview_mime") or "")
-    path = preview_path(job_id, mime)
-    if path is None or not path.is_file():
-        raise HTTPException(404, "Предпросмотр ещё не готов.")
+    current_step = int(job.get("preview_step") or 0)
+    target_step = current_step if step is None else step
+    if target_step < 2 or target_step > current_step or target_step % 2:
+        raise HTTPException(404, "Этот шаг предпросмотра недоступен.")
+    if poster:
+        path = preview_poster_path(job_id, target_step)
+        mime = "image/jpeg"
+        if path is None or not path.is_file():
+            raise HTTPException(404, "Кадр предпросмотра ещё не готов.")
+    else:
+        result = find_job_preview(job_id, target_step)
+        if result is None:
+            raise HTTPException(404, "Предпросмотр ещё не готов.")
+        path, mime = result
     return FileResponse(
         path,
         media_type=mime,

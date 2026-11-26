@@ -46,15 +46,9 @@
 
 /* Live H3 generation cards are part of Library, but never mistaken for saved media. */
 .v2-library-workspace .v2-generation-card{border-color:#42547a;background:linear-gradient(165deg,#1b2335 0%,#121724 65%);box-shadow:0 6px 32px rgba(5,10,25,.2)}
-.v2-generation-cover{isolation:isolate;background:radial-gradient(ellipse at 50% 62%,#18304a 0%,#0b1425 48%,#090e1c 100%)}
-.v2-generation-ambient{position:absolute;inset:-45%;z-index:-1;background:conic-gradient(from 110deg,transparent 0deg,rgba(55,148,255,.11) 70deg,transparent 155deg,rgba(119,83,239,.15) 225deg,transparent 330deg);animation:v2-generation-glow 16s linear infinite}
-.v2-generation-cover-content{position:absolute;inset:13px 13px 27px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center}
-.v2-generation-kicker{position:absolute;top:0;left:0;display:flex;align-items:center;gap:6px;color:#84b8ff;font-size:9px;font-weight:800;letter-spacing:.11em}
-.v2-generation-kicker .icon{width:12px;height:12px;color:#67a9ff}
-.v2-generation-symbol{display:flex;align-items:center;justify-content:center;width:52px;height:52px;margin:2px 0 4px;border:1px solid rgba(99,160,255,.42);border-radius:16px;background:linear-gradient(145deg,rgba(71,125,218,.22),rgba(91,79,177,.14));box-shadow:0 0 24px rgba(51,141,246,.12)}
-.v2-generation-symbol .icon{width:27px;height:27px;color:#acd0ff}
-.v2-generation-cover-content strong{color:#e6f0ff;font-size:15px;font-weight:750}
-.v2-generation-cover-content>span:last-child{color:#9baed0;font-size:10px}
+.v2-generation-cover{background:#050609}
+.v2-generation-poster{display:block;width:100%;height:100%;object-fit:cover}
+.v2-generation-step-badge{position:absolute;top:10px;left:10px;padding:5px 8px;border:1px solid rgba(154,196,255,.28);border-radius:7px;background:rgba(8,13,23,.82);color:#b9d7ff;font-size:9px;font-weight:800;letter-spacing:.06em}
 .v2-generation-gpu{position:absolute;right:10px;bottom:8px;padding:4px 7px;border:1px solid rgba(148,175,231,.23);border-radius:7px;background:rgba(9,17,32,.75);color:#bfcff0;font-size:9px}
 .v2-library-workspace .v2-generation-card .v2-media-card-body{min-height:164px}
 .v2-generation-progress{height:5px;margin-top:12px;border-radius:10px;background:#2b344a;overflow:hidden}
@@ -72,7 +66,10 @@
 .v2-library-workspace .v2-generation-cancel:hover:not(:disabled){background:rgba(159,48,72,.25)}
 .v2-library-workspace .v2-generation-cancel:disabled{opacity:.5;cursor:wait}
 .v2-generation-dialog .v2-generation-preview-animation{display:block;width:100%;max-height:55vh;border-radius:12px;background:#070b12;object-fit:contain}
+.v2-generation-step-nav{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px}
+.v2-generation-step-nav button{min-height:33px;padding:6px 11px;border:1px solid #343e56;border-radius:9px;background:#1b2333;color:#9eabc5;font-size:11px;font-weight:700;cursor:pointer}
+.v2-generation-step-nav button:hover{border-color:#6494e6;color:#d9e9ff}
+.v2-generation-step-nav button.active{border-color:#5c9bf3;background:rgba(51,115,211,.23);color:#e2efff}
+.v2-generation-step-nav button.follow{margin-left:auto}
 .v2-generation-dialog-note{margin:12px 1px 2px;color:#a8b3cb;font-size:11px;line-height:1.5}
-@keyframes v2-generation-glow{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.v2-generation-ambient{animation:none}}
 @media(max-width:520px){.v2-generation-actions{grid-template-columns:1fr}.v2-library-workspace .v2-generation-actions button{min-height:40px}}

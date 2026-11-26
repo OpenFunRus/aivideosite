@@ -11,6 +11,7 @@
   let activePreviewJobId = null;
   let displayedPreviewStep = 0;
   let displayedPreviewMime = "";
+  let followLatestPreview = true;
 
   const downloadFrame = async (item, position, button = null) => {
     const suffix = position === "final" ? "final" : "start";
@@ -137,15 +138,12 @@
     const statusLabel = waiting ? "В очереди" : ready ? "Предпросмотр готов" : unavailable ? "Без предпросмотра" : "Генерация";
     const previewLabel = ready ? "Воспроизвести шаг " + step : unavailable ? "Превью не подключено" : "Ожидаем шаг 2";
     const gpu = job.gpu_target === "rtx2080" ? "RTX 2080" : "RTX 3090";
+    const posterUrl = "/api/jobs/" + encodeURIComponent(job.id) + "/preview?poster=1&step=" + step;
     return '<article class="v2-media-card v2-generation-card" data-preview-job-id="' + escapeHtml(job.id) + '">' +
       '<div class="v2-media-cover v2-generation-cover">' +
-      '<div class="v2-generation-ambient" aria-hidden="true"></div>' +
-      '<div class="v2-generation-cover-content">' +
-      '<span class="v2-generation-kicker">' + icon("bolt") + 'MINIMAX H3 · LIVE</span>' +
-      '<span class="v2-generation-symbol">' + icon(waiting ? "clock" : "video") + '</span>' +
-      '<strong>' + escapeHtml(statusLabel) + '</strong>' +
-      '<span>' + escapeHtml(waiting ? "Ожидает свободную видеокарту" : ready ? "Промежуточное видео · шаг " + step : unavailable ? "Нужен Tiny VAE и Preview Override" : "Видео появится после шага 2") + '</span>' +
-      '</div><span class="v2-generation-gpu">' + escapeHtml(gpu) + '</span></div>' +
+      (ready ? '<img class="v2-generation-poster" src="' + posterUrl + '" alt="Кадр после шага ' + step + '" loading="eager">' : '') +
+      '<span class="v2-generation-step-badge">' + (ready ? 'ШАГ ' + step + ' / ' + escapeHtml(String(job.steps || 8)) : waiting ? 'В ОЧЕРЕДИ' : unavailable ? 'БЕЗ ПРЕВЬЮ' : 'ОЖИДАНИЕ КАДРА') + '</span>' +
+      '<span class="v2-generation-gpu">' + escapeHtml(gpu) + '</span></div>' +
       '<div class="v2-media-card-body">' +
       '<h3 title="' + escapeHtml(job.title) + '">' + escapeHtml(job.title || "MiniMax H3") + '</h3>' +
       '<div class="v2-media-meta"><span>' + escapeHtml(W.formatDate(job.created_at)) + '</span>' +
@@ -159,11 +157,40 @@
       '</div></div></article>';
   };
 
-  const previewPlayerHtml = (job) => {
-    const previewUrl = "/api/jobs/" + encodeURIComponent(job.id) + "/preview?step=" + Number(job.preview_step);
-    return job.preview_mime === "video/mp4"
+  const availablePreviewSteps = (job) => Array.isArray(job.preview_steps) && job.preview_steps.length
+    ? job.preview_steps
+    : [{ step: Number(job.preview_step), mime: job.preview_mime }];
+
+  const previewPlayerHtml = (job, step, mime) => {
+    const previewUrl = "/api/jobs/" + encodeURIComponent(job.id) + "/preview?step=" + step;
+    return mime === "video/mp4"
       ? '<video src="' + previewUrl + '" controls autoplay loop playsinline></video>'
       : '<img class="v2-generation-preview-animation" src="' + previewUrl + '" alt="Анимированный предпросмотр видео">';
+  };
+
+  const previewStepsHtml = (job) =>
+    '<div class="v2-generation-step-nav" aria-label="Сравнение шагов">' +
+    availablePreviewSteps(job).map((item) =>
+      '<button type="button" data-generation-step="' + Number(item.step) + '" aria-pressed="' + (Number(item.step) === displayedPreviewStep) + '"' +
+      (Number(item.step) === displayedPreviewStep ? ' class="active"' : '') + '>Шаг ' + Number(item.step) + '</button>'
+    ).join("") +
+    '<button type="button" data-generation-follow aria-pressed="' + followLatestPreview + '"' +
+    (followLatestPreview ? ' class="active follow"' : ' class="follow"') + '>Авто</button></div>';
+
+  const showPreviewStep = (job, step) => {
+    const selected = availablePreviewSteps(job).find((item) => Number(item.step) === Number(step));
+    const dialog = qs("#v2-media-dialog");
+    if (!selected || !dialog?.open) return;
+    const mime = String(selected.mime || "");
+    const changed = displayedPreviewStep !== step || displayedPreviewMime !== mime;
+    displayedPreviewStep = step;
+    displayedPreviewMime = mime;
+    const title = qs("[data-generation-preview-title]", dialog);
+    if (title) title.textContent = "Предпросмотр · шаг " + step + " из " + String(job.steps || 8);
+    const player = qs("[data-generation-preview-player]", dialog);
+    if (player && changed) player.innerHTML = previewPlayerHtml(job, step, mime);
+    const nav = qs("[data-generation-preview-nav]", dialog);
+    if (nav) nav.innerHTML = previewStepsHtml(job);
   };
 
   const openPreviewDialog = (job) => {
@@ -172,12 +199,14 @@
     activePreviewJobId = String(job.id);
     displayedPreviewStep = Number(job.preview_step);
     displayedPreviewMime = String(job.preview_mime || "");
+    followLatestPreview = true;
     dialog.innerHTML = '<div class="v2-media-dialog-inner v2-generation-dialog">' +
       '<div class="v2-media-dialog-head"><h3 data-generation-preview-title>Предпросмотр · шаг ' + Number(job.preview_step) +
       ' из ' + escapeHtml(String(job.steps || 8)) + '</h3>' +
       '<button class="v2-icon-button" type="button" data-media-dialog-close aria-label="Закрыть">' + icon("x") + '</button></div>' +
-      '<div data-generation-preview-player>' + previewPlayerHtml(job) + '</div>' +
-      '<p class="v2-generation-dialog-note">Предпросмотр автоматически обновляется на шагах 2, 4, 6, 8. Tiny VAE показывает грубую картинку даже на последнем шаге; чёткий результат появится после финального декодирования.</p>' +
+      '<div data-generation-preview-player>' + previewPlayerHtml(job, displayedPreviewStep, displayedPreviewMime) + '</div>' +
+      '<div data-generation-preview-nav>' + previewStepsHtml(job) + '</div>' +
+      '<p class="v2-generation-dialog-note">Можно сравнить шаги 2, 4, 6, 8. Кнопка «Авто» переключает на новейший предпросмотр. Tiny VAE показывает черновое изображение; финальный ролик декодируется отдельно.</p>' +
       '</div>';
     qs("[data-media-dialog-close]", dialog)?.addEventListener("click", () => dialog.close());
     dialog.showModal();
@@ -190,14 +219,12 @@
     const job = (W.snapshot?.library_jobs || []).find((item) => String(item.id) === activePreviewJobId);
     if (!job || Number(job.preview_step) < 2) return;
     const step = Number(job.preview_step);
-    const mime = String(job.preview_mime || "");
-    if (step <= displayedPreviewStep && mime === displayedPreviewMime) return;
-    displayedPreviewStep = step;
-    displayedPreviewMime = mime;
-    const title = qs("[data-generation-preview-title]", dialog);
-    if (title) title.textContent = "Предпросмотр · шаг " + step + " из " + String(job.steps || 8);
-    const player = qs("[data-generation-preview-player]", dialog);
-    if (player) player.innerHTML = previewPlayerHtml(job);
+    if (followLatestPreview && step > displayedPreviewStep) showPreviewStep(job, step);
+    else {
+      const nav = qs("[data-generation-preview-nav]", dialog);
+      const html = previewStepsHtml(job);
+      if (nav && nav.innerHTML !== html) nav.innerHTML = html;
+    }
   };
 
   const renderLibrary = () => {
@@ -251,10 +278,26 @@
       grid.innerHTML = generatingHtml + mediaHtml;
       renderedMediaHtml = mediaHtml;
     } else {
-      // Poll live progress without rebuilding finished video elements: that
-      // would repeatedly restart their metadata loading every four seconds.
-      grid.querySelectorAll(":scope > .v2-generation-card").forEach((card) => card.remove());
-      if (generatingHtml) grid.insertAdjacentHTML("afterbegin", generatingHtml);
+      // Preserve both completed videos and unchanged preview <img> instances.
+      // Recreating the images on each four-second poll causes visible flicker.
+      const existing = new Map(Array.from(grid.querySelectorAll(":scope > .v2-generation-card"))
+        .map((card) => [card.dataset.previewJobId, card]));
+      const template = document.createElement("template");
+      template.innerHTML = generatingHtml;
+      const cards = Array.from(template.content.children);
+      for (const card of cards) {
+        const old = existing.get(card.dataset.previewJobId);
+        if (!old) continue;
+        const oldPoster = old.querySelector(".v2-generation-poster");
+        const newPoster = card.querySelector(".v2-generation-poster");
+        if (oldPoster && newPoster && oldPoster.getAttribute("src") === newPoster.getAttribute("src")) {
+          newPoster.replaceWith(oldPoster);
+        }
+        old.replaceWith(card);
+        existing.delete(card.dataset.previewJobId);
+      }
+      existing.forEach((card) => card.remove());
+      for (let index = cards.length - 1; index >= 0; index--) grid.prepend(cards[index]);
     }
     updateOpenPreviewDialog();
   };
@@ -330,12 +373,22 @@
   });
 
   qs("#v2-media-dialog")?.addEventListener("click", (event) => {
+    const stepButton = event.target.closest("[data-generation-step]");
+    const followButton = event.target.closest("[data-generation-follow]");
+    if ((stepButton || followButton) && activePreviewJobId) {
+      const job = (W.snapshot?.library_jobs || []).find((item) => String(item.id) === activePreviewJobId);
+      if (!job) return;
+      followLatestPreview = Boolean(followButton);
+      showPreviewStep(job, followButton ? Number(job.preview_step) : Number(stepButton.dataset.generationStep));
+      return;
+    }
     if (event.target === event.currentTarget) event.currentTarget.close();
   });
   qs("#v2-media-dialog")?.addEventListener("close", () => {
     activePreviewJobId = null;
     displayedPreviewStep = 0;
     displayedPreviewMime = "";
+    followLatestPreview = true;
   });
 
   window.addEventListener("v2:datarefresh", renderLibrary);
